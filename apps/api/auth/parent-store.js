@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { transaction } from '../db/database.js';
+import { homeworkPage, homeworkPageSize } from '../homework/entries.js';
 import { generateInvitationCode, generateRefreshToken, invitationDigest, refreshDigest } from './credentials.js';
 
 export const parentSessionSeconds = 30 * 24 * 60 * 60;
-const homeworkPageSize = 30;
 
 const activeParentQuery = `
   SELECT s.school_id, s.guardian_id
@@ -199,10 +199,7 @@ export function createParentStore(pool, invitationKey) {
                ) ORDER BY entry_date DESC, id DESC) FROM page), '[]'::json) AS entries
       `, [sessionId, guardianId, childId, from, to, domain, beforeDate, beforeId, homeworkPageSize + 1]);
       const { authenticated, child, entries } = result.rows[0];
-      const hasMore = entries.length > homeworkPageSize;
-      if (hasMore) entries.pop();
-      const last = entries.at(-1);
-      return { authenticated, child, entries, nextCursor: hasMore ? `${last.date}~${last.id}` : null };
+      return { authenticated, child, ...homeworkPage(entries) };
     },
   };
 }

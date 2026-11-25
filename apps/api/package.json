@@ -7,7 +7,8 @@
     "start": "node server.js",
     "test": "node --test",
     "auth:admin": "node db/admin.js",
-    "homework:admin": "node homework/admin.js"
+    "homework:admin": "node homework/admin.js",
+    "direction:admin": "node direction/admin.js"
   },
   "dependencies": {
     "@fastify/cookie": "11.1.5",

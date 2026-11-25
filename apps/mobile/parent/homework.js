@@ -41,7 +41,7 @@ export function periodRange(anchor, view) {
   return { from, to: isoDay(date) };
 }
 
-function movePeriod(anchor, view, direction) {
+export function movePeriod(anchor, view, direction) {
   if (view === 'day') return addDays(anchor, direction);
   if (view === 'week') return addDays(anchor, 7 * direction);
   const month = asDate(periodRange(anchor, view).from);

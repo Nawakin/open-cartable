@@ -1,12 +1,32 @@
 import { registerRootComponent } from 'expo';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
 import { listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
+import { Direction } from './direction/direction';
+
+function openDirection() {
+  window.location.assign('/?espace=direction');
+}
+
+function AppFrame({ children }) {
+  return (
+    <SafeAreaView style={shell.safeArea}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={shell.scroll}>
+        <View style={shell.content}>
+          <View style={shell.header}>
+            <Text style={shell.brand}>Open Cartable</Text>
+          </View>
+          {children}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
 
 function ParentApp() {
   const [phase, setPhase] = useState('loading');
@@ -148,118 +168,117 @@ function ParentApp() {
   }
 
   return (
-    <SafeAreaView style={shell.safeArea}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={shell.scroll}>
-        <View style={shell.content}>
-          <View style={shell.header}>
-            <Text style={shell.brand}>Open Cartable</Text>
-          </View>
+    <AppFrame>
+      {phase === 'loading' && (
+        <View style={styles.panel}>
+          <ActivityIndicator accessibilityLabel="Chargement" color="#225344" />
+          <Text style={styles.body}>Chargement de votre espace…</Text>
+        </View>
+      )}
 
-          {phase === 'loading' && (
-            <View style={styles.panel}>
-              <ActivityIndicator accessibilityLabel="Chargement" color="#225344" />
-              <Text style={styles.body}>Chargement de votre espace…</Text>
-            </View>
-          )}
+      {phase === 'setup' && (
+        <FirstRun token={installationToken} onComplete={(result) => {
+          setInstallationToken('');
+          setSchool(result?.schoolCode ?? '');
+          setInvitation(result?.code ?? '');
+          setPhase('login');
+        }} />
+      )}
 
-          {phase === 'setup' && (
-            <FirstRun token={installationToken} onComplete={(result) => {
-              setInstallationToken('');
-              setSchool(result?.schoolCode ?? '');
-              setInvitation(result?.code ?? '');
-              setPhase('login');
-            }} />
-          )}
-
-          {phase === 'login' && (
-            <View style={styles.panel}>
-              <Text accessibilityRole="header" style={styles.title}>Connexion parent</Text>
-              <Text style={styles.body}>Saisissez les codes remis par votre école.</Text>
-              {needsSchoolAddress && (
-                <Field
-                  label="Adresse de l’école"
-                  value={address}
-                  onChangeText={setAddress}
-                  autoCapitalize="none"
-                  keyboardType="url"
-                  placeholder="https://ent.ecole.example"
-                  maxLength={512}
-                  editable={!busy}
-                />
-              )}
-              <Field label="Code de l’école" value={school} onChangeText={setSchool} autoCapitalize="characters" maxLength={32} editable={!busy} />
-              <Field
-                label="Code d’invitation"
-                value={invitation}
-                onChangeText={setInvitation}
-                autoCapitalize="characters"
-                secureTextEntry
-                maxLength={24}
-                onSubmitEditing={submit}
-                returnKeyType="go"
-                editable={!busy}
-              />
-              {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-              <Button label={busy ? 'Connexion…' : 'Se connecter'} busy={busy} onPress={submit} />
-            </View>
-          )}
-
-          {phase === 'children' && (
-            <View style={styles.panel}>
-              <Text accessibilityRole="header" style={styles.title}>Vos enfants</Text>
-              {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
-              {children.map((child) => (
-                <View key={child.id} style={shell.child}>
-                  <Text style={shell.childName}>{child.displayName}</Text>
-                  <Text style={styles.body}>{child.className}</Text>
-                  <Button
-                    label="Consulter le cahier"
-                    accessibilityLabel={`Cahier de texte de ${child.displayName}`}
-                    busy={busy}
-                    onPress={() => openNotebook(child)}
-                    secondary
-                  />
-                </View>
-              ))}
-              {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-              <View style={styles.actions}>
-                <Button label="Actualiser" busy={busy} onPress={() => void run(load)} secondary />
-                <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
-              </View>
-            </View>
-          )}
-
-          {phase === 'homework' && notebook && (
-            <Homework
-              key={notebook.child.id}
-              notebook={notebook}
-              onChange={(selection) => void run(() => loadNotebook(selection))}
-              onMore={() => void run(() => loadNotebook(notebook, true))}
-              onBack={() => void run(load)}
-              onLogout={logout}
-              busy={busy}
-              error={error}
+      {phase === 'login' && (
+        <View style={styles.panel}>
+          <Text accessibilityRole="header" style={styles.title}>Connexion parent</Text>
+          <Text style={styles.body}>Saisissez les codes remis par votre école.</Text>
+          {needsSchoolAddress && (
+            <Field
+              label="Adresse de l’école"
+              value={address}
+              onChangeText={setAddress}
+              autoCapitalize="none"
+              keyboardType="url"
+              placeholder="https://ent.ecole.example"
+              maxLength={512}
+              editable={!busy}
             />
           )}
-
-          {phase === 'unavailable' && (
-            <View style={styles.panel}>
-              <Text accessibilityRole="header" style={styles.title}>Votre espace est indisponible</Text>
-              {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-              <View style={styles.actions}>
-                <Button label="Réessayer" busy={busy} onPress={() => void run(initialize)} />
-                <Button label="Se déconnecter" busy={busy} onPress={logout} secondary />
-              </View>
-            </View>
-          )}
+          <Field label="Code de l’école" value={school} onChangeText={setSchool} autoCapitalize="characters" maxLength={32} editable={!busy} />
+          <Field
+            label="Code d’invitation"
+            value={invitation}
+            onChangeText={setInvitation}
+            autoCapitalize="characters"
+            secureTextEntry
+            maxLength={24}
+            onSubmitEditing={submit}
+            returnKeyType="go"
+            editable={!busy}
+          />
+          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <Button label={busy ? 'Connexion…' : 'Se connecter'} busy={busy} onPress={submit} />
+          {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
         </View>
-      </ScrollView>
-    </SafeAreaView>
+      )}
+
+      {phase === 'children' && (
+        <View style={styles.panel}>
+          <Text accessibilityRole="header" style={styles.title}>Vos enfants</Text>
+          {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
+          {children.map((child) => (
+            <View key={child.id} style={shell.child}>
+              <Text style={shell.childName}>{child.displayName}</Text>
+              <Text style={styles.body}>{child.className}</Text>
+              <Button
+                label="Consulter le cahier"
+                accessibilityLabel={`Cahier de texte de ${child.displayName}`}
+                busy={busy}
+                onPress={() => openNotebook(child)}
+                secondary
+              />
+            </View>
+          ))}
+          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <View style={styles.actions}>
+            <Button label="Actualiser" busy={busy} onPress={() => void run(load)} secondary />
+            <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
+            {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
+          </View>
+        </View>
+      )}
+
+      {phase === 'homework' && notebook && (
+        <Homework
+          key={notebook.child.id}
+          notebook={notebook}
+          onChange={(selection) => void run(() => loadNotebook(selection))}
+          onMore={() => void run(() => loadNotebook(notebook, true))}
+          onBack={() => void run(load)}
+          onLogout={logout}
+          busy={busy}
+          error={error}
+        />
+      )}
+
+      {phase === 'unavailable' && (
+        <View style={styles.panel}>
+          <Text accessibilityRole="header" style={styles.title}>Votre espace est indisponible</Text>
+          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+          <View style={styles.actions}>
+            <Button label="Réessayer" busy={busy} onPress={() => void run(initialize)} />
+            <Button label="Se déconnecter" busy={busy} onPress={logout} secondary />
+          </View>
+        </View>
+      )}
+    </AppFrame>
   );
 }
 
 function App() {
-  return <SafeAreaProvider><ParentApp /></SafeAreaProvider>;
+  const isDirection = Platform.OS === 'web' && new URLSearchParams(window.location.search).get('espace') === 'direction';
+  return (
+    <SafeAreaProvider>
+      {isDirection ? <AppFrame><Direction onParent={() => window.location.assign('/')} /></AppFrame> : <ParentApp />}
+    </SafeAreaProvider>
+  );
 }
 
 const shell = StyleSheet.create({

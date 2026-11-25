@@ -25,7 +25,11 @@ export function parseSchoolAddress(address) {
   }
 }
 
-export async function request(fetcher, origin, path, { method = 'GET', body, token, credentials } = {}) {
+export function request(fetcher, origin, path, options) {
+  return requestJson(fetcher, origin + parentPath + path, options);
+}
+
+export async function requestJson(fetcher, url, { method = 'GET', body, token, credentials, cache } = {}) {
   const headers = { Accept: 'application/json' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = 'Bearer ' + token;
@@ -33,11 +37,12 @@ export async function request(fetcher, origin, path, { method = 'GET', body, tok
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 12_000);
   try {
-    const response = await fetcher(origin + parentPath + path, {
+    const response = await fetcher(url, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials,
+      cache,
       redirect: 'error',
       signal: controller.signal,
     });

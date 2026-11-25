@@ -36,7 +36,10 @@ test('le premier lancement crée une seule école et permet la connexion du tute
   assert.deepEqual(status.json(), { installed: false });
   assert.equal(status.headers['cache-control'], 'no-store');
 
-  const form = { token, schoolCode: 'ECOLE-TEST', schoolName: 'École fictive', className: 'Classe fictive', studentName: 'Élève fictif' };
+  const form = {
+    token, schoolCode: 'ECOLE-TEST', schoolName: 'École fictive', className: 'Classe fictive', studentName: 'Élève fictif',
+    directionPassword: randomBytes(24).toString('base64url'),
+  };
   const submit = (payload = form, origin = webOrigin) => app.inject({
     method: 'POST', url: '/api/v1/installation', headers: { origin }, payload,
   });

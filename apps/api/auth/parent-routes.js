@@ -2,7 +2,7 @@ import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
 import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCodePattern, uuidPattern, verifyAccessToken } from './credentials.js';
 import { parentSessionSeconds } from './parent-store.js';
-import { readPeriod } from '../homework/period.js';
+import { homeworkQuerySchema, readPeriod } from '../homework/period.js';
 
 const browserCookie = '__Host-open-cartable';
 const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
@@ -140,17 +140,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
   app.get('/parent/children/:childId/homework', {
     schema: {
       params: jsonBody({ childId: uuidPattern }),
-      querystring: {
-        type: 'object',
-        required: ['from', 'to'],
-        additionalProperties: false,
-        properties: {
-          from: { type: 'string', minLength: 10, maxLength: 10 },
-          to: { type: 'string', minLength: 10, maxLength: 10 },
-          domain: { type: 'string', maxLength: 80 },
-          cursor: { type: 'string', minLength: 47, maxLength: 47 },
-        },
-      },
+      querystring: homeworkQuerySchema,
     },
   }, async (request, reply) => {
     const claims = await parentIdentity(request);

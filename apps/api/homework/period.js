@@ -3,6 +3,18 @@ import { uuidPattern } from '../auth/credentials.js';
 const datePattern = /^(?!0000)\d{4}-\d{2}-\d{2}$/;
 const dayMilliseconds = 86_400_000;
 
+export const homeworkQuerySchema = {
+  type: 'object',
+  required: ['from', 'to'],
+  additionalProperties: false,
+  properties: {
+    from: { type: 'string', minLength: 10, maxLength: 10 },
+    to: { type: 'string', minLength: 10, maxLength: 10 },
+    domain: { type: 'string', maxLength: 80 },
+    cursor: { type: 'string', minLength: 47, maxLength: 47 },
+  },
+};
+
 export function isSchoolDate(date) {
   if (typeof date !== 'string' || !datePattern.test(date)) return false;
   const instant = new Date(date + 'T00:00:00Z');

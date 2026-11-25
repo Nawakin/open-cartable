@@ -1,6 +1,36 @@
 import { randomUUID } from 'node:crypto';
 import { isSchoolDate } from './period.js';
 
+export const homeworkPageSize = 30;
+
+export function homeworkPage(entries) {
+  if (entries.length <= homeworkPageSize) return { entries, nextCursor: null };
+  const page = entries.slice(0, homeworkPageSize);
+  const last = page.at(-1);
+  return { entries: page, nextCursor: `${last.date}~${last.id}` };
+}
+
+export async function listClassEntries(db, schoolId, classId, { from, to, domain, beforeDate, beforeId }) {
+  const { rows } = await db.query(`
+    SELECT listing.id, to_char(listing.entry_date, 'YYYY-MM-DD') AS date,
+           listing.title, listing.domain, listing.description
+    FROM classes c
+    LEFT JOIN LATERAL (
+      SELECT e.id, e.entry_date, e.title, e.domain, e.description
+      FROM homework_entries e
+      WHERE (e.school_id, e.class_id) = (c.school_id, c.id)
+        AND e.entry_date BETWEEN $3 AND $4
+        AND ($5::text IS NULL OR strpos(lower(e.domain), lower($5)) > 0)
+        AND ($6::date IS NULL OR (e.entry_date, e.id) < ($6, $7::uuid))
+      ORDER BY e.entry_date DESC, e.id DESC
+      LIMIT $8
+    ) listing ON true
+    WHERE c.school_id = $1 AND c.id = $2
+    ORDER BY listing.entry_date DESC, listing.id DESC
+  `, [schoolId, classId, from, to, domain, beforeDate, beforeId, homeworkPageSize + 1]);
+  return rows.length ? homeworkPage(rows.filter(({ id }) => id !== null)) : null;
+}
+
 export function readEntry(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)
       || Object.keys(input).length !== 4 || !isSchoolDate(input.date)) return null;

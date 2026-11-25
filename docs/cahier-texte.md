@@ -2,7 +2,13 @@
 
 Le tuteur ouvre le cahier de l’un de ses enfants depuis l’écran « Vos enfants ». Il consulte les entrées de la classe actuelle de l’enfant par jour, semaine ou mois. Le champ Domaine filtre les entrées de la période sans distinction de casse. Le bouton « Afficher la suite » charge la page suivante lorsqu’une période contient plus de 30 entrées.
 
-## Publication locale
+## Publication dans la web-app
+
+Ouvrez « Espace direction » et connectez-vous avec le code école et votre mot de passe direction. Sélectionnez la classe, renseignez la date, le titre, le domaine et la description, puis cliquez sur « Publier ». La liste des publications est organisée par mois. Sélectionnez « Modifier » pour corriger une entrée, ou « Retirer » puis « Confirmer le retrait » pour la supprimer. Les familles voient les changements à la prochaine consultation. [Tutoriel d’installation et de configuration](installation.md)
+
+Le serveur utilise la session direction pour déterminer l’école autorisée. Une session parent donne accès uniquement à la lecture du cahier de ses propres enfants. Une session direction dure huit heures au maximum. Le compte direction est configuré dans l’assistant ou avec `direction:admin` pour les installations existantes.
+
+## Administration locale en ligne de commande
 
 Appliquer les migrations, préparer la base fictive et générer une invitation en suivant le [guide du parcours parent](auth-parent.md). Charger `DATABASE_URL` dans le terminal d’administration. Pour publier dans la classe A de l’école fictive, adapter la date à la période à tester.
 
@@ -27,4 +33,4 @@ La date doit être réelle et au format `AAAA-MM-JJ`. Le titre, le domaine et la
 
 La réponse contient `child` avec la classe actuelle, `entries` et `nextCursor`. Chaque entrée comporte `id`, `date`, `title`, `domain` et `description`. Le serveur vérifie la session et le rattachement actuel du tuteur à l’enfant dans la même requête que la lecture des entrées. L’accès à un enfant hors périmètre renvoie `404`, comme pour un identifiant inconnu. Les réponses portent `Cache-Control: no-store`.
 
-L’interface enseignant, les pièces jointes, les notifications et l’archivage annuel restent à développer.
+Les comptes enseignants et leurs droits par classe, les pièces jointes, les notifications et l’archivage annuel restent à développer.

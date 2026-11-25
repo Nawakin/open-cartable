@@ -16,7 +16,8 @@
     "build:mobile": "npm run build:web",
     "auth:admin": "npm run auth:admin --workspace @open-cartable/api --",
     "homework:admin": "npm run homework:admin --workspace @open-cartable/api --",
-    "dev:mobile:lan": "npm run dev:lan --workspace @open-cartable/mobile"
+    "dev:mobile:lan": "npm run dev:lan --workspace @open-cartable/mobile",
+    "direction:admin": "npm run direction:admin --workspace @open-cartable/api --"
   },
   "overrides": {
     "@expo/metro-config": {

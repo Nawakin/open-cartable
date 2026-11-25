@@ -47,6 +47,8 @@ export async function needsInstallation() {
 export function FirstRun({ token, onComplete }) {
   const [form, setForm] = useState(empty);
   const [manualToken, setManualToken] = useState('');
+  const [directionPassword, setDirectionPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState(null);
   const [alreadyInstalled, setAlreadyInstalled] = useState(false);
@@ -67,13 +69,18 @@ export function FirstRun({ token, onComplete }) {
       setProblem('Renseignez les quatre champs. Le code de l’école contient 2 à 32 lettres, chiffres ou tirets.');
       return;
     }
+    if (!directionPassword.trim() || [...directionPassword].length < 15
+      || [...directionPassword].length > 128 || confirmation !== directionPassword) {
+      setProblem('Choisissez un mot de passe direction de 15 à 128 caractères et confirmez-le.');
+      return;
+    }
     submitting.current = true;
     setPending(true);
     try {
       const response = await request({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...values, token: setupToken }),
+        body: JSON.stringify({ ...values, token: setupToken, directionPassword }),
       });
       if (response.status === 409) {
         setAlreadyInstalled(true);
@@ -82,6 +89,8 @@ export function FirstRun({ token, onComplete }) {
       } else if (response.ok) {
         setResult(await response.json());
         setManualToken('');
+        setDirectionPassword('');
+        setConfirmation('');
       } else {
         setProblem('Vérifiez les champs ou réessayez après avoir consulté le journal du serveur.');
       }
@@ -121,7 +130,7 @@ export function FirstRun({ token, onComplete }) {
   return (
     <View style={styles.panel}>
       <Text accessibilityRole="header" style={styles.title}>Configurer Open Cartable</Text>
-      <Text style={styles.body}>Créez votre école, une première classe et un premier accès parent.</Text>
+      <Text style={styles.body}>Créez votre école, une première classe et les accès direction et parent.</Text>
       <Button label="Remplir un exemple fictif" busy={pending} secondary onPress={() => setForm(example)} />
       {!token && (
         <Field label="Code d’installation" value={manualToken} onChangeText={setManualToken}
@@ -133,6 +142,10 @@ export function FirstRun({ token, onComplete }) {
           onChangeText={(value) => setForm((previous) => ({ ...previous, [key]: value }))}
           editable={!pending} />
       ))}
+      <Field label="Mot de passe direction" value={directionPassword} onChangeText={setDirectionPassword}
+        secureTextEntry autoCapitalize="none" autoComplete="new-password" maxLength={256} editable={!pending} />
+      <Field label="Confirmer le mot de passe direction" value={confirmation} onChangeText={setConfirmation}
+        secureTextEntry autoCapitalize="none" autoComplete="new-password" maxLength={256} editable={!pending} />
       {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
       <Button label={pending ? 'Configuration…' : 'Créer l’école'} busy={pending} onPress={submit} />
     </View>

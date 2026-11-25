@@ -46,7 +46,8 @@ try {
     parentAuth = { signingKey, store: createParentStore(pool, invitationKey), webOrigin };
     if (token) installation = { pool, token, invitationKey, webOrigin };
   }
-  const app = buildApp({ parentAuth, webRoot, installation });
+  const direction = webOrigin ? { pool, webOrigin } : undefined;
+  const app = buildApp({ parentAuth, webRoot, installation, direction });
   if (pool) app.addHook('onClose', async () => pool.end());
   const address = await app.listen({ host: env.OPEN_CARTABLE_HOST ?? '127.0.0.1', port: 3000 });
   for (const signal of ['SIGINT', 'SIGTERM']) {

@@ -38,7 +38,7 @@ Si l’école est encore à configurer, le lien contient le code d’installatio
 
 ## 3. Configurer l’école dans le navigateur
 
-1. Sur « Configurer Open Cartable », renseignez le nom et le code de l’école, le nom de la classe et le nom d’affichage du premier élève. Pour un essai, cliquez sur « Remplir un exemple fictif ».
+1. Sur « Configurer Open Cartable », renseignez le nom et le code de l’école, le nom de la classe et le nom d’affichage du premier élève. Pour un essai, cliquez sur « Remplir un exemple fictif ». Choisissez un mot de passe direction de 15 à 128 caractères et confirmez-le. Gardez-le dans votre gestionnaire de mots de passe.
 2. Cliquez sur « Créer l’école ». Conservez le code école et le code d’invitation parent qui s’affichent.
 3. Cliquez sur « Aller à la connexion », puis sur « Se connecter ». Le compte affiche l’élève créé. Ouvrez son cahier de texte pour consulter ses publications.
 
@@ -50,19 +50,19 @@ Si l’assistant vous demande le code d’installation après un rechargement, r
 
 ### Publier une entrée
 
-La commande suivante affiche les identifiants de classe de la base, qui servent aux commandes locales.
+1. Ouvrez « Espace direction » dans la web-app. Saisissez le code école et le mot de passe choisi dans l’assistant.
+2. Sélectionnez une classe. Renseignez la date, le titre, le domaine et la description, puis cliquez sur « Publier ».
+3. Revenez à « Espace parent » et ouvrez le cahier de texte de l’enfant. Sélectionnez la période de l’entrée. Dans l’espace direction, « Modifier » et « Retirer » permettent de corriger ou supprimer une publication. [Guide du cahier de texte](cahier-texte.md)
+
+### Activer ou réinitialiser le compte direction
+
+Après la mise à jour d’une installation existante, relancez le lanceur pour appliquer la migration. Exécutez ensuite la commande ci-dessous avec votre code école. Utilisez la même commande si vous perdez le mot de passe direction.
 
 ```sh
-docker compose exec -T postgres psql -U postgres -d open_cartable -c "SELECT s.code AS ecole, c.id AS classe, c.name FROM classes c JOIN schools s ON s.id = c.school_id"
+docker compose exec -T api npm run --silent direction:admin -- CODE_ECOLE
 ```
 
-Préparez un fichier JSON en UTF-8 dans un dossier privé hors du dépôt. Renseignez une date dans la période à consulter, un titre, un domaine et une description. Remplacez `CHEMIN_JSON`, `CODE_ECOLE` et `UUID_CLASSE` par vos valeurs. Sur Windows, exécutez la commande dans l’invite de commandes (`cmd.exe`) pour la redirection du fichier.
-
-```sh
-docker compose exec -T api npm run --silent homework:admin -- create CODE_ECOLE UUID_CLASSE < "CHEMIN_JSON"
-```
-
-Revenez dans le cahier de texte et choisissez la période de l’entrée. Le [guide du cahier de texte](cahier-texte.md) décrit le contenu du fichier et les commandes de modification et de suppression.
+La commande affiche un nouveau mot de passe dans le terminal et ferme les sessions direction de cette école. Conservez le mot de passe dans un gestionnaire et gardez le terminal privé. Les invitations et sessions parent suivent leur propre procédure de réémission.
 
 ### Générer une invitation supplémentaire
 
@@ -88,7 +88,7 @@ L’installation de départ n’écoute que sur la boucle locale. Pour un essai 
 2. Créez un fichier `.env` à la racine du projet et définissez `OPEN_CARTABLE_ORIGIN=https://ent.ecole.example` avec votre origine exacte, sans barre finale. Relancez l’installateur. L’adresse du navigateur doit correspondre à cette origine.
 3. Pour la web-app, ouvrez cette même adresse dans le navigateur de l’appareil. Pour le client natif de développement, installez Node.js 24 et exécutez `npm ci` puis `npm run dev:mobile:lan` depuis le dépôt. Ouvrez le projet dans un client Expo compatible avec le SDK 54 et Expo SecureStore. Dans l’app, saisissez l’origine HTTPS, le code école et une nouvelle invitation. Le téléphone doit aussi pouvoir joindre Metro pendant le développement.
 
-Les binaires mobiles distribués via les stores et l’administration complète par la direction font partie des lots suivants. Limitez cette installation aux données fictives jusqu’aux validations décrites dans les [exigences de sécurité](securite.md).
+Les binaires mobiles distribués via les stores et les autres fonctions de gestion de l’école font partie des lots suivants. Limitez cette installation aux données fictives jusqu’aux validations décrites dans les [exigences de sécurité](securite.md).
 
 ## 5. Redémarrer, mettre à jour et diagnostiquer
 
