@@ -4,6 +4,7 @@ import { dayInSchoolCalendar, movePeriod, periodRange } from '../parent/homework
 import { Button, Field, styles } from '../parent/ui';
 import { classPath, staffRequest } from './api';
 import { TeacherDirectory } from './teacher-directory';
+import { StaffAgenda } from '../agenda/staff-agenda';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -111,7 +112,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
       void run(async () => {
         const current = await request('/classes');
         setDesk(current);
-        if (!classId) return;
+        if (section !== 'homework' || !classId) return;
         if (!current.classes.some(({ id }) => id === classId)) {
           resetClass();
           return;
@@ -120,7 +121,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
       });
     });
     return () => subscription.remove();
-  }, [isTeacher, phase, classId, month]);
+  }, [isTeacher, phase, section, classId, month]);
 
   function login() {
     void run(async () => {
@@ -268,15 +269,14 @@ export function Staff({ role, onParent, onOtherStaff }) {
       {phase === 'desk' && (
         <>
           <Text style={staffStyles.heading}>{desk.schoolName}</Text>
-          {!isTeacher && (
-            <View style={styles.actions}>
-              <Button label="Cahier de texte" secondary={section !== 'homework'} busy={busy} onPress={() => setSection('homework')} />
-              <Button label="Comptes enseignants" secondary={section !== 'directory'} busy={busy} onPress={() => setSection('directory')} />
-            </View>
-          )}
-          {section === 'directory' ? (
-            <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />
-          ) : (
+          <View style={styles.actions}>
+            <Button label="Cahier de texte" secondary={section !== 'homework'} busy={busy} onPress={() => setSection('homework')} />
+            <Button label="Agenda" secondary={section !== 'agenda'} busy={busy} onPress={() => setSection('agenda')} />
+            {!isTeacher && <Button label="Comptes enseignants" secondary={section !== 'directory'} busy={busy} onPress={() => setSection('directory')} />}
+          </View>
+          {section === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
+          {section === 'agenda' && <StaffAgenda classes={desk.classes} isTeacher={isTeacher} request={request} run={run} busy={busy} />}
+          {section === 'homework' && (
             <>
               {desk.classes.length === 0 && <Text style={styles.body}>{isTeacher ? 'Aucune classe ne vous est affectée.' : 'Aucune classe n’est configurée.'}</Text>}
               {desk.classes.length > 0 && <Text style={styles.label}>Classe</Text>}

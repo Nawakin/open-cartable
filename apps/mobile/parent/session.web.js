@@ -1,4 +1,4 @@
-import { homeworkPath, request } from './http';
+import { agendaPath, homeworkPath, request } from './http';
 
 export const needsSchoolAddress = false;
 
@@ -21,6 +21,10 @@ export async function listChildren() {
 
 export function listHomework(childId, period) {
   return get(homeworkPath(childId, period));
+}
+
+export function listAgenda(childId, period) {
+  return get(agendaPath(childId, period));
 }
 
 export async function signOut() {

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { agendaPageSize, eventDetails, pageEvents } from '../agenda/events.js';
 import { transaction } from '../db/database.js';
 import { homeworkPage, homeworkPageSize } from '../homework/entries.js';
 import { generateInvitationCode, generateRefreshToken, invitationDigest, refreshDigest } from './credentials.js';
@@ -12,6 +13,24 @@ const activeParentQuery = `
   WHERE s.id = $1 AND s.guardian_id = $2 AND s.revoked_at IS NULL
     AND s.expires_at > statement_timestamp() AND g.active
 `;
+
+const permittedChildQuery = `
+  WITH active_parent AS (${activeParentQuery}), permitted_child AS (
+    SELECT student.school_id, student.class_id, student.id, student.display_name, c.name AS class_name
+    FROM active_parent p
+    JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
+    JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
+    JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
+    WHERE l.student_id = $3
+  )
+`;
+const childFields = `EXISTS (SELECT 1 FROM active_parent) AS authenticated,
+  (SELECT json_build_object('id', id, 'displayName', display_name,
+    'classId', class_id, 'className', class_name) FROM permitted_child) AS child`;
+
+const childAgendaEvents = `SELECT e.id, e.class_id, e.starts_at, e.ends_at, e.title, e.location, e.description
+  FROM permitted_child c
+  JOIN agenda_events e ON e.school_id = c.school_id AND (e.class_id IS NULL OR e.class_id = c.class_id)`;
 
 async function lockActiveGuardian(client, schoolId, guardianId) {
   const result = await client.query(`
@@ -172,15 +191,7 @@ export function createParentStore(pool, invitationKey) {
 
     async homework({ sessionId, guardianId }, childId, { from, to, domain, beforeDate, beforeId }) {
       const result = await pool.query(`
-        WITH active_parent AS (${activeParentQuery}),
-        permitted_child AS (
-          SELECT student.school_id, student.class_id, student.id, student.display_name, c.name AS class_name
-          FROM active_parent p
-          JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
-          JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
-          JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
-          WHERE l.student_id = $3
-        ), page AS (
+        ${permittedChildQuery}, page AS (
           SELECT e.id, e.entry_date, e.title, e.domain, e.description
           FROM permitted_child c
           JOIN homework_entries e ON (e.school_id, e.class_id) = (c.school_id, c.class_id)
@@ -190,9 +201,7 @@ export function createParentStore(pool, invitationKey) {
           ORDER BY e.entry_date DESC, e.id DESC
           LIMIT $9
         )
-        SELECT EXISTS (SELECT 1 FROM active_parent) AS authenticated,
-               (SELECT json_build_object('id', id, 'displayName', display_name,
-                 'classId', class_id, 'className', class_name) FROM permitted_child) AS child,
+        SELECT ${childFields},
                COALESCE((SELECT json_agg(json_build_object(
                  'id', id, 'date', to_char(entry_date, 'YYYY-MM-DD'),
                  'title', title, 'domain', domain, 'description', description
@@ -200,6 +209,29 @@ export function createParentStore(pool, invitationKey) {
       `, [sessionId, guardianId, childId, from, to, domain, beforeDate, beforeId, homeworkPageSize + 1]);
       const { authenticated, child, entries } = result.rows[0];
       return { authenticated, child, ...homeworkPage(entries) };
+    },
+
+    async agenda({ sessionId, guardianId }, childId, { from, until, afterStartsAt, afterId }) {
+      const { rows: [result] } = await pool.query(`
+        ${permittedChildQuery}, page AS (
+          ${childAgendaEvents}
+          WHERE e.ends_at > $4 AND e.starts_at < $5
+            AND ($6::timestamptz IS NULL OR (e.starts_at, e.id) > ($6, $7::uuid))
+          ORDER BY e.starts_at, e.id
+          LIMIT $8
+        )
+        SELECT ${childFields}, COALESCE((SELECT json_agg(page ORDER BY starts_at, id) FROM page), '[]'::json) AS events
+      `, [sessionId, guardianId, childId, from, until, afterStartsAt, afterId, agendaPageSize + 1]);
+      return { authenticated: result.authenticated, child: result.child, ...pageEvents(result.events) };
+    },
+
+    async agendaEvent({ sessionId, guardianId }, childId, eventId) {
+      const { rows: [result] } = await pool.query(`
+        ${permittedChildQuery}, visible AS (${childAgendaEvents} WHERE e.id = $4)
+        SELECT EXISTS (SELECT 1 FROM active_parent) AS authenticated,
+               (SELECT row_to_json(visible) FROM visible) AS event
+      `, [sessionId, guardianId, childId, eventId]);
+      return { authenticated: result.authenticated, event: result.event ? eventDetails(result.event) : null };
     },
   };
 }

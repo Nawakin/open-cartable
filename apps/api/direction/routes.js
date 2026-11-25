@@ -1,3 +1,4 @@
+import { registerStaffAgenda } from '../agenda/staff-routes.js';
 import { schoolCodePattern, uuidPattern } from '../auth/credentials.js';
 import { passwordLimits } from '../auth/password.js';
 import { authRateLimit, cookieOptions, registerStaffWeb, unauthorized, uuidParams } from '../auth/staff-web.js';
@@ -45,6 +46,7 @@ export async function directionRoutes(app, { pool, webOrigin }) {
   }));
 
   registerStaffHomework(app, '/direction', authenticated);
+  registerStaffAgenda(app, '/direction', authenticated);
 
   app.get('/direction/teachers', authenticated(async (_request, db, actor) => ({
     teachers: await listTeachers(db, actor.school_id),

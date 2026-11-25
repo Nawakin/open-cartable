@@ -3,11 +3,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
-import { listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
+import { listAgenda, listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
 import { Staff } from './staff/staff';
+import { ParentAgenda } from './agenda/agenda-view';
+import { agendaRange } from './agenda/dates';
 
 function openDirection() {
   window.location.assign('/?espace=direction');
@@ -36,7 +38,7 @@ function ParentApp() {
   const [phase, setPhase] = useState('loading');
   const [installationToken, setInstallationToken] = useState(consumeInstallationLink);
   const [children, setChildren] = useState([]);
-  const [notebook, setNotebook] = useState(null);
+  const [schoolPanel, setSchoolPanel] = useState(null);
   const [address, setAddress] = useState('');
   const [school, setSchool] = useState('');
   const [invitation, setInvitation] = useState('');
@@ -62,7 +64,7 @@ function ParentApp() {
   async function load(requireSession = false) {
     setPhase('loading');
     setChildren([]);
-    setNotebook(null);
+    setSchoolPanel(null);
     try {
       const roster = await listChildren();
       if (roster === null) {
@@ -93,40 +95,44 @@ function ParentApp() {
     await load();
   }
 
-  async function loadNotebook(selection, append = false) {
+  async function loadSchoolPanel(selection, append = false) {
+    const showsAgenda = selection.kind === 'agenda';
+    const key = showsAgenda ? 'events' : 'entries';
+    const list = showsAgenda ? listAgenda : listHomework;
+    const period = showsAgenda ? agendaRange(selection.anchor, selection.view) : {
+      ...periodRange(selection.anchor, selection.view), domain: selection.domain,
+    };
     if (!append) {
-      setNotebook({ ...selection, entries: [], nextCursor: null });
-      setPhase('homework');
+      setSchoolPanel({ ...selection, [key]: [], nextCursor: null });
+      setPhase(selection.kind);
     }
     try {
-      const page = await listHomework(selection.child.id, {
-        ...periodRange(selection.anchor, selection.view),
-        domain: selection.domain,
+      const page = await list(selection.child.id, {
+        ...period,
         cursor: append ? selection.nextCursor : undefined,
       });
       if (page === null) {
         setChildren([]);
-        setNotebook(null);
+        setSchoolPanel(null);
         setPhase('login');
         return;
       }
       if (append && selection.child.classId !== page.child.classId) {
-        await loadNotebook({ ...selection, child: page.child });
+        await loadSchoolPanel({ ...selection, child: page.child });
         return;
       }
-      const entries = append ? [...selection.entries, ...page.entries] : page.entries;
-      // Une entrée modifiée peut réapparaître sur une page suivante.
-      const uniqueEntries = Array.from(new Map(entries.map((entry) => [entry.id, entry])).values());
-      setNotebook({ ...selection, child: page.child, entries: uniqueEntries, nextCursor: page.nextCursor });
+      const items = append ? [...selection[key], ...page[key]] : page[key];
+      const unique = Array.from(new Map(items.map((item) => [item.id, item])).values());
+      setSchoolPanel({ ...selection, child: page.child, [key]: unique, nextCursor: page.nextCursor });
     } catch (failure) {
       if (failure.status !== 404) throw failure;
       await load();
-      setError('Ce cahier n’est plus accessible pour votre compte.');
+      setError('Cet espace n’est plus accessible pour votre compte.');
     }
   }
 
-  function openNotebook(child) {
-    void run(() => loadNotebook({ child, anchor: dayInSchoolCalendar(), view: 'week', domain: '' }));
+  function openSchoolPanel(child, kind) {
+    void run(() => loadSchoolPanel({ child, kind, anchor: dayInSchoolCalendar(), view: 'week', domain: '' }));
   }
 
   useEffect(() => {
@@ -134,12 +140,12 @@ function ParentApp() {
   }, []);
 
   useEffect(() => {
-    if (phase !== 'children' && phase !== 'homework') return undefined;
+    if (phase !== 'children' && phase !== 'homework' && phase !== 'agenda') return undefined;
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void run(phase === 'homework' ? () => loadNotebook(notebook) : load);
+      if (state === 'active') void run(schoolPanel ? () => loadSchoolPanel(schoolPanel) : load);
     });
     return () => subscription.remove();
-  }, [phase, notebook]);
+  }, [phase, schoolPanel]);
 
   function submit() {
     void run(async () => {
@@ -165,7 +171,7 @@ function ParentApp() {
     void run(async () => {
       await signOut();
       setChildren([]);
-      setNotebook(null);
+      setSchoolPanel(null);
       setInvitation('');
       setPhase('login');
     });
@@ -236,9 +242,11 @@ function ParentApp() {
                 label="Consulter le cahier"
                 accessibilityLabel={`Cahier de texte de ${child.displayName}`}
                 busy={busy}
-                onPress={() => openNotebook(child)}
+                onPress={() => openSchoolPanel(child, 'homework')}
                 secondary
               />
+              <Button label="Consulter l’agenda" accessibilityLabel={`Agenda de ${child.displayName}`} busy={busy}
+                onPress={() => openSchoolPanel(child, 'agenda')} secondary />
             </View>
           ))}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -251,17 +259,24 @@ function ParentApp() {
         </View>
       )}
 
-      {phase === 'homework' && notebook && (
+      {phase === 'homework' && schoolPanel && (
         <Homework
-          key={notebook.child.id}
-          notebook={notebook}
-          onChange={(selection) => void run(() => loadNotebook(selection))}
-          onMore={() => void run(() => loadNotebook(notebook, true))}
+          key={schoolPanel.child.id}
+          notebook={schoolPanel}
+          onChange={(selection) => void run(() => loadSchoolPanel(selection))}
+          onMore={() => void run(() => loadSchoolPanel(schoolPanel, true))}
           onBack={() => void run(load)}
           onLogout={logout}
           busy={busy}
           error={error}
         />
+      )}
+
+      {phase === 'agenda' && schoolPanel && (
+        <ParentAgenda calendar={schoolPanel} busy={busy} error={error} onLogout={logout}
+          onChange={(selection) => void run(() => loadSchoolPanel(selection))}
+          onMore={() => void run(() => loadSchoolPanel(schoolPanel, true))}
+          onBack={() => void run(load)} />
       )}
 
       {phase === 'unavailable' && (

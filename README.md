@@ -44,3 +44,7 @@ Le parcours parent permet de se connecter avec un code d’invitation, de consul
 ## Cahier de texte
 
 Le parent peut consulter les publications de la classe de ses enfants depuis l’app. La direction publie depuis la web-app et peut déléguer la publication aux enseignants par affectation de classe. Le [guide du cahier de texte](docs/cahier-texte.md) décrit ces parcours avec des données fictives.
+
+## Agenda
+
+La direction publie les événements de l’école et les enseignants ceux de leurs classes affectées. Les familles les consultent dans l’espace parent. Le [guide de l’agenda](docs/agenda.md) décrit la publication et l’export web.

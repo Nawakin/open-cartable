@@ -7,6 +7,12 @@ export function homeworkPath(childId, { from, to, domain, cursor }) {
   return `/children/${encodeURIComponent(childId)}/homework?${search.toString()}`;
 }
 
+export function agendaPath(childId, { from, until, cursor }) {
+  const search = new URLSearchParams({ from, until });
+  if (cursor) search.set('cursor', cursor);
+  return `/children/${encodeURIComponent(childId)}/agenda?${search.toString()}`;
+}
+
 export class RequestError extends Error {
   constructor(status) {
     super('La demande n’a pas abouti.');

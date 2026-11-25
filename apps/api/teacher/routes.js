@@ -1,3 +1,4 @@
+import { registerStaffAgenda } from '../agenda/staff-routes.js';
 import { schoolCodePattern } from '../auth/credentials.js';
 import { passwordLimits } from '../auth/password.js';
 import { authRateLimit, cookieOptions, registerStaffWeb, unauthorized } from '../auth/staff-web.js';
@@ -58,4 +59,5 @@ export async function teacherRoutes(app, { pool, webOrigin }) {
   }));
 
   registerStaffHomework(app, '/teacher', authenticated, canTeachClass);
+  registerStaffAgenda(app, '/teacher', authenticated, canTeachClass);
 }

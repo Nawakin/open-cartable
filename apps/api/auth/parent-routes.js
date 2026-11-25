@@ -1,5 +1,7 @@
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
+import { eventCalendar } from '../agenda/ical.js';
+import { agendaPeriod, agendaQuerySchema } from '../agenda/period.js';
 import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCodePattern, uuidPattern, verifyAccessToken } from './credentials.js';
 import { parentSessionSeconds } from './parent-store.js';
 import { homeworkQuerySchema, readPeriod } from '../homework/period.js';
@@ -152,5 +154,34 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
     if (!authenticated) return unauthorized(reply);
     if (!child) return reply.code(404).send({ error: 'Enfant introuvable.' });
     return { child, entries, nextCursor };
+  });
+
+  const calendar = '/parent/children/:childId/agenda';
+  app.get(calendar, {
+    schema: { params: jsonBody({ childId: uuidPattern }), querystring: agendaQuerySchema },
+  }, async (request, reply) => {
+    const claims = await parentIdentity(request);
+    if (!claims) return unauthorized(reply);
+    const period = agendaPeriod(request.query);
+    if (!period) return reply.code(400).send({ error: 'Période ou page non valide.' });
+    const { authenticated, child, events, nextCursor } = await store.agenda(claims, request.params.childId, period);
+    if (!authenticated) return unauthorized(reply);
+    if (!child) return reply.code(404).send({ error: 'Enfant introuvable.' });
+    return { child, events, nextCursor };
+  });
+
+  app.get(calendar + '/:eventId/ical', {
+    schema: { params: jsonBody({ childId: uuidPattern, eventId: uuidPattern }) },
+  }, async (request, reply) => {
+    const claims = await parentIdentity(request);
+    if (!claims) return unauthorized(reply);
+    const { childId, eventId } = request.params;
+    const { authenticated, event } = await store.agendaEvent(claims, childId, eventId);
+    if (!authenticated) return unauthorized(reply);
+    if (!event) return reply.code(404).send({ error: 'Événement introuvable.' });
+    return reply.type('text/calendar; charset=utf-8')
+      .header('Content-Disposition', 'attachment; filename="open-cartable-agenda.ics"')
+      .header('X-Content-Type-Options', 'nosniff')
+      .send(eventCalendar(event));
   });
 }
