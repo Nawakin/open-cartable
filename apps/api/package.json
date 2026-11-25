@@ -5,7 +5,13 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "auth:admin": "node db/admin.js"
   },
-  "dependencies": { "fastify": "5.12.8" }
+  "dependencies": {
+    "@fastify/rate-limit": "11.3.0",
+    "fastify": "5.12.8",
+    "jose": "6.2.18",
+    "pg": "8.23.1"
+  }
 }

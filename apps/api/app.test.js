@@ -13,11 +13,11 @@ test('le point de contrôle répond sans révéler la configuration', async (con
   assert.deepEqual(response.json(), { status: 'ok' });
 });
 
-test('les données élèves ne sont pas exposées par le socle', async (context) => {
+test('le parcours parent reste désactivé sans configuration', async (context) => {
   const app = buildApp();
   context.after(() => app.close());
 
-  const response = await app.inject('/api/v1/eleves');
+  const response = await app.inject('/api/v1/parent/children');
 
   assert.equal(response.statusCode, 404);
 });
