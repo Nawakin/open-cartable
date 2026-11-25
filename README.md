@@ -48,3 +48,7 @@ Le parent peut consulter les publications de la classe de ses enfants depuis l�
 ## Agenda
 
 La direction publie les événements de l’école et les enseignants ceux de leurs classes affectées. L’espace parent affiche les événements, les rendez-vous individuels et les rappels pour aujourd’hui et demain. Le [guide de l’agenda](docs/agenda.md) décrit les parcours et l’export web.
+
+## Messagerie
+
+Un tuteur peut écrire à la direction au sujet de l’un de ses enfants depuis le web ou l’app mobile. La direction répond depuis la web-app. [Guide de la messagerie](docs/messagerie.md)

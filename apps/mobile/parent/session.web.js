@@ -35,6 +35,10 @@ export function listAgendaReminders(cursor) {
   return get(agendaRemindersPath(cursor));
 }
 
+export function requestMessages(path, options) {
+  return request(fetch, '', '/messages' + path, { ...options, credentials: 'same-origin', cache: 'no-store' });
+}
+
 export async function signOut() {
   await request(fetch, '', '/web/auth/logout', { method: 'POST', credentials: 'same-origin' });
 }

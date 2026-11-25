@@ -50,7 +50,7 @@ Si l’assistant vous demande le code d’installation après un rechargement, r
 
 ### Publier une entrée
 
-1. Ouvrez « Espace direction » dans la web-app. Saisissez le code école et le mot de passe choisi dans l’assistant.
+1. Ouvrez « Espace direction » depuis la page de connexion ou le menu parent « Compte » de la web-app. Saisissez le code école et le mot de passe choisi dans l’assistant.
 2. Sélectionnez une classe. Renseignez la date, le titre, le domaine et la description, puis cliquez sur « Publier ».
 3. Revenez à « Espace parent » et ouvrez le cahier de texte de l’enfant. Sélectionnez la période de l’entrée. Dans l’espace direction, « Modifier » et « Retirer » permettent de corriger ou supprimer une publication. [Guide du cahier de texte](cahier-texte.md)
 
@@ -66,7 +66,7 @@ La commande affiche un nouveau mot de passe dans le terminal et ferme les sessio
 
 ### Créer un accès enseignant
 
-1. Dans « Espace direction », ouvrez « Comptes enseignants ». Choisissez un identifiant, affectez une ou plusieurs classes puis cliquez sur « Créer le compte enseignant ».
+1. Dans « Espace direction », ouvrez « Enseignants ». Choisissez un identifiant, affectez une ou plusieurs classes puis cliquez sur « Créer le compte enseignant ».
 2. Transmettez en privé le code école, l’identifiant et le code d’activation affiché. Le code est valable sept jours et s’utilise une seule fois.
 3. Dans « Espace enseignant », cliquez sur « Activer mon compte ». Saisissez le code école, l’identifiant et le code d’activation, puis choisissez un mot de passe de 15 à 128 caractères. Après activation, connectez-vous avec le code école, l’identifiant et ce mot de passe.
 
@@ -76,9 +76,13 @@ L’enseignant retrouve le même formulaire de publication que la direction, ave
 
 Dans « Agenda », la direction peut publier pour l’école entière ou une classe. Un enseignant peut publier pour ses classes affectées. Dans l’espace parent, ouvrez l’agenda de l’enfant pour consulter les événements ou télécharger un fichier `.ics` depuis la web-app. [Guide de l’agenda](agenda.md)
 
-Pour un rendez-vous individuel, demandez au tuteur sa référence depuis « Vos enfants », puis créez le rendez-vous dans l’onglet de la classe. [Procédure de prise de rendez-vous](agenda.md#fixer-un-rendez-vous-individuel)
+Pour un rendez-vous individuel, demandez au tuteur sa référence depuis « Compte », puis créez le rendez-vous dans l’onglet de la classe. [Procédure de prise de rendez-vous](agenda.md#fixer-un-rendez-vous-individuel)
 
 Pour essayer les rappels, publiez un événement qui commence plus tard aujourd’hui ou demain, puis ouvrez ou actualisez l’accueil parent. [Rappels d’agenda](agenda.md#rappels-dagenda)
+
+### Essayer la messagerie
+
+Dans le menu parent, ouvrez « Messagerie » et envoyez un message fictif. Ouvrez ensuite « Messagerie » dans l’espace direction de la web-app et répondez. De retour dans la conversation parent, utilisez « Actualiser » pour lire la réponse. [Guide de la messagerie](messagerie.md)
 
 ### Générer une invitation supplémentaire
 

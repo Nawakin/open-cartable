@@ -197,6 +197,22 @@ export function createParentStore(pool, invitationKey) {
       return rows[0]?.guardian_id ?? null;
     },
 
+    async withMessagingSession({ sessionId, guardianId }, operation) {
+      return transaction(pool, async (client) => {
+        const parameters = [sessionId, guardianId];
+        const { rows: [identity] } = await client.query(activeParentQuery, parameters);
+        if (!identity) return { authorized: false };
+        // Garder le même ordre de verrouillage que le remplacement d’un appareil.
+        const guardian = await client.query(`
+          SELECT 1 FROM guardians WHERE school_id = $1 AND id = $2 AND active FOR SHARE
+        `, [identity.school_id, guardianId]);
+        if (!guardian.rowCount) return { authorized: false };
+        const { rows: [actor] } = await client.query(`${activeParentQuery} FOR SHARE OF s`, parameters);
+        if (!actor) return { authorized: false };
+        return { authorized: true, value: await operation(client, actor) };
+      });
+    },
+
     async homework({ sessionId, guardianId }, childId, { from, to, domain, beforeDate, beforeId }) {
       const result = await pool.query(`
         ${permittedChildQuery}, page AS (

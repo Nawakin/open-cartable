@@ -5,6 +5,7 @@ import { readAuthKeys } from './auth/credentials.js';
 import { createParentStore } from './auth/parent-store.js';
 import { migrate, migrations, openDatabase } from './db/database.js';
 import { readSecret } from './installation/secrets.js';
+import { startMessageCleanup } from './messaging/retention.js';
 
 function readWebOrigin(value) {
   const url = URL.parse(value);
@@ -48,8 +49,13 @@ try {
   }
   const direction = webOrigin ? { pool, webOrigin } : undefined;
   const app = buildApp({ parentAuth, webRoot, installation, direction });
-  if (pool) app.addHook('onClose', async () => pool.end());
+  let stopMessageCleanup;
+  if (pool) app.addHook('onClose', async () => {
+    await stopMessageCleanup?.();
+    await pool.end();
+  });
   const address = await app.listen({ host: env.OPEN_CARTABLE_HOST ?? '127.0.0.1', port: 3000 });
+  if (pool) stopMessageCleanup = startMessageCleanup(pool);
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, async () => {
       try {

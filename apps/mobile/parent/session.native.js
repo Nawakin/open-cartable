@@ -1,6 +1,6 @@
 import { fetch } from 'expo/fetch';
 import * as SecureStore from 'expo-secure-store';
-import { agendaPath, agendaRemindersPath, homeworkPath, parseSchoolAddress, request } from './http';
+import { agendaPath, agendaRemindersPath, homeworkPath, parseSchoolAddress, request, RequestError } from './http';
 
 const storageKey = 'open-cartable-parent-session';
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -80,9 +80,9 @@ async function withSession(operation) {
   }
 }
 
-async function get(path) {
+async function get(path, options) {
   try {
-    return await withSession(({ origin, accessToken }) => request(fetch, origin, path, { token: accessToken }));
+    return await withSession(({ origin, accessToken }) => request(fetch, origin, path, { ...options, token: accessToken }));
   } catch (error) {
     if (error.status !== 401) throw error;
     await forget();
@@ -108,6 +108,12 @@ export function listAgenda(childId, period) {
 
 export function listAgendaReminders(cursor) {
   return get(agendaRemindersPath(cursor));
+}
+
+export async function requestMessages(path, options) {
+  const result = await get('/messages' + path, options);
+  if (result === null) throw new RequestError(401);
+  return result;
 }
 
 export async function signOut() {

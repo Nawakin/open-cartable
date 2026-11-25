@@ -5,6 +5,7 @@ import { agendaPeriod, agendaQuerySchema, readAgendaCursor, remindersQuerySchema
 import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCodePattern, uuidPattern, verifyAccessToken } from './credentials.js';
 import { parentSessionSeconds } from './parent-store.js';
 import { homeworkQuerySchema, readPeriod } from '../homework/period.js';
+import { registerParentMessages } from '../messaging/routes.js';
 
 const browserCookie = '__Host-open-cartable';
 const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
@@ -58,6 +59,8 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
     return request.headers.authorization === undefined && webOrigin
       ? browserIdentity(request) : bearerIdentity(request);
   }
+
+  registerParentMessages(app, { store, identify: parentIdentity, webOrigin, unauthorized });
 
   const invitationOptions = {
     bodyLimit: 1024,

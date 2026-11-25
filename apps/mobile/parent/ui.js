@@ -1,7 +1,8 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
-export function Button({ label, accessibilityLabel, onPress, busy, secondary = false }) {
+export function Button({ label, accessibilityLabel, onPress, busy, icon, secondary = false }) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -11,6 +12,7 @@ export function Button({ label, accessibilityLabel, onPress, busy, secondary = f
       onPress={onPress}
       style={({ pressed }) => [styles.button, secondary && styles.secondaryButton, (pressed || busy) && styles.dimmed]}
     >
+      {icon && <Ionicons name={icon} size={19} color={secondary ? '#17372d' : '#fff'} accessible={false} aria-hidden />}
       <Text style={secondary ? styles.secondaryLabel : styles.buttonLabel}>{label}</Text>
     </Pressable>
   );
@@ -39,7 +41,7 @@ export const styles = StyleSheet.create({
   field: { gap: 6 },
   label: { color: '#17372d', fontSize: 15, fontWeight: '700' },
   input: { color: '#132d25', fontSize: 16, minHeight: 48, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#929e91', backgroundColor: '#fff' },
-  button: { minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: '#225344' },
+  button: { minHeight: 48, flexDirection: 'row', gap: 8, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: '#225344' },
   buttonLabel: { color: '#fff', fontSize: 16, fontWeight: '700' },
   secondaryButton: { backgroundColor: '#e7ede4' },
   secondaryLabel: { color: '#17372d', fontSize: 16, fontWeight: '700' },

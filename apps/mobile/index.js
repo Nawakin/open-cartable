@@ -1,17 +1,22 @@
 import { registerRootComponent } from 'expo';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { ActivityIndicator, AppState, Image, Platform, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
-import { getTutorReference, listAgenda, listAgendaReminders, listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
+import { getTutorReference, listAgenda, listAgendaReminders, listChildren, listHomework, needsSchoolAddress, requestMessages, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
 import { Staff } from './staff/staff';
 import { AgendaReminders, ParentAgenda } from './agenda/agenda-view';
 import { agendaRange } from './agenda/dates';
+import { Messages } from './messaging/messages';
+import { AppFrame, SectionNav } from './navigation';
 
 const emptyReminders = { reminders: [], nextCursor: null };
+const parentSections = ['children', 'homework', 'agenda', 'messages', 'account'];
+const welcomeImage = require('./assets/accueil.jpg');
 
 function openDirection() {
   window.location.assign('/?espace=direction');
@@ -19,21 +24,6 @@ function openDirection() {
 
 function openTeacher() {
   window.location.assign('/?espace=enseignant');
-}
-
-function AppFrame({ children }) {
-  return (
-    <SafeAreaView style={shell.safeArea}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={shell.scroll}>
-        <View style={shell.content}>
-          <View style={shell.header}>
-            <Text style={shell.brand}>Open Cartable</Text>
-          </View>
-          {children}
-        </View>
-      </ScrollView>
-    </SafeAreaView>
-  );
 }
 
 function ParentApp() {
@@ -224,8 +214,24 @@ function ParentApp() {
     });
   }
 
+  function showParentSection(section) {
+    setTutorReference(null);
+    setSchoolPanel(null);
+    setError('');
+    setPhase(section);
+    if (section === 'children' && children.length) void run(() => loadReminders());
+  }
+
+  const menu = parentSections.includes(phase) && <SectionNav label="Menu parent" busy={busy}
+    active={phase === 'homework' || phase === 'agenda' ? 'children' : phase}
+    items={[
+      { id: 'children', icon: 'home-outline', label: 'Accueil', onPress: () => showParentSection('children') },
+      { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie', onPress: () => showParentSection('messages') },
+      { id: 'account', icon: 'person-circle-outline', label: 'Compte', onPress: () => showParentSection('account') },
+    ]} />;
+
   return (
-    <AppFrame>
+    <AppFrame menu={menu} scrollKey={phase}>
       {phase === 'loading' && (
         <View style={styles.panel}>
           <ActivityIndicator accessibilityLabel="Chargement" color="#225344" />
@@ -244,6 +250,7 @@ function ParentApp() {
 
       {phase === 'login' && (
         <View style={styles.panel}>
+          <Image source={welcomeImage} resizeMode="cover" accessible={false} aria-hidden style={shell.welcome} />
           <Text accessibilityRole="header" style={styles.title}>Connexion parent</Text>
           <Text style={styles.body}>Saisissez les codes remis par votre école.</Text>
           {needsSchoolAddress && (
@@ -271,9 +278,11 @@ function ParentApp() {
             editable={!busy}
           />
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-          <Button label={busy ? 'Connexion…' : 'Se connecter'} busy={busy} onPress={submit} />
-          {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
-          {Platform.OS === 'web' && <Button label="Espace enseignant" busy={busy} onPress={openTeacher} secondary />}
+          <Button label={busy ? 'Connexion…' : 'Se connecter'} icon="log-in-outline" busy={busy} onPress={submit} />
+          {Platform.OS === 'web' && <View style={styles.actions}>
+            <Button label="Espace direction" icon="business-outline" busy={busy} onPress={openDirection} secondary />
+            <Button label="Espace enseignant" icon="school-outline" busy={busy} onPress={openTeacher} secondary />
+          </View>}
         </View>
       )}
 
@@ -287,37 +296,50 @@ function ParentApp() {
             {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
             {children.map((child) => (
               <View key={child.id} style={shell.child}>
-                <Text style={shell.childName}>{child.displayName}</Text>
-                <Text style={styles.body}>{child.className}</Text>
-                <Button
-                  label="Consulter le cahier"
-                  accessibilityLabel={`Cahier de texte de ${child.displayName}`}
-                  busy={busy}
-                  onPress={() => openSchoolPanel(child, 'homework')}
-                  secondary
-                />
-                <Button label="Consulter l’agenda" accessibilityLabel={`Agenda de ${child.displayName}`} busy={busy}
-                  onPress={() => openSchoolPanel(child, 'agenda')} secondary />
+                <View style={shell.childHeader}>
+                  <View style={shell.childIcon}>
+                    <Ionicons name="school-outline" size={22} color="#225344" accessible={false} aria-hidden />
+                  </View>
+                  <View style={shell.childDetails}>
+                    <Text style={shell.childName}>{child.displayName}</Text>
+                    <Text style={styles.body}>{child.className}</Text>
+                  </View>
+                </View>
+                <View style={styles.actions}>
+                  <Button label="Cahier de texte" icon="book-outline" accessibilityLabel={`Cahier de texte de ${child.displayName}`}
+                    busy={busy} onPress={() => openSchoolPanel(child, 'homework')} secondary />
+                  <Button label="Agenda" icon="calendar-outline" accessibilityLabel={`Agenda de ${child.displayName}`}
+                    busy={busy} onPress={() => openSchoolPanel(child, 'agenda')} secondary />
+                </View>
               </View>
             ))}
-            {tutorReference && (
-              <View style={shell.child}>
-                <Text style={styles.body}>Transmettez cette référence à l’école pour fixer un rendez-vous individuel.</Text>
-                <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>
-              </View>
-            )}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             <View style={styles.actions}>
-              <Button label={tutorReference ? 'Masquer ma référence tuteur' : 'Afficher ma référence tuteur'}
-                busy={busy} onPress={toggleTutorReference} secondary />
-              <Button label="Actualiser" busy={busy} onPress={() => void run(load)} secondary />
-              <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
-              {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
-              {Platform.OS === 'web' && <Button label="Espace enseignant" busy={busy} onPress={openTeacher} secondary />}
+              <Button label="Actualiser" icon="refresh-outline" busy={busy} onPress={() => void run(load)} secondary />
             </View>
           </View>
         </>
       )}
+
+      {phase === 'messages' && <View style={styles.panel}>
+        <Messages children={children} request={requestMessages} onExpired={() => void run(load)} />
+      </View>}
+
+      {phase === 'account' && <View style={styles.panel}>
+        <Text accessibilityRole="header" style={styles.title}>Mon compte</Text>
+        <Text style={styles.body}>Votre référence tuteur permet à l’école de vous proposer un rendez-vous individuel.</Text>
+        {tutorReference && <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>}
+        {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+        <View style={styles.actions}>
+          <Button label={tutorReference ? 'Masquer ma référence tuteur' : 'Afficher ma référence tuteur'}
+            icon={tutorReference ? 'eye-off-outline' : 'eye-outline'} busy={busy} onPress={toggleTutorReference} secondary />
+          <Button label="Se déconnecter" icon="log-out-outline" busy={busy} onPress={logout} secondary />
+        </View>
+        {Platform.OS === 'web' && <View style={styles.actions}>
+          <Button label="Espace direction" icon="business-outline" busy={busy} onPress={openDirection} secondary />
+          <Button label="Espace enseignant" icon="school-outline" busy={busy} onPress={openTeacher} secondary />
+        </View>}
+      </View>}
 
       {phase === 'homework' && schoolPanel && (
         <Homework
@@ -358,19 +380,18 @@ function App() {
   const role = section === 'direction' ? 'direction' : (section === 'enseignant' ? 'teacher' : null);
   return (
     <SafeAreaProvider>
-      {role ? <AppFrame><Staff role={role} onParent={() => window.location.assign('/')}
-        onOtherStaff={role === 'teacher' ? openDirection : openTeacher} /></AppFrame> : <ParentApp />}
+      {role ? <Staff role={role} onParent={() => window.location.assign('/')}
+        onOtherStaff={role === 'teacher' ? openDirection : openTeacher} /> : <ParentApp />}
     </SafeAreaProvider>
   );
 }
 
 const shell = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#f3f0e5' },
-  scroll: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 36 },
-  content: { width: '100%', maxWidth: 560, gap: 18 },
-  header: { backgroundColor: '#17372d', paddingHorizontal: 24, paddingVertical: 18, borderRadius: 18 },
-  brand: { color: '#fff7df', fontSize: 23, fontWeight: '800', letterSpacing: -0.5 },
-  child: { paddingVertical: 13, paddingHorizontal: 16, backgroundColor: '#eef1e9', borderRadius: 12, gap: 4 },
+  welcome: { width: '100%', height: 132, borderRadius: 12, backgroundColor: '#e5e6d3' },
+  child: { paddingVertical: 13, paddingHorizontal: 16, backgroundColor: '#eef1e9', borderRadius: 12, gap: 12 },
+  childHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  childIcon: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center', backgroundColor: '#dfe9dc', borderRadius: 12 },
+  childDetails: { flex: 1, minWidth: 0 },
   childName: { color: '#132d25', fontSize: 18, fontWeight: '700' },
 });
 

@@ -11,7 +11,7 @@ Saisissez les horaires dans le fuseau de votre appareil. L’application enregis
 
 ## Fixer un rendez-vous individuel
 
-1. Dans l’espace parent, ouvrez « Vos enfants », puis « Afficher ma référence tuteur ». Transmettez cette référence à l’école en privé pour le rendez-vous.
+1. Dans le menu parent, ouvrez « Compte », puis « Afficher ma référence tuteur ». Transmettez cette référence à l’école en privé pour le rendez-vous.
 2. Dans l’espace direction ou enseignant, ouvrez « Agenda », choisissez la classe de l’élève, puis « Rendez-vous individuels ».
 3. Sélectionnez l’élève, collez la référence reçue et renseignez les horaires. Cliquez sur « Créer le rendez-vous ». Le serveur vérifie que le tuteur est actif et lié à cet élève.
 
@@ -21,7 +21,7 @@ Si l’élève change de classe, le rendez-vous cesse d’apparaître dans l’a
 
 ## Consulter et exporter
 
-Dans l’espace parent, choisissez « Consulter l’agenda » sous l’enfant. Les événements de sa classe actuelle et ceux de son école sont affichés par semaine ou par mois. La liste comprend les événements qui chevauchent la période affichée.
+Dans l’accueil parent, choisissez « Agenda » sous l’enfant. Les événements de sa classe actuelle et ceux de son école sont affichés par semaine ou par mois. La liste comprend les événements qui chevauchent la période affichée.
 
 Dans la web-app, « Télécharger le fichier .ics » exporte l’événement choisi pour l’importer dans un calendrier. Ce fichier constitue une copie de l’événement au moment du téléchargement. Il faudra l’importer de nouveau si l’horaire change après téléchargement. L’export applique les mêmes contrôles de tutelle, d’école et de classe que la consultation.
 

@@ -5,10 +5,21 @@ import { Button, Field, styles } from '../parent/ui';
 import { classPath, staffRequest } from './api';
 import { TeacherDirectory } from './teacher-directory';
 import { StaffAgenda } from '../agenda/staff-agenda';
+import { Messages } from '../messaging/messages';
+import { AppFrame, SectionNav } from '../navigation';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
 const blankEntry = () => ({ date: dayInSchoolCalendar(), title: '', domain: '', description: '' });
+const commonSections = [
+  { id: 'homework', icon: 'book-outline', label: 'Cahier de texte' },
+  { id: 'agenda', icon: 'calendar-outline', label: 'Agenda' },
+];
+const directionSections = [
+  ...commonSections,
+  { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie' },
+  { id: 'directory', icon: 'people-outline', label: 'Enseignants' },
+];
 
 function message(error, activating) {
   switch (error.status) {
@@ -54,6 +65,11 @@ export function Staff({ role, onParent, onOtherStaff }) {
     setPhase('login');
   }
 
+  function expireSession() {
+    resetDesk();
+    setProblem('Votre session a expiré. Reconnectez-vous.');
+  }
+
   function resetClass() {
     setClassId(null);
     setPage(emptyPage);
@@ -72,8 +88,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
       await operation();
     } catch (error) {
       if (error.status === 401 && phase === 'desk') {
-        resetDesk();
-        setProblem('Votre session a expiré. Reconnectez-vous.');
+        expireSession();
       } else {
         if (isTeacher && phase === 'desk' && error.status === 404) {
           resetClass();
@@ -235,14 +250,21 @@ export function Staff({ role, onParent, onOtherStaff }) {
     });
   }
 
-  return (
+  const menu = phase === 'desk' && <SectionNav label={isTeacher ? 'Menu enseignant' : 'Menu direction'} active={section} busy={busy}
+    items={(isTeacher ? commonSections : directionSections).map((item) => ({
+      ...item, onPress: () => setSection(item.id),
+    }))} />;
+  const spaceLinks = <View style={styles.actions}>
+    <Button label="Espace parent" icon="home-outline" onPress={onParent} busy={busy} secondary />
+    <Button label={isTeacher ? 'Espace direction' : 'Espace enseignant'} icon={isTeacher ? 'business-outline' : 'school-outline'}
+      onPress={onOtherStaff} busy={busy} secondary />
+  </View>;
+
+  const panel = (
     <View style={styles.panel}>
-      <Text accessibilityRole="header" style={styles.title}>{title}</Text>
-      <View style={styles.actions}>
-        <Button label="Espace parent" onPress={onParent} busy={busy} secondary />
-        <Button label={isTeacher ? 'Espace direction' : 'Espace enseignant'} onPress={onOtherStaff} busy={busy} secondary />
-        {phase === 'desk' && <Button label="Se déconnecter" onPress={logout} busy={busy} secondary />}
-      </View>
+      {phase === 'desk'
+        ? <Text accessibilityRole="header" style={staffStyles.heading}>{desk.schoolName}</Text>
+        : <Text accessibilityRole="header" style={styles.title}>{title}</Text>}
       {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
       {notice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text> : null}
       {phase === 'loading' && <Text style={styles.body}>Chargement de votre espace…</Text>}
@@ -268,14 +290,9 @@ export function Staff({ role, onParent, onOtherStaff }) {
       )}
       {phase === 'desk' && (
         <>
-          <Text style={staffStyles.heading}>{desk.schoolName}</Text>
-          <View style={styles.actions}>
-            <Button label="Cahier de texte" secondary={section !== 'homework'} busy={busy} onPress={() => setSection('homework')} />
-            <Button label="Agenda" secondary={section !== 'agenda'} busy={busy} onPress={() => setSection('agenda')} />
-            {!isTeacher && <Button label="Comptes enseignants" secondary={section !== 'directory'} busy={busy} onPress={() => setSection('directory')} />}
-          </View>
           {section === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
           {section === 'agenda' && <StaffAgenda classes={desk.classes} isTeacher={isTeacher} request={request} run={run} busy={busy} />}
+          {section === 'messages' && <Messages request={(path, options) => request('/messages' + path, options)} onExpired={expireSession} />}
           {section === 'homework' && (
             <>
               {desk.classes.length === 0 && <Text style={styles.body}>{isTeacher ? 'Aucune classe ne vous est affectée.' : 'Aucune classe n’est configurée.'}</Text>}
@@ -333,6 +350,14 @@ export function Staff({ role, onParent, onOtherStaff }) {
         </>
       )}
     </View>
+  );
+
+  return (
+    <AppFrame menu={menu} scrollKey={phase === 'desk' ? section : phase} busy={busy}
+      onLogout={phase === 'desk' ? logout : undefined} wide>
+      {panel}
+      {spaceLinks}
+    </AppFrame>
   );
 }
 
