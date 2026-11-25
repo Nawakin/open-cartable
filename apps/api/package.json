@@ -9,7 +9,9 @@
     "auth:admin": "node db/admin.js"
   },
   "dependencies": {
+    "@fastify/cookie": "11.1.5",
     "@fastify/rate-limit": "11.3.0",
+    "@fastify/static": "10.1.12",
     "fastify": "5.12.8",
     "jose": "6.2.18",
     "pg": "8.23.1"

@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 
+export const migrations = ['001-parent-auth.sql', '002-browser-sessions.sql'];
+
 export function openDatabase(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL est requise.');
   return new pg.Pool({
@@ -32,7 +34,6 @@ export async function transaction(pool, operation) {
 }
 
 export async function migrate(pool) {
-  const migrations = ['001-parent-auth.sql'];
   await transaction(pool, async (client) => {
     await client.query("SELECT pg_advisory_xact_lock(192615, 1)");
     await client.query('CREATE TABLE IF NOT EXISTS schema_migrations (name text PRIMARY KEY)');

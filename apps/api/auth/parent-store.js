@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { transaction } from '../db/database.js';
 import { generateInvitationCode, generateRefreshToken, invitationDigest, refreshDigest } from './credentials.js';
 
+export const parentSessionSeconds = 30 * 24 * 60 * 60;
+
 async function lockActiveGuardian(client, schoolId, guardianId) {
   const result = await client.query(`
     SELECT 1 FROM guardians
@@ -40,7 +42,7 @@ export function createParentStore(pool, invitationKey) {
       });
     },
 
-    async redeem(schoolCode, code) {
+    async redeem(schoolCode, code, { browser = false } = {}) {
       const digest = invitationDigest(invitationKey, schoolCode, code);
       return transaction(pool, async (client) => {
         const lookup = await client.query(`
@@ -61,16 +63,33 @@ export function createParentStore(pool, invitationKey) {
 
         const result = await client.query(`
           INSERT INTO parent_sessions (id, school_id, guardian_id, expires_at)
-          VALUES ($1, $2, $3, statement_timestamp() + interval '30 days')
+          VALUES ($1, $2, $3, statement_timestamp() + $4::interval)
           RETURNING id, guardian_id, expires_at
-        `, [randomUUID(), invitation.school_id, invitation.guardian_id]);
+        `, [randomUUID(), invitation.school_id, invitation.guardian_id, `${parentSessionSeconds} seconds`]);
         const session = result.rows[0];
+        if (browser) {
+          const browserToken = generateRefreshToken();
+          await client.query('INSERT INTO parent_browser_sessions (digest, session_id) VALUES ($1, $2)', [
+            refreshDigest(browserToken), session.id,
+          ]);
+          return { session, browserToken };
+        }
         const refreshToken = generateRefreshToken();
         await client.query('INSERT INTO parent_refresh_tokens (digest, session_id) VALUES ($1, $2)', [
           refreshDigest(refreshToken), session.id,
         ]);
         return { session, refreshToken };
       });
+    },
+
+    async browserIdentity(token) {
+      const result = await pool.query(`
+        SELECT s.id AS "sessionId", s.guardian_id AS "guardianId"
+        FROM parent_browser_sessions b
+        JOIN parent_sessions s ON s.id = b.session_id
+        WHERE b.digest = $1 AND s.revoked_at IS NULL AND s.expires_at > statement_timestamp()
+      `, [refreshDigest(token)]);
+      return result.rows[0] ?? null;
     },
 
     async rotate(token) {
@@ -112,6 +131,14 @@ export function createParentStore(pool, invitationKey) {
         UPDATE parent_sessions SET revoked_at = statement_timestamp()
         WHERE id = $1 AND guardian_id = $2 AND revoked_at IS NULL
       `, [sessionId, guardianId]);
+    },
+
+    async revokeRefreshToken(token) {
+      await pool.query(`
+        UPDATE parent_sessions s SET revoked_at = statement_timestamp()
+        FROM parent_refresh_tokens r
+        WHERE s.id = r.session_id AND r.digest = $1 AND s.revoked_at IS NULL
+      `, [refreshDigest(token)]);
     },
 
     async children({ sessionId, guardianId }) {

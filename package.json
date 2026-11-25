@@ -12,7 +12,8 @@
     "dev:api": "npm run dev --workspace @open-cartable/api",
     "dev:mobile": "npm run dev --workspace @open-cartable/mobile",
     "test": "npm test --workspace @open-cartable/api",
-    "build:mobile": "npm run build:web --workspace @open-cartable/mobile",
+    "build:web": "npm run build:web --workspace @open-cartable/mobile",
+    "build:mobile": "npm run build:web",
     "auth:admin": "npm run auth:admin --workspace @open-cartable/api --"
   },
   "overrides": {

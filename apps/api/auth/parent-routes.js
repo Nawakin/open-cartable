@@ -1,5 +1,10 @@
 import rateLimit from '@fastify/rate-limit';
+import cookie from '@fastify/cookie';
 import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCodePattern, verifyAccessToken } from './credentials.js';
+import { parentSessionSeconds } from './parent-store.js';
+
+const browserCookie = '__Host-open-cartable';
+const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
 
 function jsonBody(fields) {
   return {
@@ -16,8 +21,9 @@ function unauthorized(reply) {
   return reply.code(401).send({ error: 'Identifiants non valides.' });
 }
 
-export async function parentRoutes(app, { store, signingKey }) {
+export async function parentRoutes(app, { store, signingKey, webOrigin }) {
   await app.register(rateLimit, { global: false, cache: 10_000 });
+  if (webOrigin) await app.register(cookie);
   app.addHook('onRequest', async (_request, reply) => {
     reply.header('Cache-Control', 'no-store');
   });
@@ -35,16 +41,23 @@ export async function parentRoutes(app, { store, signingKey }) {
     return { ...access, refreshToken: result.refreshToken };
   }
 
-  function identity(request) {
+  function bearerIdentity(request) {
     const match = /^Bearer (\S+)$/i.exec(request.headers.authorization ?? '');
     return verifyAccessToken(signingKey, match?.[1]);
   }
 
-  app.post('/parent/auth/invitations/redeem', {
+  function browserIdentity(request) {
+    const token = request.cookies?.[browserCookie];
+    return typeof token === 'string' && refreshTokenPattern.test(token) ? store.browserIdentity(token) : null;
+  }
+
+  const invitationOptions = {
     bodyLimit: 1024,
     config: { rateLimit: { max: 10, timeWindow: '1 minute' } },
     schema: { body: jsonBody({ schoolCode: schoolCodePattern, code: invitationCodePattern }) },
-  }, async (request, reply) => {
+  };
+
+  app.post('/parent/auth/invitations/redeem', invitationOptions, async (request, reply) => {
     const { schoolCode, code } = request.body;
     return signIn(reply, await store.redeem(schoolCode, code));
   });
@@ -55,12 +68,41 @@ export async function parentRoutes(app, { store, signingKey }) {
     schema: { body: jsonBody({ refreshToken: refreshTokenPattern }) },
   }, async (request, reply) => signIn(reply, await store.rotate(request.body.refreshToken)));
 
-  app.post('/parent/auth/logout', async (request, reply) => {
-    const claims = await identity(request);
+  app.post('/parent/auth/logout', { bodyLimit: 1024 }, async (request, reply) => {
+    if (request.headers.authorization === undefined) {
+      const token = request.body?.refreshToken;
+      if (typeof token !== 'string' || !refreshTokenPattern.test(token)) return unauthorized(reply);
+      await store.revokeRefreshToken(token);
+      return reply.code(204).send();
+    }
+    const claims = await bearerIdentity(request);
     if (!claims) return unauthorized(reply);
     await store.revoke(claims);
     return reply.code(204).send();
   });
+
+  if (webOrigin) {
+    async function requireWebOrigin(request, reply) {
+      if (request.headers.origin !== webOrigin) {
+        return reply.code(403).send({ error: 'Origine de la requête non autorisée.' });
+      }
+    }
+
+    app.post('/parent/web/auth/login', { ...invitationOptions, onRequest: requireWebOrigin }, async (request, reply) => {
+      const { schoolCode, code } = request.body;
+      const result = await store.redeem(schoolCode, code, { browser: true });
+      if (!result) return unauthorized(reply);
+      return reply.setCookie(browserCookie, result.browserToken, {
+        ...cookieOptions, maxAge: parentSessionSeconds,
+      }).code(204).send();
+    });
+
+    app.post('/parent/web/auth/logout', { onRequest: requireWebOrigin }, async (request, reply) => {
+      const claims = await browserIdentity(request);
+      if (claims) await store.revoke(claims);
+      return reply.clearCookie(browserCookie, cookieOptions).code(204).send();
+    });
+  }
 
   app.get('/parent/children', {
     schema: {
@@ -82,7 +124,8 @@ export async function parentRoutes(app, { store, signingKey }) {
       },
     },
   }, async (request, reply) => {
-    const claims = await identity(request);
+    const claims = await (request.headers.authorization === undefined && webOrigin
+      ? browserIdentity(request) : bearerIdentity(request));
     if (!claims) return unauthorized(reply);
     const children = await store.children(claims);
     if (!children) return unauthorized(reply);

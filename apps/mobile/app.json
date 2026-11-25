@@ -3,6 +3,12 @@
     "name": "Open Cartable",
     "slug": "open-cartable",
     "newArchEnabled": true,
-    "web": { "bundler": "metro" }
+    "web": {
+      "bundler": "metro",
+      "lang": "fr"
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

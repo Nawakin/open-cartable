@@ -10,6 +10,7 @@ import { createParentStore } from './parent-store.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const schoolCode = demo.school.code;
+const webOrigin = 'https://ent.ecole.example';
 const [guardianA, guardianB] = demo.guardians;
 
 test('parcours parent sur PostgreSQL', { skip: !databaseUrl }, async (context) => {
@@ -25,7 +26,7 @@ test('parcours parent sur PostgreSQL', { skip: !databaseUrl }, async (context) =
   await admin.query(`CREATE SCHEMA ${schema}`);
   const pool = new pg.Pool({ connectionString: databaseUrl, options: `-c search_path=${schema}` });
   const store = createParentStore(pool, randomBytes(32));
-  const app = buildApp({ parentAuth: { store, signingKey: randomBytes(32) } });
+  const app = buildApp({ parentAuth: { store, signingKey: randomBytes(32), webOrigin } });
   context.after(async () => {
     await app.close();
     await pool.end();
@@ -45,6 +46,10 @@ test('parcours parent sur PostgreSQL', { skip: !databaseUrl }, async (context) =
   const redeem = (code, school = schoolCode) => post('/auth/invitations/redeem', { schoolCode: school, code });
   const refresh = (refreshToken) => post('/auth/refresh', { refreshToken });
   const authorize = (accessToken) => ({ authorization: `Bearer ${accessToken}` });
+  const webPost = (path, { origin, cookie, payload }) => app.inject({
+    method: 'POST', url: endpoint + '/web/auth/' + path, payload,
+    headers: { ...(origin === undefined ? {} : { origin }), ...(cookie ? { cookie } : {}) },
+  });
   const children = (accessToken, query = '') => app.inject({
     url: endpoint + '/children' + query,
     headers: accessToken ? authorize(accessToken) : {},
@@ -130,6 +135,69 @@ test('parcours parent sur PostgreSQL', { skip: !databaseUrl }, async (context) =
     assert.equal(logout.statusCode, 204);
     assert.equal((await children(rotated.accessToken)).statusCode, 401);
     assert.equal((await refresh(rotated.refreshToken)).statusCode, 401);
+  });
+
+  await context.test('le mobile se déconnecte avec le jeton de renouvellement sans devoir le faire tourner', async () => {
+    const initial = await login(guardianA);
+    const logout = { refreshToken: initial.refreshToken };
+    assert.equal((await post('/auth/logout', logout)).statusCode, 204);
+    assert.equal((await post('/auth/logout', logout)).statusCode, 204);
+    assert.equal((await children(initial.accessToken)).statusCode, 401);
+    assert.equal((await refresh(initial.refreshToken)).statusCode, 401);
+  });
+
+  await context.test('le navigateur exige une origine exacte et garde le secret de session dans un cookie protégé', async () => {
+    const { code } = await store.invite(schoolCode, guardianB);
+    const payload = { schoolCode, code };
+    for (const origin of [undefined, 'null', 'https://autre.ecole.example']) {
+      assert.equal((await webPost('login', { origin, payload })).statusCode, 403);
+    }
+    const result = await webPost('login', { origin: webOrigin, payload });
+    assert.equal(result.statusCode, 204);
+    assert.equal(result.body, '');
+    assert.equal(result.headers['cache-control'], 'no-store');
+    const setCookie = result.headers['set-cookie'];
+    assert.match(setCookie, /^__Host-open-cartable=[A-Za-z0-9_-]{43};/);
+    for (const attribute of ['Path=/', 'Max-Age=2592000', 'Secure', 'HttpOnly', 'SameSite=Strict']) {
+      assert.ok(setCookie.split(/;\s*/).includes(attribute));
+    }
+    assert.doesNotMatch(setCookie, /;\s*Domain=/i);
+    const cookie = setCookie.split(';')[0];
+    const token = cookie.split('=')[1];
+    const browserSession = await pool.query('SELECT digest FROM parent_browser_sessions WHERE digest = $1', [refreshDigest(token)]);
+    assert.equal(browserSession.rowCount, 1);
+    assert.equal((await refresh(token)).statusCode, 401);
+    assert.equal((await redeem(code)).statusCode, 401);
+    const browserChildren = () => app.inject({ url: endpoint + '/children', headers: { cookie } });
+    const tabs = await Promise.all([browserChildren(), browserChildren()]);
+    for (const tab of tabs) {
+      assert.equal(tab.statusCode, 200);
+      assert.equal(tab.headers['cache-control'], 'no-store');
+      assert.deepEqual(tab.json().children.map(({ id }) => id), [demo.students[2].id]);
+    }
+    assert.equal((await webPost('logout', { origin: 'https://autre.ecole.example', cookie })).statusCode, 403);
+    assert.equal((await browserChildren()).statusCode, 200);
+    const logout = await webPost('logout', { origin: webOrigin, cookie });
+    assert.equal(logout.statusCode, 204);
+    assert.match(logout.headers['set-cookie'], /^__Host-open-cartable=;/);
+    assert.equal((await browserChildren()).statusCode, 401);
+  });
+
+  await context.test('le remplacement et l’expiration invalident aussi les sessions navigateur', async () => {
+    const openBrowserSession = async () => {
+      const { code } = await store.invite(schoolCode, guardianB);
+      const response = await webPost('login', { origin: webOrigin, payload: { schoolCode, code } });
+      assert.equal(response.statusCode, 204);
+      return response.headers['set-cookie'].split(';')[0];
+    };
+    const browserChildren = (cookie) => app.inject({ url: endpoint + '/children', headers: { cookie } });
+    const expired = await openBrowserSession();
+    await pool.query(`UPDATE parent_sessions SET expires_at = now()
+      WHERE id = (SELECT session_id FROM parent_browser_sessions WHERE digest = $1)`, [refreshDigest(expired.split('=')[1])]);
+    assert.equal((await browserChildren(expired)).statusCode, 401);
+    const replaced = await openBrowserSession();
+    await store.invite(schoolCode, guardianB, true);
+    assert.equal((await browserChildren(replaced)).statusCode, 401);
   });
 
   await context.test('le remplacement révoque les accès et invitations du compte ciblé', async () => {
