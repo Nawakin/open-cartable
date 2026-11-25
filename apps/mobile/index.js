@@ -7,10 +7,14 @@ import { listChildren, listHomework, needsSchoolAddress, signIn, signOut } from 
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
-import { Direction } from './direction/direction';
+import { Staff } from './staff/staff';
 
 function openDirection() {
   window.location.assign('/?espace=direction');
+}
+
+function openTeacher() {
+  window.location.assign('/?espace=enseignant');
 }
 
 function AppFrame({ children }) {
@@ -216,6 +220,7 @@ function ParentApp() {
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           <Button label={busy ? 'Connexion…' : 'Se connecter'} busy={busy} onPress={submit} />
           {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
+          {Platform.OS === 'web' && <Button label="Espace enseignant" busy={busy} onPress={openTeacher} secondary />}
         </View>
       )}
 
@@ -241,6 +246,7 @@ function ParentApp() {
             <Button label="Actualiser" busy={busy} onPress={() => void run(load)} secondary />
             <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
             {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
+            {Platform.OS === 'web' && <Button label="Espace enseignant" busy={busy} onPress={openTeacher} secondary />}
           </View>
         </View>
       )}
@@ -273,10 +279,12 @@ function ParentApp() {
 }
 
 function App() {
-  const isDirection = Platform.OS === 'web' && new URLSearchParams(window.location.search).get('espace') === 'direction';
+  const section = Platform.OS === 'web' ? new URLSearchParams(window.location.search).get('espace') : null;
+  const role = section === 'direction' ? 'direction' : (section === 'enseignant' ? 'teacher' : null);
   return (
     <SafeAreaProvider>
-      {isDirection ? <AppFrame><Direction onParent={() => window.location.assign('/')} /></AppFrame> : <ParentApp />}
+      {role ? <AppFrame><Staff role={role} onParent={() => window.location.assign('/')}
+        onOtherStaff={role === 'teacher' ? openDirection : openTeacher} /></AppFrame> : <ParentApp />}
     </SafeAreaProvider>
   );
 }

@@ -6,7 +6,7 @@ import { buildApp } from '../app.js';
 import { createParentStore } from '../auth/parent-store.js';
 import { migrate, openDatabase, transaction } from '../db/database.js';
 import { demo, seedDemo } from '../db/demo.js';
-import { hashPassword } from './password.js';
+import { hashPassword } from '../auth/password.js';
 import { setDirectionPassword } from './store.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;

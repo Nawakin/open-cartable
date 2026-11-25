@@ -2,7 +2,10 @@ import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { readSecret } from '../installation/secrets.js';
 
-export const migrations = ['001-parent-auth.sql', '002-browser-sessions.sql', '003-homework-entries.sql', '004-school-name.sql', '005-direction.sql'];
+export const migrations = [
+  '001-parent-auth.sql', '002-browser-sessions.sql', '003-homework-entries.sql',
+  '004-school-name.sql', '005-direction.sql', '006-teachers.sql',
+];
 
 export function openDatabase(connectionString) {
   const password = connectionString ? undefined : readSecret(process.env, 'PGPASSWORD');

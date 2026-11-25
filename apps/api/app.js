@@ -3,6 +3,7 @@ import fastifyStatic from '@fastify/static';
 import { parentRoutes } from './auth/parent-routes.js';
 import { installationRoutes } from './installation/setup.js';
 import { directionRoutes } from './direction/routes.js';
+import { teacherRoutes } from './teacher/routes.js';
 
 export function buildApp({ parentAuth, webRoot, installation, direction } = {}) {
   const app = Fastify({
@@ -17,7 +18,10 @@ export function buildApp({ parentAuth, webRoot, installation, direction } = {}) 
     app.register(parentRoutes, { prefix: '/api/v1', ...parentAuth });
   }
   if (installation) app.register(installationRoutes, { prefix: '/api/v1', ...installation });
-  if (direction) app.register(directionRoutes, { prefix: '/api/v1', ...direction });
+  if (direction) {
+    app.register(directionRoutes, { prefix: '/api/v1', ...direction });
+    app.register(teacherRoutes, { prefix: '/api/v1', ...direction });
+  }
   if (webRoot) {
     app.register(fastifyStatic, {
       root: webRoot,

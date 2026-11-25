@@ -64,6 +64,14 @@ docker compose exec -T api npm run --silent direction:admin -- CODE_ECOLE
 
 La commande affiche un nouveau mot de passe dans le terminal et ferme les sessions direction de cette école. Conservez le mot de passe dans un gestionnaire et gardez le terminal privé. Les invitations et sessions parent suivent leur propre procédure de réémission.
 
+### Créer un accès enseignant
+
+1. Dans « Espace direction », ouvrez « Comptes enseignants ». Choisissez un identifiant, affectez une ou plusieurs classes puis cliquez sur « Créer le compte enseignant ».
+2. Transmettez en privé le code école, l’identifiant et le code d’activation affiché. Le code est valable sept jours et s’utilise une seule fois.
+3. Dans « Espace enseignant », cliquez sur « Activer mon compte ». Saisissez le code école, l’identifiant et le code d’activation, puis choisissez un mot de passe de 15 à 128 caractères. Après activation, connectez-vous avec le code école, l’identifiant et ce mot de passe.
+
+L’enseignant retrouve le même formulaire de publication que la direction, avec ses seules classes affectées. La direction peut modifier les affectations, réinitialiser l’activation ou retirer le compte. Réinitialiser ou retirer un compte ferme ses sessions. Les publications restent dans le cahier de la classe. [Guide du cahier de texte](cahier-texte.md)
+
 ### Générer une invitation supplémentaire
 
 ```sh

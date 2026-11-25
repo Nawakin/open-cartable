@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { schoolCodePattern } from '../auth/credentials.js';
 import { openDatabase, transaction } from '../db/database.js';
-import { hashPassword } from './password.js';
+import { hashPassword } from '../auth/password.js';
 import { setDirectionPassword } from './store.js';
 
 async function main([code, ...rest]) {

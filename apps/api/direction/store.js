@@ -1,6 +1,6 @@
 import { generateRefreshToken, refreshDigest } from '../auth/credentials.js';
 import { transaction } from '../db/database.js';
-import { verifyPassword } from './password.js';
+import { verifyPassword } from '../auth/password.js';
 
 export const directionSessionSeconds = 8 * 60 * 60;
 

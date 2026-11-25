@@ -1,7 +1,7 @@
 import { requestJson } from '../parent/http';
 
-export function directionRequest(path, options) {
-  return requestJson(fetch, '/api/v1/direction' + path, {
+export function staffRequest(role, path, options) {
+  return requestJson(fetch, '/api/v1/' + role + path, {
     ...options, credentials: 'same-origin', cache: 'no-store',
   });
 }

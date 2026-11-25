@@ -2,7 +2,7 @@ import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { schoolCodePattern } from '../auth/credentials.js';
 import { insertParentInvitation } from '../auth/parent-store.js';
 import { transaction } from '../db/database.js';
-import { hashPassword, passwordLimits, validPassword } from '../direction/password.js';
+import { hashPassword, passwordLimits, validPassword } from '../auth/password.js';
 import { setDirectionPassword } from '../direction/store.js';
 
 export async function isInstalled(db) {

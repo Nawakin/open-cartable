@@ -25,6 +25,7 @@ async function main(args) {
         await client.query('DELETE FROM parent_invitations WHERE expires_at <= statement_timestamp()');
         await client.query('DELETE FROM parent_sessions WHERE expires_at <= statement_timestamp() OR revoked_at IS NOT NULL');
         await client.query('DELETE FROM direction_sessions WHERE expires_at <= statement_timestamp()');
+        await client.query('DELETE FROM teacher_sessions WHERE expires_at <= statement_timestamp()');
       });
       console.log('Identifiants expirés et sessions révoquées purgés.');
     } else {

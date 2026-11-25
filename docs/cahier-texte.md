@@ -6,7 +6,7 @@ Le tuteur ouvre le cahier de l’un de ses enfants depuis l’écran « Vos enfa
 
 Ouvrez « Espace direction » et connectez-vous avec le code école et votre mot de passe direction. Sélectionnez la classe, renseignez la date, le titre, le domaine et la description, puis cliquez sur « Publier ». La liste des publications est organisée par mois. Sélectionnez « Modifier » pour corriger une entrée, ou « Retirer » puis « Confirmer le retrait » pour la supprimer. Les familles voient les changements à la prochaine consultation. [Tutoriel d’installation et de configuration](installation.md)
 
-Le serveur utilise la session direction pour déterminer l’école autorisée. Une session parent donne accès uniquement à la lecture du cahier de ses propres enfants. Une session direction dure huit heures au maximum. Le compte direction est configuré dans l’assistant ou avec `direction:admin` pour les installations existantes.
+La direction peut créer des comptes enseignants depuis « Comptes enseignants ». Après activation, l’enseignant utilise « Espace enseignant » pour publier, modifier et retirer les entrées de ses classes affectées. Le serveur vérifie l’affectation à chaque lecture et écriture. Une affectation retirée prend effet à la prochaine requête, y compris pour une session déjà ouverte. Les sessions direction et enseignant durent au maximum huit heures. Les parents lisent le cahier de la classe de leurs enfants via leur propre session. [Création et activation d’un compte enseignant](installation.md#créer-un-accès-enseignant)
 
 ## Administration locale en ligne de commande
 
@@ -33,4 +33,4 @@ La date doit être réelle et au format `AAAA-MM-JJ`. Le titre, le domaine et la
 
 La réponse contient `child` avec la classe actuelle, `entries` et `nextCursor`. Chaque entrée comporte `id`, `date`, `title`, `domain` et `description`. Le serveur vérifie la session et le rattachement actuel du tuteur à l’enfant dans la même requête que la lecture des entrées. L’accès à un enfant hors périmètre renvoie `404`, comme pour un identifiant inconnu. Les réponses portent `Cache-Control: no-store`.
 
-Les comptes enseignants et leurs droits par classe, les pièces jointes, les notifications et l’archivage annuel restent à développer.
+Les pièces jointes, les notifications et l’archivage annuel restent à développer.
