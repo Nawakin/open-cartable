@@ -1,0 +1,8 @@
+{
+  "expo": {
+    "name": "Open Cartable",
+    "slug": "open-cartable",
+    "newArchEnabled": true,
+    "web": { "bundler": "metro" }
+  }
+}

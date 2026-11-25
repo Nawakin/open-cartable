@@ -1,0 +1,17 @@
+{
+  "name": "@open-cartable/mobile",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo start --localhost",
+    "build:web": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo export --platform web --max-workers 2"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "6.1.2",
+    "expo": "54.0.38",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-web": "0.21.0"
+  }
+}

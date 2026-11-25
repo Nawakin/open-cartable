@@ -1,0 +1,22 @@
+{
+  "name": "open-cartable",
+  "private": true,
+  "license": "GPL-3.0-only",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace @open-cartable/api",
+    "dev:mobile": "npm run dev --workspace @open-cartable/mobile",
+    "test": "npm test --workspace @open-cartable/api",
+    "build:mobile": "npm run build:web --workspace @open-cartable/mobile"
+  },
+  "overrides": {
+    "@expo/metro-config": {
+      "postcss": "8.5.33"
+    }
+  }
+}
