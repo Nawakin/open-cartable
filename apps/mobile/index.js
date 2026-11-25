@@ -4,7 +4,7 @@ import { ActivityIndicator, AppState, Image, Platform, StyleSheet, Text, View } 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
-import { getTutorReference, listAgenda, listAgendaReminders, listChildren, listHomework, needsSchoolAddress, requestMessages, signIn, signOut } from './parent/session';
+import { getTutorReference, listAgenda, listAgendaReminders, listChildren, listHomework, needsSchoolAddress, requestMessages, requestParent, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
@@ -14,9 +14,10 @@ import { agendaRange } from './agenda/dates';
 import { Messages } from './messaging/messages';
 import { useUnreadMessages } from './messaging/unread';
 import { AppFrame, SectionNav } from './navigation';
+import { ParentLiaison } from './liaison/parent-liaison';
 
 const emptyReminders = { reminders: [], nextCursor: null };
-const parentSections = ['children', 'homework', 'agenda', 'messages', 'account'];
+const parentSections = ['children', 'homework', 'agenda', 'liaison', 'messages', 'account'];
 const welcomeImage = require('./assets/accueil.jpg');
 
 function openDirection() {
@@ -226,7 +227,7 @@ function ParentApp() {
   }
 
   const menu = signedIn && <SectionNav label="Menu parent" busy={busy}
-    active={phase === 'homework' || phase === 'agenda' ? 'children' : phase}
+    active={['homework', 'agenda', 'liaison'].includes(phase) ? 'children' : phase}
     items={[
       { id: 'children', icon: 'home-outline', label: 'Accueil', onPress: () => showParentSection('children') },
       { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie', unreadCount: unread.count,
@@ -312,6 +313,8 @@ function ParentApp() {
                 <View style={styles.actions}>
                   <Button label="Cahier de texte" icon="book-outline" accessibilityLabel={`Cahier de texte de ${child.displayName}`}
                     busy={busy} onPress={() => openSchoolPanel(child, 'homework')} secondary />
+                  <Button label="Cahier de liaison" icon="reader-outline" accessibilityLabel={`Cahier de liaison de ${child.displayName}`}
+                    busy={busy} onPress={() => { setSchoolPanel({ child }); setPhase('liaison'); }} secondary />
                   <Button label="Agenda" icon="calendar-outline" accessibilityLabel={`Agenda de ${child.displayName}`}
                     busy={busy} onPress={() => openSchoolPanel(child, 'agenda')} secondary />
                 </View>
@@ -363,6 +366,11 @@ function ParentApp() {
           onChange={(selection) => void run(() => loadSchoolPanel(selection))}
           onMore={() => void run(() => loadSchoolPanel(schoolPanel, true))}
           onBack={() => void run(load)} />
+      )}
+
+      {phase === 'liaison' && schoolPanel && (
+        <ParentLiaison key={schoolPanel.child.id} child={schoolPanel.child} request={requestParent}
+          onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
       )}
 
       {phase === 'unavailable' && (

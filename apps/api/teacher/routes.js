@@ -4,6 +4,7 @@ import { passwordLimits } from '../auth/password.js';
 import { authRateLimit, cookieOptions, registerStaffWeb, unauthorized } from '../auth/staff-web.js';
 import { registerStaffHomework } from '../homework/staff-routes.js';
 import { registerTeacherMessages } from '../messaging/routes.js';
+import { registerTeacherLiaison } from '../liaison/routes.js';
 import {
   activateTeacher, canTeachClass, signInTeacher, signOutTeacher, teacherActivationPattern,
   teacherLoginPattern, teacherSessionSeconds, withTeacherSession,
@@ -62,4 +63,5 @@ export async function teacherRoutes(app, { pool, webOrigin }) {
   registerStaffHomework(app, '/teacher', authenticated, canTeachClass);
   registerStaffAgenda(app, '/teacher', authenticated, canTeachClass);
   registerTeacherMessages(app, authenticated);
+  registerTeacherLiaison(app, authenticated);
 }

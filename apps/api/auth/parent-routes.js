@@ -6,6 +6,7 @@ import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCod
 import { parentSessionSeconds } from './parent-store.js';
 import { homeworkQuerySchema, readPeriod } from '../homework/period.js';
 import { registerParentMessages } from '../messaging/routes.js';
+import { registerParentLiaison } from '../liaison/routes.js';
 
 const browserCookie = '__Host-open-cartable';
 const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
@@ -60,7 +61,27 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
       ? browserIdentity(request) : bearerIdentity(request);
   }
 
-  registerParentMessages(app, { store, identify: parentIdentity, webOrigin, unauthorized });
+  function authenticated(operation, success = 200) {
+    return async (request, reply) => {
+      const claims = await parentIdentity(request);
+      if (!claims) return unauthorized(reply);
+      const result = await store.withParentSession(claims, (db, actor) => operation(request, db, actor));
+      if (!result.authorized) return unauthorized(reply);
+      if (result.value === null) return reply.code(404).send({ error: 'Ressource introuvable.' });
+      return reply.code(success).send(result.value);
+    };
+  }
+
+  const writes = {
+    async onRequest(request, reply) {
+      if (request.headers.authorization !== undefined) return;
+      if (!webOrigin || request.headers.origin !== webOrigin) {
+        return reply.code(403).send({ error: 'Origine non autorisée.' });
+      }
+    },
+  };
+  registerParentMessages(app, { authenticated, writes });
+  registerParentLiaison(app, { authenticated, writes });
 
   const invitationOptions = {
     bodyLimit: 1024,

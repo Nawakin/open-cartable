@@ -124,10 +124,14 @@ export function listAgendaReminders(cursor) {
   return get(agendaRemindersPath(cursor));
 }
 
-export async function requestMessages(path, options) {
-  const result = await get('/messages' + path, options);
+export async function requestParent(path, options) {
+  const result = await get(path, options);
   if (result === null) throw new RequestError(401);
   return result;
+}
+
+export function requestMessages(path, options) {
+  return requestParent('/messages' + path, options);
 }
 
 export async function signOut() {

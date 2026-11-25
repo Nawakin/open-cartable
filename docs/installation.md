@@ -84,6 +84,10 @@ Pour essayer les rappels, publiez un événement qui commence plus tard aujourd�
 
 Dans le menu parent, ouvrez « Messagerie », puis « Nouveau message ». Sélectionnez un enfant et choisissez « Direction » ou un enseignant de sa classe dont le compte est activé. Envoyez un message fictif, puis ouvrez « Messagerie » dans l’espace destinataire de la web-app pour répondre. Le compteur indique les conversations à lire. Si la conversation est déjà ouverte côté parent, utilisez « Actualiser » pour afficher la réponse. [Guide de la messagerie](messagerie.md)
 
+### Essayer le cahier de liaison
+
+Connectez-vous à l’espace enseignant dans la web-app, ouvrez « Cahier de liaison » et publiez un mot fictif pour votre classe. Dans l’accueil parent, ouvrez le cahier de liaison de l’enfant et choisissez « Répondre ». De retour dans l’espace enseignant, utilisez « Voir les réponses », puis « Répondre en privé » pour ouvrir la messagerie avec le destinataire déjà renseigné. [Guide du cahier de liaison](cahier-liaison.md)
+
 ### Générer une invitation supplémentaire
 
 ```sh

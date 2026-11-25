@@ -82,26 +82,7 @@ export function registerTeacherMessages(app, authenticated) {
   }), 201));
 }
 
-export function registerParentMessages(app, { store, identify, webOrigin, unauthorized }) {
-  function authenticated(operation, success = 200) {
-    return async (request, reply) => {
-      const claims = await identify(request);
-      if (!claims) return unauthorized(reply);
-      const result = await store.withMessagingSession(claims, (db, actor) => operation(request, db, actor));
-      if (!result.authorized) return unauthorized(reply);
-      if (result.value === null) return reply.code(404).send({ error: 'Ressource introuvable.' });
-      return reply.code(success).send(result.value);
-    };
-  }
-
-  const writes = {
-    async onRequest(request, reply) {
-      if (request.headers.authorization !== undefined) return;
-      if (!webOrigin || request.headers.origin !== webOrigin) {
-        return reply.code(403).send({ error: 'Origine non autorisée.' });
-      }
-    },
-  };
+export function registerParentMessages(app, { authenticated, writes }) {
   const collection = registerConversations(app, '/parent', authenticated, writes);
   app.get('/parent/messages/recipients/:childId', { schema: { params: uuidParams('childId') } },
     authenticated((request, db, actor) => listParentRecipients(db, actor, request.params.childId)));

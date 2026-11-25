@@ -36,20 +36,20 @@ function messageError(error, sending) {
   }
 }
 
-export function Messages({ request, role = 'parent', children = [], classes = [], loadStudents, refreshUnread, onExpired }) {
+export function Messages({ request, role = 'parent', children = [], classes = [], loadStudents, refreshUnread, onExpired, initialDraft }) {
   const isParent = role === 'parent';
   const isTeacher = role === 'teacher';
   const canStart = isParent ? children.length > 0 : isTeacher && classes.length > 0;
-  const [view, setView] = useState(inboxView);
+  const [view, setView] = useState(initialDraft ? { kind: 'compose' } : inboxView);
   const [inbox, setInbox] = useState(null);
   const [thread, setThread] = useState(null);
-  const [childId, setChildId] = useState(null);
+  const [childId, setChildId] = useState(initialDraft?.childId ?? null);
   const [teachers, setTeachers] = useState(null);
   const [recipient, setRecipient] = useState(null);
-  const [classId, setClassId] = useState(null);
-  const [students, setStudents] = useState(null);
-  const [guardianReference, setGuardianReference] = useState('');
-  const [subject, setSubject] = useState('');
+  const [classId, setClassId] = useState(initialDraft?.classId ?? null);
+  const [students, setStudents] = useState(initialDraft ? [{ id: initialDraft.childId, displayName: initialDraft.studentName }] : null);
+  const [guardianReference, setGuardianReference] = useState(initialDraft?.guardianReference ?? '');
+  const [subject, setSubject] = useState(initialDraft?.subject ?? '');
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
@@ -186,7 +186,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
   }
 
   useEffect(() => {
-    void run(() => loadInbox());
+    if (!initialDraft) void run(() => loadInbox());
   }, []);
 
   useEffect(() => {

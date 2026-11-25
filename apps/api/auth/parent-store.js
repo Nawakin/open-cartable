@@ -197,7 +197,7 @@ export function createParentStore(pool, invitationKey) {
       return rows[0]?.guardian_id ?? null;
     },
 
-    async withMessagingSession({ sessionId, guardianId }, operation) {
+    async withParentSession({ sessionId, guardianId }, operation) {
       return transaction(pool, async (client) => {
         const parameters = [sessionId, guardianId];
         const { rows: [identity] } = await client.query(activeParentQuery, parameters);

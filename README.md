@@ -52,3 +52,7 @@ La direction publie les événements de l’école et les enseignants ceux de le
 ## Messagerie
 
 Un tuteur peut écrire à la direction ou à un enseignant de son enfant depuis le web ou l’app mobile. Les enseignants échangent avec les familles de leurs classes et la direction répond aux conversations qui lui sont adressées depuis la web-app. [Guide de la messagerie](docs/messagerie.md)
+
+## Cahier de liaison
+
+L’enseignant publie un mot du jour pour sa classe. Chaque tuteur peut répondre depuis l’espace de son enfant. L’enseignant peut poursuivre l’échange dans la messagerie privée. [Guide du cahier de liaison](docs/cahier-liaison.md)

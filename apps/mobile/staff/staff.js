@@ -8,6 +8,7 @@ import { StaffAgenda } from '../agenda/staff-agenda';
 import { Messages } from '../messaging/messages';
 import { useUnreadMessages } from '../messaging/unread';
 import { AppFrame, SectionNav } from '../navigation';
+import { StaffLiaison } from '../liaison/staff-liaison';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -20,6 +21,10 @@ const commonSections = [
 const directionSections = [
   ...commonSections,
   { id: 'directory', icon: 'people-outline', label: 'Enseignants' },
+];
+const teacherSections = [
+  ...commonSections,
+  { id: 'liaison', icon: 'reader-outline', label: 'Cahier de liaison' },
 ];
 
 function message(error, activating) {
@@ -41,6 +46,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
   const requestMessages = useCallback((path, options) => staffRequest(role, '/messages' + path, options), [role]);
   const [phase, setPhase] = useState('loading');
   const [section, setSection] = useState('homework');
+  const [messageDraft, setMessageDraft] = useState(null);
   const [desk, setDesk] = useState(null);
   const [school, setSchool] = useState('');
   const [teacherLogin, setTeacherLogin] = useState('');
@@ -62,6 +68,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
 
   function resetDesk() {
     setDesk(null);
+    setMessageDraft(null);
     setSection('homework');
     resetClass();
     setPassword('');
@@ -254,8 +261,9 @@ export function Staff({ role, onParent, onOtherStaff }) {
   }
 
   const menu = phase === 'desk' && <SectionNav label={isTeacher ? 'Menu enseignant' : 'Menu direction'} active={section} busy={busy}
-    items={(isTeacher ? commonSections : directionSections).map((item) => ({
-      ...item, unreadCount: item.id === 'messages' ? unread.count : 0, onPress: () => setSection(item.id),
+    items={(isTeacher ? teacherSections : directionSections).map((item) => ({
+      ...item, unreadCount: item.id === 'messages' ? unread.count : 0,
+      onPress: () => { setMessageDraft(null); setSection(item.id); },
     }))} />;
   const spaceLinks = <View style={styles.actions}>
     <Button label="Espace parent" icon="home-outline" onPress={onParent} busy={busy} secondary />
@@ -295,7 +303,10 @@ export function Staff({ role, onParent, onOtherStaff }) {
         <>
           {section === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
           {section === 'agenda' && <StaffAgenda classes={desk.classes} isTeacher={isTeacher} request={request} run={run} busy={busy} />}
+          {isTeacher && section === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
+            onReply={(target) => { setMessageDraft(target); setSection('messages'); }} />}
           {section === 'messages' && <Messages role={role} classes={desk.classes} request={requestMessages} refreshUnread={unread.refresh}
+            initialDraft={messageDraft}
             loadStudents={(id) => request('/classes/' + encodeURIComponent(id) + '/appointments/students')}
             onExpired={expireSession} />}
           {section === 'homework' && (
