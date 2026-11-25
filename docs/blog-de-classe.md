@@ -12,8 +12,16 @@ Le filtre « Brouillons » permet de retrouver les articles en préparation. Si 
 ## Ajouter plusieurs photos
 
 1. Après avoir saisi le titre, cliquez sur « Ajouter des photos » et sélectionnez vos images. Un article accepte jusqu’à 12 fichiers JPEG, PNG ou WebP statiques de 10 Mo et 26 mégapixels chacun.
-2. Ouvrez les vignettes pour inspecter les images en grand. Pour chaque image, choisissez « Vérifier la photo », ajoutez une description si elle aide à comprendre l’image et validez après avoir vérifié les autorisations des personnes identifiables. Pour masquer un visage, préparez la version anonymisée avant de l’envoyer.
+2. Ouvrez les vignettes pour inspecter les images en grand. Choisissez « Vérifier la photo ». Indiquez si des élèves sont reconnaissables et, dans ce cas, sélectionnez-les tous. Le registre doit contenir une autorisation valable pour chacun. Ajoutez une description si elle facilite la compréhension de l’image. Si une autorisation manque, utilisez une version anonymisée préparée avant l’envoi.
 3. Utilisez « Mettre en couverture » sur une photo pour la placer en premier. Prévisualisez l’article, puis publiez-le après avoir validé toutes les photos.
+
+## Renseigner les autorisations
+
+La direction ouvre « École », puis « Autorisations photo ». Après avoir choisi la classe et l’élève, elle enregistre la décision recueillie auprès de la famille. Les statuts disponibles sont « À renseigner », « Autorisée » et « Refusée ». Le tuteur peut consulter le registre de ses enfants dans « Compte », puis « Autorisations photo ».
+
+Une photo associée à un élève disparaît du fil des familles dès le prochain chargement quand son autorisation est retirée. Sans texte ni autre photo visible, l’article disparaît lui aussi. Si l’école enregistre ensuite une nouvelle autorisation, l’enseignant doit vérifier la photo en brouillon et la republier. La sélection des élèves se fait manuellement.
+
+Les photos publiées avant l’ajout du registre conservent leur validation précédente. Pour associer une photo existante à des élèves, remettez l’article en brouillon, vérifiez les photos puis republiez. Les retraits automatiques s’appliquent aux photos vérifiées avec le registre.
 
 ## Corriger ou retirer un article
 

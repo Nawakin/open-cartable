@@ -1,4 +1,5 @@
 import { forTeacherClass, linkedChildClass } from '../auth/class-access.js';
+import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
 import { requireTimestampCursor, timestampCursor } from '../db/keyset.js';
 import { maxImageBytes } from './images.js';
@@ -133,10 +134,12 @@ export function registerTeacherBlog(app, { authenticated, mediaKey, tokenFor, un
     });
   }
 
-  app.put(photo, { bodyLimit: 4096, schema: { params: photoParams, body: schemaFor({
+  app.put(photo, { bodyLimit: 8192, schema: { params: photoParams, body: schemaFor({
     version, reviewed: { type: 'boolean' }, description: { type: 'string', maxLength: 180 },
+    studentIds: { type: 'array', maxItems: 100, uniqueItems: true, items: { type: 'string', pattern: uuidPattern.source } },
   }) } }, mutatePhoto((db, scope, id, fields) => reviewPhoto(db, scope, id, {
     reviewed: fields.reviewed, description: requireText(fields.description, false, false),
+    studentIds: fields.reviewed ? fields.studentIds : [],
   })));
   app.put(photo + '/cover', { bodyLimit: 1024, schema: { params: photoParams, body: schemaFor({ version }) } }, mutatePhoto(movePhotoToCover));
   app.delete(photo, { bodyLimit: 1024, schema: { params: photoParams, body: schemaFor({ version }) } }, mutatePhoto(removePhoto));

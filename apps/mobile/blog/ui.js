@@ -30,7 +30,7 @@ export function useBlogTask(onExpired) {
       else if (error.status === 409) setProblem('L’article a changé. Rechargez sa version enregistrée avant de continuer.');
       else if (error.status === 413) setProblem('Une photo dépasse 10 Mo ou le stockage de l’école est plein. Les photos déjà ajoutées sont conservées.');
       else if (error.status === 415) setProblem('Une image n’a pas pu être lue. Choisissez un fichier JPEG, PNG ou WebP statique. Les photos déjà ajoutées sont conservées.');
-      else if (error.status === 422) setProblem('Vérifiez le contenu, la validation des photos et la limite de 12 photos par article.');
+      else if (error.status === 422) setProblem('Vérifiez le contenu, les autorisations photo et la limite de 12 photos par article.');
       else if (error.status === 503) setProblem('Le stockage des photos est indisponible sur ce serveur.');
       else if (error.status === 0) setProblem('La connexion a été interrompue. Actualisez pour vérifier l’état de l’article.');
       else setProblem('L’opération a échoué. Réessayez dans un instant.');

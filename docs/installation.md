@@ -66,7 +66,7 @@ La commande affiche un nouveau mot de passe dans le terminal et ferme les sessio
 
 ### Créer un accès enseignant
 
-1. Dans « Espace direction », ouvrez « Enseignants ». Choisissez un identifiant, affectez une ou plusieurs classes puis cliquez sur « Créer le compte enseignant ».
+1. Dans « Espace direction », ouvrez « École », puis « Enseignants ». Choisissez un identifiant, affectez une ou plusieurs classes puis cliquez sur « Créer le compte enseignant ».
 2. Transmettez en privé le code école, l’identifiant et le code d’activation affiché. Le code est valable sept jours et s’utilise une seule fois.
 3. Dans « Espace enseignant », cliquez sur « Activer mon compte ». Saisissez le code école, l’identifiant et le code d’activation, puis choisissez un mot de passe de 15 à 128 caractères. Après activation, connectez-vous avec le code école, l’identifiant et ce mot de passe.
 
@@ -91,6 +91,8 @@ Connectez-vous à l’espace enseignant dans la web-app, ouvrez « Cahier de lia
 ### Essayer le blog de classe
 
 Dans l’espace enseignant, ouvrez « Blog de classe » et créez un article fictif. Ajoutez deux photos d’objets et validez-les dans le brouillon. Choisissez « Prévisualiser », puis « Publier cet article ». Dans l’espace parent, ouvrez « Blog de classe » sous le nom de l’enfant et sélectionnez `+1` pour ouvrir le carrousel. [Guide du blog de classe](blog-de-classe.md)
+
+Pour vérifier le registre avec les données fictives de l’assistant, ouvrez « École », puis « Autorisations photo » dans l’espace direction. Renseignez un statut pour l’élève fictif. Dans l’espace parent, retrouvez le statut dans « Compte », puis « Autorisations photo ».
 
 ### Générer une invitation supplémentaire
 

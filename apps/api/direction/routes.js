@@ -4,6 +4,7 @@ import { passwordLimits } from '../auth/password.js';
 import { authRateLimit, cookieOptions, registerStaffWeb, unauthorized, uuidParams } from '../auth/staff-web.js';
 import { registerStaffHomework } from '../homework/staff-routes.js';
 import { registerDirectionMessages } from '../messaging/routes.js';
+import { registerDirectionPhotoAuthorizations } from '../photo-authorizations/routes.js';
 import { createTeacher, deleteTeacher, listTeachers, resetTeacher, teacherLoginPattern, updateTeacherClasses } from '../teacher/store.js';
 import { directionSessionSeconds, signInDirection, signOutDirection, withDirectionSession } from './store.js';
 
@@ -49,6 +50,7 @@ export async function directionRoutes(app, { pool, webOrigin }) {
   registerStaffHomework(app, '/direction', authenticated);
   registerStaffAgenda(app, '/direction', authenticated);
   registerDirectionMessages(app, authenticated);
+  registerDirectionPhotoAuthorizations(app, authenticated);
 
   app.get('/direction/teachers', authenticated(async (_request, db, actor) => ({
     teachers: await listTeachers(db, actor.school_id),

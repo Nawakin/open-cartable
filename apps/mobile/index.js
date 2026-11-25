@@ -16,6 +16,7 @@ import { useUnreadMessages } from './messaging/unread';
 import { AppFrame, SectionNav } from './navigation';
 import { ParentLiaison } from './liaison/parent-liaison';
 import { ParentBlog } from './blog/parent-blog';
+import { FamilyPhotoAuthorizations } from './photo-authorizations/family';
 
 const emptyReminders = { reminders: [], nextCursor: null };
 const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'messages', 'account'];
@@ -337,6 +338,7 @@ function ParentApp() {
 
       {phase === 'account' && <View style={styles.panel}>
         <Text accessibilityRole="header" style={styles.title}>Mon compte</Text>
+        <FamilyPhotoAuthorizations request={requestParent} run={run} busy={busy} onExpired={load} />
         <Text style={styles.body}>Votre référence tuteur permet à l’école de vous écrire ou de vous proposer un rendez-vous individuel.</Text>
         {tutorReference && <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}

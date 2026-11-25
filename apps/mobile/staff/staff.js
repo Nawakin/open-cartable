@@ -10,6 +10,7 @@ import { useUnreadMessages } from '../messaging/unread';
 import { AppFrame, SectionNav } from '../navigation';
 import { StaffLiaison } from '../liaison/staff-liaison';
 import { StaffBlog } from '../blog/staff-blog';
+import { DirectionPhotoAuthorizations } from '../photo-authorizations/direction';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -21,7 +22,7 @@ const commonSections = [
 ];
 const directionSections = [
   ...commonSections,
-  { id: 'directory', icon: 'people-outline', label: 'Enseignants' },
+  { id: 'school', icon: 'business-outline', label: 'École' },
 ];
 const teacherSections = [
   ...commonSections,
@@ -48,6 +49,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
   const requestMessages = useCallback((path, options) => staffRequest(role, '/messages' + path, options), [role]);
   const [phase, setPhase] = useState('loading');
   const [section, setSection] = useState('homework');
+  const [schoolPage, setSchoolPage] = useState(null);
   const [messageDraft, setMessageDraft] = useState(null);
   const [desk, setDesk] = useState(null);
   const [school, setSchool] = useState('');
@@ -72,6 +74,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
     setDesk(null);
     setMessageDraft(null);
     setSection('homework');
+    setSchoolPage(null);
     resetClass();
     setPassword('');
     setPhase('login');
@@ -265,7 +268,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
   const menu = phase === 'desk' && <SectionNav label={isTeacher ? 'Menu enseignant' : 'Menu direction'} active={section} busy={busy}
     items={(isTeacher ? teacherSections : directionSections).map((item) => ({
       ...item, unreadCount: item.id === 'messages' ? unread.count : 0,
-      onPress: () => { setMessageDraft(null); setSection(item.id); },
+      onPress: () => { setMessageDraft(null); setSchoolPage(null); setSection(item.id); },
     }))} />;
   const spaceLinks = <View style={styles.actions}>
     <Button label="Espace parent" icon="home-outline" onPress={onParent} busy={busy} secondary />
@@ -303,7 +306,22 @@ export function Staff({ role, onParent, onOtherStaff }) {
       )}
       {phase === 'desk' && (
         <>
-          {section === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
+          {!isTeacher && section === 'school' && <>
+            {schoolPage ? <View style={styles.actions}>
+              <Button label="Retour" accessibilityLabel="Retour à École" icon="arrow-back-outline"
+                secondary busy={busy} onPress={() => setSchoolPage(null)} />
+            </View> : <>
+              <Text accessibilityRole="header" style={styles.title}>Gérer l’école</Text>
+              <View style={styles.actions}>
+                <Button label="Enseignants" icon="people-outline" secondary busy={busy} onPress={() => setSchoolPage('directory')} />
+                <Button label="Autorisations photo" icon="shield-checkmark-outline" secondary busy={busy}
+                  onPress={() => setSchoolPage('photo-authorizations')} />
+              </View>
+            </>}
+            {schoolPage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
+            {schoolPage === 'photo-authorizations' && <DirectionPhotoAuthorizations classes={desk.classes}
+              request={request} run={run} busy={busy} />}
+          </>}
           {section === 'agenda' && <StaffAgenda classes={desk.classes} isTeacher={isTeacher} request={request} run={run} busy={busy} />}
           {isTeacher && section === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
             onReply={(target) => { setMessageDraft(target); setSection('messages'); }} />}
@@ -372,7 +390,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
   );
 
   return (
-    <AppFrame menu={menu} scrollKey={phase === 'desk' ? section : phase} busy={busy}
+    <AppFrame menu={menu} scrollKey={phase === 'desk' ? (schoolPage ?? section) : phase} busy={busy}
       onLogout={phase === 'desk' ? logout : undefined} wide>
       {panel}
       {spaceLinks}

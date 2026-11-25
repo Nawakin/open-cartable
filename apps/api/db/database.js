@@ -7,6 +7,7 @@ export const migrations = [
   '004-school-name.sql', '005-direction.sql', '006-teachers.sql', '007-agenda.sql',
   '008-private-appointments.sql', '009-private-messages.sql', '010-teacher-messages.sql',
   '011-message-reading.sql', '012-liaison-notebook.sql', '013-class-blog.sql', '014-blog-photos.sql',
+  '015-photo-authorizations.sql',
 ];
 
 export function openDatabase(connectionString) {

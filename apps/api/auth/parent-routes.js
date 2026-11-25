@@ -8,6 +8,7 @@ import { homeworkQuerySchema, readPeriod } from '../homework/period.js';
 import { registerParentMessages } from '../messaging/routes.js';
 import { registerParentLiaison } from '../liaison/routes.js';
 import { registerParentBlog } from '../blog/routes.js';
+import { registerFamilyPhotoAuthorizations } from '../photo-authorizations/routes.js';
 
 const browserCookie = '__Host-open-cartable';
 const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
@@ -84,6 +85,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
   registerParentMessages(app, { authenticated, writes });
   registerParentLiaison(app, { authenticated, writes });
   registerParentBlog(app, { authenticated, mediaKey: blogMediaKey });
+  registerFamilyPhotoAuthorizations(app, authenticated);
 
   const invitationOptions = {
     bodyLimit: 1024,

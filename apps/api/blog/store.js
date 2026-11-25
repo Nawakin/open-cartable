@@ -89,7 +89,7 @@ export async function setPublication(db, scope, version, published) {
   if (Boolean(article.publishedAt) === published) return withPhotos(db, scope, article);
   if (published) {
     const photos = await listPhotos(db, scope);
-    if ((!article.body && !photos.length) || photos.some((photo) => !photo.reviewed)) {
+    if ((!article.body && !photos.length) || photos.some((photo) => !photo.publishable)) {
       throw Object.assign(new Error('Il manque le contenu ou la vérification des photos.'), { statusCode: 422 });
     }
   }

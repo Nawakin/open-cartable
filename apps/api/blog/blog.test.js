@@ -5,8 +5,10 @@ import pg from 'pg';
 import sharp from 'sharp';
 import { buildApp } from '../app.js';
 import { createParentStore } from '../auth/parent-store.js';
+import { hashPassword } from '../auth/password.js';
 import { migrate, openDatabase, transaction } from '../db/database.js';
 import { demo, seedDemo } from '../db/demo.js';
+import { setDirectionPassword } from '../direction/store.js';
 import { activateTeacher, createTeacher } from '../teacher/store.js';
 import { purgeExpiredBlogPhotos } from './photos.js';
 
@@ -126,6 +128,27 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
   assert.equal((await call('GET', staffArticle, a.headers)).statusCode, 404);
 
   await context.test('les galeries photo vérifiées restent privées et expirent', async () => {
+    const password = randomBytes(24).toString('base64url');
+    const passwordHash = await hashPassword(password);
+    await transaction(pool, (db) => setDirectionPassword(db, schoolId, passwordHash));
+    await transaction(pool, (db) => setDirectionPassword(db, otherSchool, passwordHash));
+    const loginDirection = async (code) => cookie(
+      await call('POST', '/direction/auth/login', { origin }, { schoolCode: code, password }),
+    );
+    const direction = await loginDirection(schoolCode);
+    const otherDirection = await loginDirection('ECOLE-VOISINE');
+    const recordPath = '/direction/classes/' + classA.id + '/photo-authorizations';
+    const teacherRegister = '/teacher/classes/' + classA.id + '/photo-authorizations';
+    const familyRegister = '/parent/photo-authorizations';
+    const setConsent = (status, revision, headers = direction) =>
+      call('PUT', recordPath + '/' + childA.id, headers, { status, revision });
+    assert.equal((await call('GET', recordPath, direction)).json().students.find(({ id }) => id === childA.id).status, 'unrecorded');
+    assert.equal((await call('GET', teacherRegister, b.headers)).statusCode, 404);
+    assert.equal((await setConsent('allowed', null, a.headers)).statusCode, 401);
+    assert.equal((await setConsent('allowed', null, otherDirection)).statusCode, 404);
+    assert.equal((await setConsent('allowed', null, { ...direction, origin: 'https://ailleurs.example' })).statusCode, 403);
+    assert.deepEqual((await call('GET', familyRegister, second)).json().children.map(({ id }) => id), [childC.id]);
+
     const image = await sharp({ create: { width: 800, height: 500, channels: 3, background: '#315545' } })
       .jpeg().withMetadata({ orientation: 6 }).toBuffer();
     assert.ok((await sharp(image).metadata()).exif);
@@ -159,11 +182,22 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     assert.equal(moved.statusCode, 200);
     article = moved.json();
     assert.equal(article.photos[0].id, cover.id);
+    const review = (id, studentIds) => call('PUT', photoCollection + '/' + id, a.headers, {
+      version: article.version, reviewed: true, description: 'Matériel fictif', studentIds,
+    });
+    assert.equal((await review(firstPhoto.id, [childA.id])).statusCode, 422);
+    assert.equal((await review(firstPhoto.id, [childB.id])).statusCode, 422);
+    const allowance = await setConsent('allowed', null);
+    assert.equal(allowance.statusCode, 200);
+    const granted = allowance.json();
+    assert.equal((await call('GET', teacherRegister, a.headers)).json().students.find(({ id }) => id === childA.id).status, 'allowed');
+    assert.deepEqual((await call('GET', familyRegister, family)).json().children.find(({ id }) => id === childA.id), {
+      id: childA.id, displayName: childA.name, status: 'allowed',
+    });
     for (const photo of article.photos) {
-      const review = await call('PUT', photoCollection + '/' + photo.id, a.headers,
-        { version: article.version, reviewed: true, description: 'Matériel fictif' });
-      assert.equal(review.statusCode, 200);
-      article = review.json();
+      const checked = await review(photo.id, photo.id === firstPhoto.id ? [childA.id] : []);
+      assert.equal(checked.statusCode, 200);
+      article = checked.json();
     }
     const published = await setPublished(true);
     assert.equal(published.statusCode, 200);
@@ -171,7 +205,9 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     const entry = (await call('GET', familyPath, family)).json().articles[0];
     assert.equal(entry.photoCount, 3);
     assert.deepEqual(entry.photos.map(({ id }) => id), article.photos.slice(0, 2).map(({ id }) => id));
-    assert.equal((await call('GET', familyURL, family)).json().photos.length, 3);
+    const publishedPhotos = (await call('GET', familyURL, family)).json().photos;
+    assert.equal(publishedPhotos.length, 3);
+    assert.equal(publishedPhotos.some((photo) => Object.hasOwn(photo, 'studentIds') || Object.hasOwn(photo, 'reviewBasis')), false);
     assert.equal((await call('GET', photoURL, {})).statusCode, 401);
     assert.equal((await call('GET', photoURL.replace(childA.id, childB.id), family)).statusCode, 404);
     const file = await call('GET', photoURL, family);
@@ -189,11 +225,27 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     assert.equal(stored.full_data.length, file.rawPayload.length + 28);
     assert.ok(!stored.full_data.subarray(28).equals(file.rawPayload));
 
+    assert.equal((await setConsent('refused', null)).statusCode, 409);
+    const withdrawal = await setConsent('refused', granted.revision);
+    assert.equal(withdrawal.statusCode, 200);
+    assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+    assert.equal((await call('GET', photoURL + '?size=thumb', family)).statusCode, 404);
+    const familyGallery = (await call('GET', familyURL, family)).json();
+    assert.equal(familyGallery.photoCount, 2);
+    assert.equal(familyGallery.photos.some(({ id }) => id === firstPhoto.id), false);
+    assert.equal((await setConsent('allowed', withdrawal.json().revision)).statusCode, 200);
+    assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+
     const withdrawn = await setPublished(false);
     article = withdrawn.json();
     assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+    assert.equal((await setPublished(true)).statusCode, 422);
+    const reviewedAgain = await review(firstPhoto.id, [childA.id]);
+    assert.equal(reviewedAgain.statusCode, 200);
+    article = reviewedAgain.json();
     const republished = await setPublished(true);
     assert.equal(republished.statusCode, 200);
+    assert.equal((await call('GET', photoURL, family)).statusCode, 200);
     const { rows: [{ expires_at: expiry }] } = await pool.query('SELECT expires_at FROM class_blog_photos WHERE id = $1', [firstPhoto.id]);
     assert.deepEqual(expiry, stored.expires_at);
     await pool.query("UPDATE class_blog_photos SET expires_at = statement_timestamp() - interval '1 minute' WHERE article_id = $1", [article.id]);

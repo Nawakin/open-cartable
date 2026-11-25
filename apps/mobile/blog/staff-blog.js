@@ -34,12 +34,14 @@ export function StaffBlog({ classes, request, onExpired }) {
   const [confirmation, setConfirmation] = useState(null);
   const [notice, setNotice] = useState('');
   const [photoIndex, setPhotoIndex] = useState(null);
+  const [students, setStudents] = useState(null);
   const { busy, problem, run } = useBlogTask(onExpired);
   const scrollToTop = useScrollToTop();
   const selected = classes.some(({ id }) => id === classId);
   const valid = Boolean(draft.title.trim());
   const photos = article?.photos ?? [];
-  const missingReview = photos.filter((photo) => !photo.reviewed).length;
+  const missingReview = photos.filter((photo) => !photo.publishable).length;
+  const maskedPhotos = photos.filter((photo) => photo.reviewBasis !== 'legacy' && !photo.publishable).length;
   const canPublish = Boolean(article?.body || photos.length) && !missingReview;
   const dirty = draft.title !== (article?.title ?? '') || draft.body !== (article?.body ?? '');
 
@@ -55,6 +57,7 @@ export function StaffBlog({ classes, request, onExpired }) {
       setNotice('');
       if (!cursor) {
         setClassId(id);
+        setStudents(null);
         setFilter(status);
         setPage(null);
         setView('list');
@@ -154,6 +157,15 @@ export function StaffBlog({ classes, request, onExpired }) {
     });
   }
 
+  function loadAuthorizations() {
+    void run(async () => {
+      setStudents(null);
+      const path = '/classes/' + encodeURIComponent(classId) + '/photo-authorizations';
+      const result = await request(path);
+      setStudents(result.students);
+    });
+  }
+
   function publish(published) {
     void run(async () => {
       const current = await request(articlePath(classId, article.id) + '/publication', {
@@ -171,6 +183,7 @@ export function StaffBlog({ classes, request, onExpired }) {
       setArticle(null);
       setDraft(emptyDraft);
       setPhotoIndex(null);
+      setStudents(null);
       setConfirmation(null);
       setPage(null);
       scrollToTop();
@@ -244,7 +257,8 @@ export function StaffBlog({ classes, request, onExpired }) {
         <PhotoPicker onPick={upload} busy={busy || !valid || photos.length >= maxPhotos} />
         <Text style={styles.body}>JPEG, PNG ou WebP · 10 Mo par photo · {photos.length} sur {maxPhotos}</Text>
         {article && <DraftGallery photos={photos} articlePath={articlePath(classId, article.id)}
-          request={request} onChange={changePhoto} onOpen={setPhotoIndex} busy={busy} />}
+          request={request} onChange={changePhoto} onOpen={setPhotoIndex} busy={busy}
+          students={students} onLoadAuthorizations={loadAuthorizations} />}
         <Field label="Texte de l’article (facultatif)" value={draft.body} onChangeText={(body) => setDraft({ ...draft, body })}
           maxLength={8000} multiline editable={!busy} style={[styles.input, blog.editor]} />
         <View style={styles.actions}>
@@ -276,6 +290,9 @@ export function StaffBlog({ classes, request, onExpired }) {
 
       {selected && view === 'published' && article && <>
         <Text accessibilityRole="header" style={blog.heading}>Article publié</Text>
+        {maskedPhotos > 0 && <Text style={styles.body}>{maskedPhotos === 1
+          ? 'Une photo est masquée dans le fil des familles.'
+          : `${maskedPhotos} photos sont masquées dans le fil des familles.`}</Text>}
         <ArticleContent article={article} gallery={gallery} />
         {confirmation === 'withdraw' ? <View style={blog.empty}>
           <Text style={styles.body}>L’article sera retiré du fil des familles et reviendra en brouillon.</Text>
