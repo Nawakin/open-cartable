@@ -1,7 +1,7 @@
 import { isInstant } from '../agenda/period.js';
 import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
-import { addMessage, createConversation, listConversations, readConversation } from './store.js';
+import { addMessage, createConversation, listConversations, listParentRecipients, readConversation } from './store.js';
 
 const uuid = { type: 'string', pattern: uuidPattern.source };
 const message = { type: 'string', minLength: 1, maxLength: 4000 };
@@ -11,8 +11,8 @@ const querystring = {
   properties: { cursor: { type: 'string', minLength: 61, maxLength: 61 } },
 };
 
-function bodySchema(properties) {
-  return { type: 'object', required: Object.keys(properties), additionalProperties: false, properties };
+function bodySchema(properties, optional = {}) {
+  return { type: 'object', required: Object.keys(properties), additionalProperties: false, properties: { ...properties, ...optional } };
 }
 
 function requireText(input) {
@@ -56,6 +56,20 @@ export function registerDirectionMessages(app, authenticated) {
   registerConversations(app, '/direction', authenticated);
 }
 
+function conversationDraft(body) {
+  return { childId: body.childId, subject: requireText(body.subject), body: requireText(body.body) };
+}
+
+export function registerTeacherMessages(app, authenticated) {
+  const collection = registerConversations(app, '/teacher', authenticated);
+  app.post(collection, {
+    bodyLimit: 64 * 1024,
+    schema: { body: bodySchema({ childId: uuid, guardianReference: uuid, subject, body: message }) },
+  }, authenticated((request, db, actor) => createConversation(db, actor, {
+    ...conversationDraft(request.body), guardianReference: request.body.guardianReference,
+  }), 201));
+}
+
 export function registerParentMessages(app, { store, identify, webOrigin, unauthorized }) {
   function authenticated(operation, success = 200) {
     return async (request, reply) => {
@@ -77,11 +91,13 @@ export function registerParentMessages(app, { store, identify, webOrigin, unauth
     },
   };
   const collection = registerConversations(app, '/parent', authenticated, writes);
+  app.get('/parent/messages/recipients/:childId', { schema: { params: uuidParams('childId') } },
+    authenticated((request, db, actor) => listParentRecipients(db, actor, request.params.childId)));
   app.post(collection, {
     ...writes,
     bodyLimit: 64 * 1024,
-    schema: { body: bodySchema({ childId: uuid, subject, body: message }) },
+    schema: { body: bodySchema({ childId: uuid, subject, body: message }, { teacherId: uuid }) },
   }, authenticated((request, db, actor) => createConversation(db, actor, {
-    childId: request.body.childId, subject: requireText(request.body.subject), body: requireText(request.body.body),
+    ...conversationDraft(request.body), teacherId: request.body.teacherId,
   }), 201));
 }

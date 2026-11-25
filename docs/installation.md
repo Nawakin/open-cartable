@@ -82,7 +82,7 @@ Pour essayer les rappels, publiez un événement qui commence plus tard aujourd�
 
 ### Essayer la messagerie
 
-Dans le menu parent, ouvrez « Messagerie » et envoyez un message fictif. Ouvrez ensuite « Messagerie » dans l’espace direction de la web-app et répondez. De retour dans la conversation parent, utilisez « Actualiser » pour lire la réponse. [Guide de la messagerie](messagerie.md)
+Dans le menu parent, ouvrez « Messagerie », puis « Nouveau message ». Sélectionnez un enfant et choisissez « Direction » ou un enseignant de sa classe dont le compte est activé. Envoyez un message fictif, puis ouvrez « Messagerie » dans l’espace destinataire de la web-app pour répondre. De retour dans la conversation parent, utilisez « Actualiser » pour lire la réponse. [Guide de la messagerie](messagerie.md)
 
 ### Générer une invitation supplémentaire
 

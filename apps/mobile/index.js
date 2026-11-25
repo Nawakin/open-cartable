@@ -327,7 +327,7 @@ function ParentApp() {
 
       {phase === 'account' && <View style={styles.panel}>
         <Text accessibilityRole="header" style={styles.title}>Mon compte</Text>
-        <Text style={styles.body}>Votre référence tuteur permet à l’école de vous proposer un rendez-vous individuel.</Text>
+        <Text style={styles.body}>Votre référence tuteur permet à l’école de vous écrire ou de vous proposer un rendez-vous individuel.</Text>
         {tutorReference && <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>}
         {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>

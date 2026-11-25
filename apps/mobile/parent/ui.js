@@ -2,12 +2,12 @@ import React from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 
-export function Button({ label, accessibilityLabel, onPress, busy, icon, secondary = false }) {
+export function Button({ label, accessibilityLabel, onPress, busy, icon, selected, secondary = false }) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      accessibilityState={{ disabled: busy }}
+      accessibilityState={{ disabled: busy, selected }}
       disabled={busy}
       onPress={onPress}
       style={({ pressed }) => [styles.button, secondary && styles.secondaryButton, (pressed || busy) && styles.dimmed]}

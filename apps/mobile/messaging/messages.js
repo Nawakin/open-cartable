@@ -7,6 +7,11 @@ const collection = '/conversations';
 const emptyInbox = { conversations: [], nextCursor: null };
 const inboxView = { kind: 'inbox' };
 const dateLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+const tutorReferencePattern = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+function contactLabel(conversation) {
+  return conversation.channel === 'teacher' ? conversation.teacherLabel : 'Direction';
+}
 
 function conversationPath(id) {
   return collection + '/' + encodeURIComponent(id);
@@ -26,17 +31,24 @@ function messageError(error, sending) {
       ? 'La connexion a été interrompue. Actualisez la conversation avant de renvoyer le message.'
       : 'Le serveur est inaccessible. Vérifiez votre connexion et actualisez.';
     case 400: return 'Vérifiez le texte et la longueur des champs.';
-    case 404: return 'Cette conversation ou ce lien avec l’élève n’est plus accessible.';
+    case 404: return 'Cette conversation ou ce destinataire n’est plus accessible. Vérifiez le lien avec l’élève.';
     default: return 'L’opération a échoué. Réessayez dans un instant.';
   }
 }
 
-export function Messages({ request, children, onExpired }) {
-  const isParent = children !== undefined;
+export function Messages({ request, role = 'parent', children = [], classes = [], loadStudents, onExpired }) {
+  const isParent = role === 'parent';
+  const isTeacher = role === 'teacher';
+  const canStart = isParent ? children.length > 0 : isTeacher && classes.length > 0;
   const [view, setView] = useState(inboxView);
   const [inbox, setInbox] = useState(null);
   const [thread, setThread] = useState(null);
   const [childId, setChildId] = useState(null);
+  const [teachers, setTeachers] = useState(null);
+  const [recipient, setRecipient] = useState(null);
+  const [classId, setClassId] = useState(null);
+  const [students, setStudents] = useState(null);
+  const [guardianReference, setGuardianReference] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [busy, setBusy] = useState(false);
@@ -98,28 +110,73 @@ export function Messages({ request, children, onExpired }) {
   }
 
   function startConversation() {
-    setChildId(children.length === 1 ? children[0].id : null);
+    setChildId(null);
+    setTeachers(null);
+    setRecipient(null);
+    setClassId(null);
+    setStudents(null);
+    setGuardianReference('');
     setSubject('');
     setBody('');
     setNotice('');
     setProblem('');
     setView({ kind: 'compose' });
+    if (isParent && children.length === 1) chooseChild(children[0].id);
+    if (isTeacher && classes.length === 1) chooseClass(classes[0].id);
   }
+
+  function chooseChild(id) {
+    setChildId(id);
+    setTeachers(null);
+    setRecipient(null);
+    void run(async () => {
+      const result = await request('/recipients/' + encodeURIComponent(id));
+      setTeachers(result.teachers);
+      if (!result.teachers.length) setRecipient('direction');
+    });
+  }
+
+  function chooseClass(id) {
+    setClassId(id);
+    setStudents(null);
+    setChildId(null);
+    setGuardianReference('');
+    void run(async () => {
+      const result = await loadStudents(id);
+      setStudents(result.students);
+      if (result.students.length === 1) setChildId(result.students[0].id);
+    });
+  }
+
+  const reference = guardianReference.trim().toLowerCase();
+  const readyToCompose = Boolean(childId && subject.trim() && body.trim()
+    && (isParent ? recipient : tutorReferencePattern.test(reference)));
 
   function send() {
     if (!body.trim()) return;
-    if (view.kind === 'compose' && (!childId || !subject.trim())) return;
+    if (view.kind === 'compose' && !readyToCompose) return;
     void run(async () => {
       if (view.kind === 'compose') {
-        const { id } = await request(collection, { method: 'POST', body: { childId, subject, body } });
+        const draft = { childId, subject, body };
+        if (isTeacher) draft.guardianReference = reference;
+        else if (recipient !== 'direction') draft.teacherId = recipient;
+        const { id } = await request(collection, { method: 'POST', body: draft });
         setBody('');
         setSubject('');
+        setGuardianReference('');
         setNotice('Message envoyé.');
         setView({ kind: 'thread', id });
         await loadThread(id);
         return;
       }
-      await request(conversationPath(view.id), { method: 'POST', body: { body } });
+      try {
+        await request(conversationPath(view.id), { method: 'POST', body: { body } });
+      } catch (error) {
+        if (error.status !== 404 || !isParent || thread.conversation.channel !== 'teacher') throw error;
+        await loadThread(view.id);
+        setProblem('L’envoi a échoué. Vérifiez si l’enseignant est toujours joignable.');
+        return;
+      }
       setBody('');
       setNotice('Message envoyé.');
       await loadThread(view.id);
@@ -150,7 +207,7 @@ export function Messages({ request, children, onExpired }) {
   return (
     <View style={ui.layout}>
       {view.kind !== 'thread' && <Text accessibilityRole="header" style={styles.title}>
-        {composing ? 'Écrire à la direction' : 'Messagerie'}
+        {composing ? 'Nouveau message' : 'Messagerie'}
       </Text>}
       {view.kind !== 'inbox' && <View style={styles.actions}>
         <Button label="Retour" accessibilityLabel="Retour aux conversations" icon="arrow-back-outline" secondary busy={busy} onPress={goToInbox} />
@@ -163,7 +220,7 @@ export function Messages({ request, children, onExpired }) {
 
       {view.kind === 'inbox' && <>
         <View style={styles.actions}>
-          {isParent && children.length > 0 && <Button label="Nouveau message" icon="create-outline" busy={busy}
+          {canStart && <Button label="Nouveau message" icon="create-outline" busy={busy}
             onPress={startConversation} />}
           <Button label="Actualiser" icon="refresh-outline" secondary busy={busy} onPress={() => void run(() => loadInbox())} />
         </View>
@@ -171,16 +228,17 @@ export function Messages({ request, children, onExpired }) {
           <Ionicons name="chatbubbles-outline" size={34} color="#225344" accessible={false} aria-hidden />
           <Text style={ui.heading}>Aucune conversation</Text>
           <Text style={styles.body}>{isParent
-            ? (children.length ? 'Écrivez à la direction au sujet de l’un de vos enfants.' : 'Aucun enfant n’est rattaché à votre compte.')
-            : 'Les messages envoyés par les familles s’afficheront ici.'}</Text>
+            ? (canStart ? 'Écrivez à la direction ou à un enseignant de votre enfant.' : 'Aucun enfant n’est rattaché à votre compte.')
+            : (isTeacher && !canStart ? 'Vous pourrez écrire aux familles dès qu’une classe vous sera affectée.' : 'Vos échanges avec les familles s’afficheront ici.')}</Text>
         </View>}
         {conversations.map((entry) => (
-          <Pressable accessibilityRole="button" accessibilityLabel={entry.subject + ' · ' + entry.studentName}
+          <Pressable accessibilityRole="button" accessibilityLabel={[entry.subject, entry.studentName, isParent && contactLabel(entry)].filter(Boolean).join(' · ')}
             key={entry.id} disabled={busy} onPress={() => openThread(entry.id)}
             style={({ pressed }) => [ui.conversation, pressed && ui.pressed]}>
             <View style={ui.summary}>
               <Text style={[ui.heading, ui.text]}>{entry.subject}</Text>
               <Text style={[styles.body, ui.text]}>{entry.studentName}</Text>
+              {isParent && <Text style={[ui.date, ui.text]}>{contactLabel(entry)}</Text>}
               <Text style={ui.date}>{dateLabel.format(new Date(entry.lastMessageAt))}</Text>
             </View>
             <Ionicons name="chevron-forward-outline" size={19} color="#225344" accessible={false} aria-hidden />
@@ -191,39 +249,79 @@ export function Messages({ request, children, onExpired }) {
       </>}
 
       {composing && <>
-        <Text style={styles.label}>Enfant concerné</Text>
-        <View style={styles.actions}>
-          {children.map(({ id, displayName, className }) => (
-            <Button key={id} label={displayName + ' · ' + className} icon={id === childId ? 'checkmark-outline' : 'person-outline'}
-              secondary={id !== childId} busy={busy} onPress={() => setChildId(id)} />
-          ))}
-        </View>
+        {isParent ? <>
+          <Text style={styles.label}>Enfant concerné</Text>
+          <View style={styles.actions}>
+            {children.map(({ id, displayName, className }) => (
+              <Button key={id} label={displayName + ' · ' + className} icon={id === childId ? 'checkmark-outline' : 'person-outline'}
+                selected={id === childId} secondary={id !== childId} busy={busy} onPress={() => chooseChild(id)} />
+            ))}
+          </View>
+          {childId && <Text style={styles.label}>Destinataire</Text>}
+          {childId && busy && teachers === null && <Text style={styles.body}>Chargement des destinataires…</Text>}
+          {teachers && <View style={styles.actions}>
+            <Button label="Direction" icon={recipient === 'direction' ? 'checkmark-outline' : 'business-outline'}
+              selected={recipient === 'direction'} secondary={recipient !== 'direction'} busy={busy} onPress={() => setRecipient('direction')} />
+            {teachers.map(({ id, label }) => (
+              <Button key={id} label={label} icon={recipient === id ? 'checkmark-outline' : 'school-outline'}
+                accessibilityLabel={label + ', enseignant'} selected={recipient === id} secondary={recipient !== id}
+                busy={busy} onPress={() => setRecipient(id)} />
+            ))}
+          </View>}
+        </> : <>
+          <Text style={styles.label}>Classe</Text>
+          <View style={styles.actions}>
+            {classes.map(({ id, name }) => (
+              <Button key={id} label={name} icon={id === classId ? 'checkmark-outline' : 'school-outline'}
+                selected={id === classId} secondary={id !== classId} busy={busy} onPress={() => chooseClass(id)} />
+            ))}
+          </View>
+          {classId && busy && students === null && <Text style={styles.body}>Chargement des élèves…</Text>}
+          {students?.length === 0 && <Text style={styles.body}>Aucun élève de cette classe n’a de tuteur actif.</Text>}
+          {students?.length > 0 && <>
+            <Text style={styles.label}>Élève concerné</Text>
+            <View style={styles.actions}>
+              {students.map(({ id, displayName }) => (
+                <Button key={id} label={displayName} icon={id === childId ? 'checkmark-outline' : 'person-outline'}
+                  selected={id === childId} secondary={id !== childId} busy={busy}
+                  onPress={() => { setChildId(id); setGuardianReference(''); }} />
+              ))}
+            </View>
+          </>}
+          {childId && <>
+            <Field label="Référence du tuteur destinataire" value={guardianReference} onChangeText={setGuardianReference}
+              autoCapitalize="none" maxLength={36} editable={!busy} />
+            <Text style={styles.body}>Le tuteur peut vous transmettre sa référence depuis « Compte ».</Text>
+          </>}
+        </>}
         <Field label="Objet" value={subject} onChangeText={setSubject} maxLength={120} editable={!busy} />
         {messageField}
-        <Button label="Envoyer" icon="send-outline" onPress={send}
-          busy={busy || !childId || !subject.trim() || !body.trim()} />
+        <Button label="Envoyer" icon="send-outline" onPress={send} busy={busy || !readyToCompose} />
       </>}
 
       {view.kind === 'thread' && thread && <>
         <View style={ui.layout}>
           <Text accessibilityRole="header" style={[styles.title, ui.text]}>{thread.conversation.subject}</Text>
           <Text style={[styles.body, ui.text]}>{thread.conversation.studentName}</Text>
+          {isParent && <Text style={[ui.date, ui.text]}>{contactLabel(thread.conversation)}</Text>}
           {!isParent && <Text selectable style={ui.date}>Référence tuteur · {thread.conversation.guardianReference}</Text>}
         </View>
         {thread.nextCursor && <Button label="Afficher les anciens messages" icon="time-outline" secondary busy={busy}
           onPress={() => void run(() => loadThread(view.id, thread.nextCursor))} />}
         {[...thread.messages].reverse().map((entry) => {
-          const own = entry.sender === (isParent ? 'parent' : 'direction');
+          const own = entry.sender === role;
           return (
             <View key={entry.id} style={[ui.bubble, own && ui.ownBubble]}>
-              <Text style={styles.label}>{own ? 'Vous' : (isParent ? 'Direction' : 'Tuteur')}</Text>
+              <Text style={styles.label}>{own ? 'Vous' : (isParent ? contactLabel(thread.conversation) : 'Tuteur')}</Text>
               <Text selectable style={[styles.body, ui.text]}>{entry.body}</Text>
               <Text style={ui.date}>{dateLabel.format(new Date(entry.sentAt))}</Text>
             </View>
           );
         })}
-        {messageField}
-        <Button label="Envoyer la réponse" icon="send-outline" busy={busy || !body.trim()} onPress={send} />
+        {thread.conversation.canReply ? <>
+          {messageField}
+          <Button label="Envoyer la réponse" icon="send-outline" busy={busy || !body.trim()} onPress={send} />
+        </> : <Text style={styles.body}>Cet enseignant n’est plus joignable pour cet élève. L’historique reste consultable.</Text>}
       </>}
     </View>
   );

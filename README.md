@@ -51,4 +51,4 @@ La direction publie les événements de l’école et les enseignants ceux de le
 
 ## Messagerie
 
-Un tuteur peut écrire à la direction au sujet de l’un de ses enfants depuis le web ou l’app mobile. La direction répond depuis la web-app. [Guide de la messagerie](docs/messagerie.md)
+Un tuteur peut écrire à la direction ou à un enseignant de son enfant depuis le web ou l’app mobile. Les enseignants échangent avec les familles de leurs classes et la direction répond aux conversations qui lui sont adressées depuis la web-app. [Guide de la messagerie](docs/messagerie.md)

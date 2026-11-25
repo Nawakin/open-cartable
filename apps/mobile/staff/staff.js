@@ -14,10 +14,10 @@ const blankEntry = () => ({ date: dayInSchoolCalendar(), title: '', domain: '', 
 const commonSections = [
   { id: 'homework', icon: 'book-outline', label: 'Cahier de texte' },
   { id: 'agenda', icon: 'calendar-outline', label: 'Agenda' },
+  { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie' },
 ];
 const directionSections = [
   ...commonSections,
-  { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie' },
   { id: 'directory', icon: 'people-outline', label: 'Enseignants' },
 ];
 
@@ -292,7 +292,10 @@ export function Staff({ role, onParent, onOtherStaff }) {
         <>
           {section === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
           {section === 'agenda' && <StaffAgenda classes={desk.classes} isTeacher={isTeacher} request={request} run={run} busy={busy} />}
-          {section === 'messages' && <Messages request={(path, options) => request('/messages' + path, options)} onExpired={expireSession} />}
+          {section === 'messages' && <Messages role={role} classes={desk.classes}
+            request={(path, options) => request('/messages' + path, options)}
+            loadStudents={(id) => request('/classes/' + encodeURIComponent(id) + '/appointments/students')}
+            onExpired={expireSession} />}
           {section === 'homework' && (
             <>
               {desk.classes.length === 0 && <Text style={styles.body}>{isTeacher ? 'Aucune classe ne vous est affectée.' : 'Aucune classe n’est configurée.'}</Text>}

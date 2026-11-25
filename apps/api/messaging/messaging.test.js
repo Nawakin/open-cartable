@@ -14,6 +14,7 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
 const webOrigin = 'https://ent.ecole.example';
 const parentPath = '/parent/messages/conversations';
 const directionPath = '/direction/messages/conversations';
+const teacherPath = '/teacher/messages/conversations';
 
 test('La messagerie isole les familles et écoles, pagine et purge les messages privés', { skip: !databaseUrl }, async (context) => {
   const schema = 'messages_test_' + randomUUID().replaceAll('-', '');
@@ -85,7 +86,7 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
   assert.deepEqual((await call('GET', directionPath, foreign)).json().conversations, []);
   assert.equal((await call('GET', directionItem, foreign)).statusCode, 404);
   assert.equal((await call('POST', directionItem, foreign, { body: 'Intrus' })).statusCode, 404);
-  assert.equal((await call('GET', '/teacher/messages/conversations', direction)).statusCode, 404);
+  assert.equal((await call('GET', teacherPath, direction)).statusCode, 401);
   const staffThread = await call('GET', directionItem, direction);
   assert.equal(staffThread.headers['cache-control'], 'no-store');
   assert.equal(staffThread.json().conversation.guardianReference, demo.guardians[0]);
@@ -99,7 +100,7 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
   ]);
 
   await pool.query(`
-    INSERT INTO direction_messages (school_id, conversation_id, id, sender, body, sent_at)
+    INSERT INTO conversation_messages (school_id, conversation_id, id, sender, body, sent_at)
     SELECT $1, $2, gen_random_uuid(), 'direction', 'Test de pagination', statement_timestamp() - minutes * interval '1 minute'
     FROM generate_series(1, 30) minutes
   `, [demo.school.id, id]);
@@ -114,23 +115,107 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
 
   const expired = randomUUID();
   await pool.query(`
-    INSERT INTO direction_conversations (school_id, id, guardian_id, student_id, subject, last_message_at)
+    INSERT INTO message_conversations (school_id, id, guardian_id, student_id, subject, last_message_at)
     VALUES ($1, $2, $3, $4, 'Conversation expirée', statement_timestamp() - interval '2 years')
   `, [demo.school.id, expired, demo.guardians[0], demo.students[0].id]);
   await pool.query(`
-    INSERT INTO direction_messages (school_id, conversation_id, id, sender, body, sent_at)
+    INSERT INTO conversation_messages (school_id, conversation_id, id, sender, body, sent_at)
     VALUES ($1, $2, gen_random_uuid(), 'parent', 'Message expiré', statement_timestamp() - interval '2 years')
   `, [demo.school.id, id]);
   assert.equal((await call('GET', parentPath + '/' + expired, first)).statusCode, 404);
   const beforePurge = (await call('GET', parentItem + '?cursor=' + encodeURIComponent(latest.nextCursor), first)).json();
   assert.equal(beforePurge.messages.length, 2);
   await purgeExpiredMessages(pool);
-  assert.equal((await pool.query('SELECT 1 FROM direction_conversations WHERE id = $1', [expired])).rowCount, 0);
-  assert.equal((await pool.query("SELECT 1 FROM direction_messages WHERE body = 'Message expiré'")).rowCount, 0);
-  assert.equal((await pool.query('SELECT 1 FROM direction_messages WHERE conversation_id = $1', [id])).rowCount, 32);
+  assert.equal((await pool.query('SELECT 1 FROM message_conversations WHERE id = $1', [expired])).rowCount, 0);
+  assert.equal((await pool.query("SELECT 1 FROM conversation_messages WHERE body = 'Message expiré'")).rowCount, 0);
+  assert.equal((await pool.query('SELECT 1 FROM conversation_messages WHERE conversation_id = $1', [id])).rowCount, 32);
+
+  await context.test('les échanges enseignant restent privés après une réaffectation ou un retrait', async () => {
+    const [classA, classB] = demo.classes;
+    const [childA, childB, childC] = demo.students;
+    const teachersPath = '/direction/teachers';
+    async function teacher(login, classId, activate = true) {
+      const created = await call('POST', teachersPath, direction, { login, classIds: [classId] });
+      assert.equal(created.statusCode, 201);
+      const { id: teacherId, code } = created.json();
+      if (!activate) return { teacherId };
+      const credentials = { schoolCode, login, password };
+      const activation = await call('POST', '/teacher/auth/activate', { origin: webOrigin }, { ...credentials, code });
+      assert.equal(activation.statusCode, 204);
+      return { teacherId, headers: cookie(await call('POST', '/teacher/auth/login', { origin: webOrigin }, credentials)) };
+    }
+    const a = await teacher('enseignant-a', classA.id);
+    const b = await teacher('enseignant-b', classA.id);
+    const outside = await teacher('enseignant-c', classB.id);
+    const pending = await teacher('enseignant-d', classA.id, false);
+
+    const recipients = (childId) => '/parent/messages/recipients/' + childId;
+    const available = await call('GET', recipients(childA.id), first);
+    assert.deepEqual(available.json(), { teachers: [
+      { id: a.teacherId, label: 'enseignant-a' }, { id: b.teacherId, label: 'enseignant-b' },
+    ] });
+    assert.equal((await call('GET', recipients(childC.id), first)).statusCode, 404);
+    assert.equal((await call('POST', parentPath, first, { ...draft, teacherId: outside.teacherId })).statusCode, 404);
+    assert.equal((await call('POST', parentPath, first, { ...draft, teacherId: pending.teacherId })).statusCode, 404);
+
+    const toTeacher = await call('POST', parentPath, first, { ...draft, teacherId: a.teacherId });
+    assert.equal(toTeacher.statusCode, 201);
+    const teacherConversationId = toTeacher.json().id;
+    const familyThread = parentPath + '/' + teacherConversationId;
+    const teacherThread = teacherPath + '/' + teacherConversationId;
+    const readTeacher = (profile) => call('GET', teacherThread, profile.headers);
+    const replyTeacher = (profile) => call('POST', teacherThread, profile.headers, { body: 'Réponse de l’enseignant.' });
+    assert.deepEqual((await call('GET', teacherPath, a.headers)).json().conversations.map(({ id }) => id), [teacherConversationId]);
+    assert.equal((await call('GET', teacherPath + '/' + id, a.headers)).statusCode, 404);
+    assert.equal((await call('GET', directionPath + '/' + teacherConversationId, direction)).statusCode, 404);
+    assert.equal((await call('GET', familyThread, second)).statusCode, 404);
+    assert.equal((await readTeacher(b)).statusCode, 404);
+    assert.equal((await replyTeacher(b)).statusCode, 404);
+    assert.equal((await replyTeacher(a)).statusCode, 201);
+    const paired = (await call('GET', familyThread, first)).json();
+    assert.equal(paired.conversation.channel, 'teacher');
+    assert.equal(paired.conversation.teacherLabel, 'enseignant-a');
+    assert.equal(paired.conversation.canReply, true);
+    assert.equal(paired.messages[0].sender, 'teacher');
+
+    const teacherDraft = { ...draft, guardianReference: demo.guardians[0] };
+    const schoolOrigin = { ...a.headers, origin: 'https://ailleurs.example' };
+    assert.equal((await call('POST', teacherPath, schoolOrigin, teacherDraft)).statusCode, 403);
+    assert.equal((await call('POST', teacherPath, a.headers, { ...teacherDraft, childId: childB.id })).statusCode, 404);
+    assert.equal((await call('POST', teacherPath, a.headers, { ...teacherDraft, childId: childC.id })).statusCode, 404);
+    const toFamily = await call('POST', teacherPath, a.headers, teacherDraft);
+    assert.equal(toFamily.statusCode, 201);
+    const fromTeacher = (await call('GET', parentPath + '/' + toFamily.json().id, firstBrowser)).json();
+    assert.equal(fromTeacher.messages[0].sender, 'teacher');
+    assert.equal((await call('GET', parentPath + '/' + toFamily.json().id, second)).statusCode, 404);
+
+    const account = teachersPath + '/' + a.teacherId;
+    const assign = (classIds) => call('PUT', account + '/classes', direction, { classIds });
+    assert.equal((await assign([classB.id])).statusCode, 204);
+    assert.equal((await readTeacher(a)).statusCode, 404);
+    assert.equal((await replyTeacher(a)).statusCode, 404);
+    assert.equal((await call('POST', familyThread, first, { body: 'Suite fictive.' })).statusCode, 404);
+    assert.equal((await call('GET', familyThread, first)).json().conversation.canReply, false);
+    assert.equal((await assign([classA.id])).statusCode, 204);
+    await pool.query('UPDATE students SET class_id = $1 WHERE school_id = $2 AND id = $3', [classB.id, demo.school.id, childA.id]);
+    assert.equal((await readTeacher(a)).statusCode, 404);
+    assert.equal((await call('GET', familyThread, first)).json().conversation.canReply, false);
+    await pool.query('UPDATE students SET class_id = $1 WHERE school_id = $2 AND id = $3', [classA.id, demo.school.id, childA.id]);
+    assert.equal((await readTeacher(a)).statusCode, 200);
+
+    assert.equal((await call('DELETE', account, direction)).statusCode, 204);
+    assert.equal((await readTeacher(a)).statusCode, 401);
+    assert.equal((await readTeacher(b)).statusCode, 404);
+    const archived = (await call('GET', familyThread, first)).json();
+    assert.equal(archived.conversation.channel, 'teacher');
+    assert.equal(archived.conversation.canReply, false);
+    assert.equal(archived.messages.length, 2);
+    assert.equal((await call('GET', directionPath + '/' + teacherConversationId, direction)).statusCode, 404);
+  });
 
   await pool.query('DELETE FROM guardian_students WHERE school_id = $1 AND guardian_id = $2 AND student_id = $3',
     [demo.school.id, demo.guardians[0], demo.students[0].id]);
   assert.equal((await call('GET', directionItem, direction)).statusCode, 404);
-  assert.equal((await pool.query('SELECT 1 FROM direction_messages WHERE conversation_id = $1', [id])).rowCount, 0);
+  assert.equal((await pool.query('SELECT 1 FROM conversation_messages WHERE conversation_id = $1', [id])).rowCount, 0);
+  assert.deepEqual((await call('GET', parentPath, first)).json().conversations, []);
 });
