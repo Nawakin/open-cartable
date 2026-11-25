@@ -15,9 +15,10 @@ import { Messages } from './messaging/messages';
 import { useUnreadMessages } from './messaging/unread';
 import { AppFrame, SectionNav } from './navigation';
 import { ParentLiaison } from './liaison/parent-liaison';
+import { ParentBlog } from './blog/parent-blog';
 
 const emptyReminders = { reminders: [], nextCursor: null };
-const parentSections = ['children', 'homework', 'agenda', 'liaison', 'messages', 'account'];
+const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'messages', 'account'];
 const welcomeImage = require('./assets/accueil.jpg');
 
 function openDirection() {
@@ -227,7 +228,7 @@ function ParentApp() {
   }
 
   const menu = signedIn && <SectionNav label="Menu parent" busy={busy}
-    active={['homework', 'agenda', 'liaison'].includes(phase) ? 'children' : phase}
+    active={['homework', 'agenda', 'liaison', 'blog'].includes(phase) ? 'children' : phase}
     items={[
       { id: 'children', icon: 'home-outline', label: 'Accueil', onPress: () => showParentSection('children') },
       { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie', unreadCount: unread.count,
@@ -317,6 +318,8 @@ function ParentApp() {
                     busy={busy} onPress={() => { setSchoolPanel({ child }); setPhase('liaison'); }} secondary />
                   <Button label="Agenda" icon="calendar-outline" accessibilityLabel={`Agenda de ${child.displayName}`}
                     busy={busy} onPress={() => openSchoolPanel(child, 'agenda')} secondary />
+                  <Button label="Blog de classe" icon="newspaper-outline" accessibilityLabel={`Blog de classe de ${child.displayName}`}
+                    busy={busy} onPress={() => { setSchoolPanel({ child }); setPhase('blog'); }} secondary />
                 </View>
               </View>
             ))}
@@ -370,6 +373,11 @@ function ParentApp() {
 
       {phase === 'liaison' && schoolPanel && (
         <ParentLiaison key={schoolPanel.child.id} child={schoolPanel.child} request={requestParent}
+          onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
+      )}
+
+      {phase === 'blog' && schoolPanel && (
+        <ParentBlog key={schoolPanel.child.id} child={schoolPanel.child} request={requestParent}
           onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
       )}
 

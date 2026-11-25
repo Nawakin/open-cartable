@@ -1,10 +1,18 @@
-import React from 'react';
+import React, { createContext, useCallback, useContext, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+const ScrollToTop = createContext(() => {});
+
+export function useScrollToTop() {
+  return useContext(ScrollToTop);
+}
+
 export function AppFrame({ menu, scrollKey, onLogout, busy, wide = false, children }) {
   const content = [nav.content, wide && nav.wide];
+  const scroll = useRef(null);
+  const scrollToTop = useCallback(() => scroll.current?.scrollTo({ y: 0, animated: false }), []);
   return (
     <SafeAreaView style={nav.safeArea}>
       <View style={nav.headerArea}>
@@ -21,8 +29,8 @@ export function AppFrame({ menu, scrollKey, onLogout, busy, wide = false, childr
           {menu}
         </View>
       </View>
-      <ScrollView key={scrollKey} keyboardShouldPersistTaps="handled" contentContainerStyle={nav.scroll}>
-        <View style={content}>{children}</View>
+      <ScrollView ref={scroll} key={scrollKey} keyboardShouldPersistTaps="handled" contentContainerStyle={nav.scroll}>
+        <ScrollToTop.Provider value={scrollToTop}><View style={content}>{children}</View></ScrollToTop.Provider>
       </ScrollView>
     </SafeAreaView>
   );
@@ -31,6 +39,7 @@ export function AppFrame({ menu, scrollKey, onLogout, busy, wide = false, childr
 export function SectionNav({ label, items, active, busy }) {
   const { width, fontScale } = useWindowDimensions();
   const twoColumns = items.length === 4 && width < 360 * fontScale;
+  const threeColumns = items.length === 5 && width < 440 * fontScale;
   return (
     <View accessibilityRole="navigation" accessibilityLabel={label} style={nav.container}>
       {items.map(({ id, icon, label: title, onPress, unreadCount = 0 }) => {
@@ -41,7 +50,8 @@ export function SectionNav({ label, items, active, busy }) {
         return (
           <Pressable key={id} accessibilityRole="button" accessibilityLabel={navLabel}
             accessibilityState={{ selected, disabled: busy }} disabled={busy} onPress={onPress}
-            style={({ pressed }) => [nav.item, twoColumns && nav.half, selected && nav.selected, (pressed || busy) && nav.dimmed]}>
+            style={({ pressed }) => [nav.item, twoColumns && nav.half, threeColumns && nav.third,
+              selected && nav.selected, (pressed || busy) && nav.dimmed]}>
             <View style={nav.iconRow}>
               <Ionicons name={icon} color={color} size={21} accessible={false} aria-hidden />
               {unreadCount > 0 && <Text style={nav.badge} accessible={false} aria-hidden>
@@ -78,6 +88,7 @@ const nav = StyleSheet.create({
   },
   selected: { backgroundColor: '#225344' },
   half: { flexBasis: '44%' },
+  third: { flexBasis: '29%' },
   label: { textAlign: 'center', fontSize: 13, fontWeight: '700' },
   iconRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   badge: { color: '#402b09', backgroundColor: '#ffdd9b', borderRadius: 12, minWidth: 20,

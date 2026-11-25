@@ -1,6 +1,6 @@
-import { isInstant } from '../agenda/period.js';
 import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
+import { requireTimestampCursor, timestampCursor } from '../db/keyset.js';
 import {
   addMessage, countUnreadConversations, createConversation, listConversations, listParentRecipients,
   markConversationRead, readConversation,
@@ -11,7 +11,7 @@ const message = { type: 'string', minLength: 1, maxLength: 4000 };
 const subject = { type: 'string', minLength: 1, maxLength: 120 };
 const querystring = {
   type: 'object', additionalProperties: false,
-  properties: { cursor: { type: 'string', minLength: 61, maxLength: 61 } },
+  properties: { cursor: timestampCursor },
 };
 
 function bodySchema(properties, optional = {}) {
@@ -26,15 +26,6 @@ function requireText(input) {
   return text;
 }
 
-function requireCursor(cursor) {
-  if (cursor === undefined) return { beforeAt: null, beforeId: null };
-  const [beforeAt, beforeId, ...rest] = cursor.split('~');
-  if (rest.length || !isInstant(beforeAt) || !beforeId || !uuidPattern.test(beforeId)) {
-    throw Object.assign(new Error('Page non valide.'), { statusCode: 400 });
-  }
-  return { beforeAt, beforeId };
-}
-
 function registerConversations(app, prefix, authenticated, writeOptions = {}) {
   const collection = prefix + '/messages/conversations';
   const item = collection + '/:conversationId';
@@ -42,10 +33,10 @@ function registerConversations(app, prefix, authenticated, writeOptions = {}) {
 
   app.get(prefix + '/messages/unread', authenticated((_request, db, actor) => countUnreadConversations(db, actor)));
   app.get(collection, { schema: { querystring } },
-    authenticated((request, db, actor) => listConversations(db, actor, requireCursor(request.query.cursor))));
+    authenticated((request, db, actor) => listConversations(db, actor, requireTimestampCursor(request.query.cursor))));
   app.get(item, { schema: { params, querystring } },
     authenticated((request, db, actor) =>
-      readConversation(db, actor, request.params.conversationId, requireCursor(request.query.cursor))));
+      readConversation(db, actor, request.params.conversationId, requireTimestampCursor(request.query.cursor))));
   app.post(item, {
     ...writeOptions,
     bodyLimit: 64 * 1024,

@@ -5,12 +5,12 @@
 | Phase | Déjà disponible | Reste à faire |
 | --- | --- | --- |
 | v0.1 · Socle | Lanceurs Docker pour Windows, macOS et Linux, configuration dans la web-app, invitations parent, comptes direction et enseignant, cahier de texte, agenda et rendez-vous, messagerie texte et compteur de non-lus | Documents joints au cahier de texte et à la messagerie, archivage scolaire, notifications push et préférences, gestion des invitations depuis la web-app, profils et QR d’école, rôles restreints du personnel et protections de connexion prévues au cahier des charges. |
-| v0.2 · Vie de classe | Cahier de liaison avec mots du jour, réponses des familles et réponse individuelle dans la messagerie | Blog de classe et brouillons, consentements photo, floutage avec vérification humaine et publication des versions expurgées, médiathèque avec quotas, classement et archivage. |
+| v0.2 · Vie de classe | Cahier de liaison et blog de classe en texte avec brouillons, aperçu et publication | Photos et vidéos, consentements photo, floutage avec vérification humaine, publication de médias expurgés, diffusion à l’échelle de l’école et médiathèque avec quotas, classement et archivage. |
 | v0.3 · Suivi et administration | Création de la première école, de la première classe et des accès initiaux, gestion des comptes enseignants et de leurs affectations | Appel et justificatifs, alertes d’absences, livret scolaire et exports LSU/PDF, gestion des classes, élèves, tuteurs et personnels, invitations en masse, réglages de conservation, statistiques et journal d’audit. |
 | v0.4 · Exploitation et RGPD | Contrôles d’accès, conservation automatique des messages et des mots de liaison, point de contrôle de l’API | Sauvegardes chiffrées et restaurations, chiffrement au repos, procédure TLS et supervision, export et effacement des données d’un élève, mentions d’information, registre, AIPD et procédures d’incident. |
 | v1.0 · Publication | Code Expo partagé et export web livré avec Compose | Valider l’installation sur Windows et macOS, les usages sur appareils iOS et Android, les performances, l’accessibilité et les mises à jour. Préparer la bêta et les publications sur les stores. |
 
-Dans la v0.2, le blog texte et les brouillons peuvent être développés avant le dépôt de photos. La mise à disposition de fichiers aux familles dépend du contrôle d’accès au téléchargement, du traitement des originaux et des limites de stockage. Ces mécanismes serviront aussi à la médiathèque et aux pièces jointes de la v0.1.
+La suite de la v0.2 commence par le dépôt de médias en brouillon. La mise à disposition de fichiers aux familles dépend du contrôle d’accès au téléchargement, du traitement des originaux, des consentements photo et des limites de stockage. Ces mécanismes serviront aussi à la médiathèque et aux pièces jointes de la v0.1.
 
 ## Architecture cible
 

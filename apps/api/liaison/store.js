@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { linkedChildClass } from '../auth/class-access.js';
 
 const retainedSince = "statement_timestamp() - interval '1 year'";
 const currentDay = "(statement_timestamp() AT TIME ZONE 'Europe/Paris')::date";
@@ -11,16 +12,8 @@ function packPage(rows, size, cursorField) {
   return { items, nextCursor: rows.length > size ? items.at(-1)[cursorField] : null };
 }
 
-async function childClass(db, actor, childId) {
-  const { rows: [row] } = await db.query(`
-    SELECT s.class_id FROM students s JOIN guardian_students l ON (l.school_id, l.student_id) = (s.school_id, s.id)
-    WHERE s.school_id = $1 AND l.guardian_id = $2 AND s.id = $3 FOR SHARE OF s, l
-  `, [actor.school_id, actor.guardian_id, childId]);
-  return row?.class_id;
-}
-
 export async function listFamilyNotes(db, actor, childId, before) {
-  const classId = await childClass(db, actor, childId);
+  const classId = await linkedChildClass(db, actor, childId);
   if (!classId) return null;
   const { rows } = await db.query(`
     SELECT ${noteFields},
@@ -36,7 +29,7 @@ export async function listFamilyNotes(db, actor, childId, before) {
 }
 
 export async function saveFamilyReply(db, actor, childId, noteId, body) {
-  const classId = await childClass(db, actor, childId);
+  const classId = await linkedChildClass(db, actor, childId);
   if (!classId) return null;
   const { rows: [reply] } = await db.query(`
     INSERT INTO liaison_replies (school_id, id, note_id, guardian_id, student_id, body)

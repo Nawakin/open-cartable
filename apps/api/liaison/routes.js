@@ -1,7 +1,7 @@
 import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
 import { isSchoolDate } from '../homework/period.js';
-import { canTeachClass } from '../teacher/store.js';
+import { forTeacherClass } from '../auth/class-access.js';
 import { listClassNotes, listFamilyNotes, listNoteReplies, saveDailyNote, saveFamilyReply } from './store.js';
 
 const dayField = { type: 'string', minLength: 10, maxLength: 10 };
@@ -51,14 +51,7 @@ export function registerTeacherLiaison(app, authenticated) {
   const path = '/teacher/classes/:classId/liaison';
   const classParams = uuidParams('classId');
   function forClass(operation) {
-    return authenticated(async (request, db, actor) => {
-      const { classId } = request.params;
-      if (!await canTeachClass(db, actor, classId)) return null;
-      const current = await db.query('SELECT 1 FROM classes WHERE school_id = $1 AND id = $2 FOR SHARE',
-        [actor.school_id, classId]);
-      if (!current.rowCount) return null;
-      return operation(request, db, actor.school_id, classId);
-    });
+    return forTeacherClass(authenticated, operation);
   }
 
   app.get(path, { schema: { params: classParams, querystring: dateQuery } },

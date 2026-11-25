@@ -56,3 +56,7 @@ Un tuteur peut écrire à la direction ou à un enseignant de son enfant depuis 
 ## Cahier de liaison
 
 L’enseignant publie un mot du jour pour sa classe. Chaque tuteur peut répondre depuis l’espace de son enfant. L’enseignant peut poursuivre l’échange dans la messagerie privée. [Guide du cahier de liaison](docs/cahier-liaison.md)
+
+## Blog de classe
+
+Les enseignants préparent des articles texte en brouillon, les prévisualisent et les publient pour les familles de leurs classes. Le fil parent est disponible sur le web et sur mobile. [Guide du blog de classe](docs/blog-de-classe.md)

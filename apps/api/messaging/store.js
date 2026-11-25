@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { pageByTimestamp } from '../db/keyset.js';
 
 const pageSize = 30;
 const retainedSince = "statement_timestamp() - interval '1 year'";
@@ -40,12 +41,6 @@ function actorScope(actor) {
   return [actor.school_id, actor.guardian_id ?? null, actor.teacher_id ?? null];
 }
 
-function page(rows, field) {
-  const items = rows.slice(0, pageSize);
-  const last = items.at(-1);
-  return { items, nextCursor: rows.length > pageSize ? `${new Date(last[field]).toISOString()}~${last.id}` : null };
-}
-
 export async function listConversations(db, actor, { beforeAt, beforeId }) {
   const { rows } = await db.query(`
     SELECT ${threadColumns}, ${unread} AS unread, (
@@ -59,7 +54,7 @@ export async function listConversations(db, actor, { beforeAt, beforeId }) {
     WHERE ${visibleThread} AND ($4::timestamptz IS NULL OR (c.last_message_at, c.id) < ($4, $5::uuid))
     ORDER BY c.last_message_at DESC, c.id DESC LIMIT $6
   `, [...actorScope(actor), beforeAt, beforeId, pageSize + 1]);
-  const { items, nextCursor } = page(rows, 'lastMessageAt');
+  const { items, nextCursor } = pageByTimestamp(rows, pageSize, 'lastMessageAt');
   return { conversations: items, nextCursor };
 }
 
@@ -110,7 +105,7 @@ export async function readConversation(db, actor, id, { beforeAt, beforeId }) {
   const messages = result.messages.map((message) => ({
     ...message, sentAt: new Date(message.sentAt).toISOString(),
   }));
-  const { items, nextCursor } = page(messages, 'sentAt');
+  const { items, nextCursor } = pageByTimestamp(messages, pageSize, 'sentAt');
   return { conversation: result.conversation, messages: items, nextCursor };
 }
 

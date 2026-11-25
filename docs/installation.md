@@ -88,6 +88,10 @@ Dans le menu parent, ouvrez « Messagerie », puis « Nouveau message ». Sélec
 
 Connectez-vous à l’espace enseignant dans la web-app, ouvrez « Cahier de liaison » et publiez un mot fictif pour votre classe. Dans l’accueil parent, ouvrez le cahier de liaison de l’enfant et choisissez « Répondre ». De retour dans l’espace enseignant, utilisez « Voir les réponses », puis « Répondre en privé » pour ouvrir la messagerie avec le destinataire déjà renseigné. [Guide du cahier de liaison](cahier-liaison.md)
 
+### Essayer le blog de classe
+
+Dans l’espace enseignant, ouvrez « Blog de classe » et créez un article fictif. Choisissez « Prévisualiser », puis « Publier cet article ». Les familles de la classe peuvent ensuite le lire depuis « Blog de classe » sous le nom de leur enfant. [Guide du blog de classe](blog-de-classe.md)
+
 ### Générer une invitation supplémentaire
 
 ```sh

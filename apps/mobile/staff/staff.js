@@ -9,6 +9,7 @@ import { Messages } from '../messaging/messages';
 import { useUnreadMessages } from '../messaging/unread';
 import { AppFrame, SectionNav } from '../navigation';
 import { StaffLiaison } from '../liaison/staff-liaison';
+import { StaffBlog } from '../blog/staff-blog';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -25,6 +26,7 @@ const directionSections = [
 const teacherSections = [
   ...commonSections,
   { id: 'liaison', icon: 'reader-outline', label: 'Cahier de liaison' },
+  { id: 'blog', icon: 'newspaper-outline', label: 'Blog de classe' },
 ];
 
 function message(error, activating) {
@@ -305,6 +307,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
           {section === 'agenda' && <StaffAgenda classes={desk.classes} isTeacher={isTeacher} request={request} run={run} busy={busy} />}
           {isTeacher && section === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
             onReply={(target) => { setMessageDraft(target); setSection('messages'); }} />}
+          {isTeacher && section === 'blog' && <StaffBlog classes={desk.classes} request={request} onExpired={expireSession} />}
           {section === 'messages' && <Messages role={role} classes={desk.classes} request={requestMessages} refreshUnread={unread.refresh}
             initialDraft={messageDraft}
             loadStudents={(id) => request('/classes/' + encodeURIComponent(id) + '/appointments/students')}
