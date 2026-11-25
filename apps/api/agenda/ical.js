@@ -27,6 +27,7 @@ export function eventCalendar(event, now = new Date()) {
     'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Open Cartable//Agenda//FR', 'BEGIN:VEVENT',
     'UID:' + event.id + '@open-cartable',
     'DTSTAMP:' + stamp(now), 'DTSTART:' + stamp(event.startsAt), 'DTEND:' + stamp(event.endsAt),
+    ...(event.scope === 'private' ? ['CLASS:PRIVATE'] : []),
     'SUMMARY:' + text(event.title),
     ...(event.location ? ['LOCATION:' + text(event.location)] : []),
     ...(event.description ? ['DESCRIPTION:' + text(event.description)] : []),

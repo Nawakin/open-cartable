@@ -11,12 +11,16 @@ const blankEvent = () => {
   return { title: '', location: '', description: '', startDate: today, startTime: '09:00', endDate: today, endTime: '10:00' };
 };
 
-function url(scope) {
-  return scope === 'school' ? '/agenda' : `/classes/${encodeURIComponent(scope)}/agenda`;
+function url(scope, privateMode) {
+  return scope === 'school' ? '/agenda' : `/classes/${encodeURIComponent(scope)}/${privateMode ? 'appointments' : 'agenda'}`;
 }
 
 export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
   const [scope, setScope] = useState(isTeacher ? null : 'school');
+  const [privateMode, setPrivateMode] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [studentId, setStudentId] = useState(null);
+  const [guardianReference, setGuardianReference] = useState('');
   const [anchor, setAnchor] = useState(dayInSchoolCalendar);
   const [view, setView] = useState('month');
   const [page, setPage] = useState(emptyPage);
@@ -26,10 +30,10 @@ export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
   const [message, setMessage] = useState('');
   const [problem, setProblem] = useState('');
 
-  async function list(target, date, period, cursor) {
+  async function list(target, date, period, cursor, appointments = privateMode) {
     const search = new URLSearchParams(agendaRange(date, period));
     if (cursor) search.set('cursor', cursor);
-    const result = await request(`${url(target)}?${search}`);
+    const result = await request(`${url(target, appointments)}?${search}`);
     setPage((before) => cursor ? ({
       events: Array.from(new Map([...before.events, ...result.events].map((event) => [event.id, event])).values()),
       nextCursor: result.nextCursor,
@@ -43,6 +47,8 @@ export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
   useEffect(() => {
     if (scope && scope !== 'school' && !classes.some(({ id }) => id === scope)) {
       setScope(null);
+      setPrivateMode(false);
+      setStudents([]);
       setPage(emptyPage);
       resetEditor();
     }
@@ -53,15 +59,43 @@ export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
     setEditing(null);
     setRemoving(null);
     setProblem('');
+    setStudentId(null);
+    setGuardianReference('');
   }
 
   function select(target) {
     void run(async () => {
       setScope(target);
+      setPrivateMode(false);
+      setStudents([]);
       setPage(emptyPage);
       setMessage('');
       resetEditor();
-      await list(target, anchor, view);
+      await list(target, anchor, view, undefined, false);
+    });
+  }
+
+  async function loadStudents() {
+    const result = await request(url(scope, true) + '/students');
+    setStudents(result.students);
+  }
+
+  function switchMode(appointments) {
+    void run(async () => {
+      setPrivateMode(appointments);
+      setPage(emptyPage);
+      setMessage('');
+      resetEditor();
+      if (appointments) await loadStudents();
+      else setStudents([]);
+      await list(scope, anchor, view, undefined, appointments);
+    });
+  }
+
+  function refresh() {
+    void run(async () => {
+      if (privateMode) await loadStudents();
+      await list(scope, anchor, view);
     });
   }
 
@@ -99,12 +133,20 @@ export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
         setProblem('Renseignez un titre, une date et une heure de fin postérieures au début.');
         return;
       }
-      const path = editing ? `${url(scope)}/${editing.id}` : url(scope);
+      const event = { startsAt, endsAt, title: draft.title, location: draft.location, description: draft.description };
+      const reference = guardianReference.trim().toLowerCase();
+      if (privateMode && !editing && (!studentId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(reference))) {
+        setProblem('Choisissez un élève et saisissez la référence exacte reçue du tuteur.');
+        return;
+      }
+      const collection = url(scope, privateMode);
+      const path = editing ? `${collection}/${editing.id}` : collection;
       await request(path, {
         method: editing ? 'PUT' : 'POST',
-        body: { startsAt, endsAt, title: draft.title, location: draft.location, description: draft.description },
+        body: privateMode && !editing ? { studentId, guardianReference: reference, event } : event,
       });
-      setMessage(editing ? 'Événement modifié.' : 'Événement publié.');
+      setMessage(privateMode ? (editing ? 'Rendez-vous modifié.' : 'Rendez-vous créé.')
+        : (editing ? 'Événement modifié.' : 'Événement publié.'));
       setAnchor(draft.startDate);
       resetEditor();
       await list(scope, draft.startDate, view);
@@ -113,10 +155,10 @@ export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
 
   function remove(id) {
     void run(async () => {
-      await request(`${url(scope)}/${id}`, { method: 'DELETE' });
+      await request(`${url(scope, privateMode)}/${id}`, { method: 'DELETE' });
       if (editing?.id === id) resetEditor();
       setRemoving(null);
-      setMessage('Événement retiré.');
+      setMessage(privateMode ? 'Rendez-vous retiré.' : 'Événement retiré.');
       setPage((before) => ({ ...before, events: before.events.filter((event) => event.id !== id) }));
       await list(scope, anchor, view);
     });
@@ -139,7 +181,30 @@ export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
       {isTeacher && classes.length === 0 && <Text style={styles.body}>Aucune classe ne vous est affectée.</Text>}
       {scope && (
         <>
-          <Text accessibilityRole="header" style={styles.label}>{editing ? 'Modifier l’événement' : 'Nouvel événement'}</Text>
+          {scope !== 'school' && (
+            <View style={styles.actions}>
+              <Button label="Événements de classe" secondary={privateMode} busy={busy} onPress={() => switchMode(false)} />
+              <Button label="Rendez-vous individuels" secondary={!privateMode} busy={busy} onPress={() => switchMode(true)} />
+            </View>
+          )}
+          <Text accessibilityRole="header" style={styles.label}>{privateMode
+            ? (editing ? 'Modifier le rendez-vous' : 'Nouveau rendez-vous individuel')
+            : (editing ? 'Modifier l’événement' : 'Nouvel événement')}</Text>
+          {privateMode && (editing ? (
+            <Text style={styles.body}>{editing.studentName} · {editing.guardianReference}</Text>
+          ) : (
+            <>
+              <Text style={styles.body}>Sélectionnez l’élève et saisissez la référence remise par le tuteur destinataire.</Text>
+              {students.length === 0 && !busy && <Text style={styles.body}>Aucun élève de cette classe n’a de tuteur actif.</Text>}
+              <View style={styles.actions}>
+                {students.map(({ id, displayName }) => (
+                  <Button key={id} label={displayName} secondary={studentId !== id} busy={busy} onPress={() => setStudentId(id)} />
+                ))}
+              </View>
+              <Field label="Référence du tuteur destinataire" value={guardianReference} onChangeText={setGuardianReference}
+                maxLength={36} autoCapitalize="none" editable={!busy} />
+            </>
+          ))}
           <Text style={styles.body}>Les horaires suivent le fuseau de votre appareil.</Text>
           {field('title', 'Titre de l’événement', { maxLength: 120 })}
           {field('startDate', 'Date de début', { placeholder: 'AAAA-MM-JJ', maxLength: 10 })}
@@ -151,18 +216,20 @@ export function StaffAgenda({ classes, isTeacher, request, run, busy }) {
           {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
           {message ? <Text accessibilityLiveRegion="polite" style={styles.body}>{message}</Text> : null}
           <View style={styles.actions}>
-            <Button label={editing ? 'Enregistrer l’événement' : 'Publier l’événement'} onPress={save} busy={busy} />
+            <Button label={privateMode ? (editing ? 'Enregistrer le rendez-vous' : 'Créer le rendez-vous')
+              : (editing ? 'Enregistrer l’événement' : 'Publier l’événement')} onPress={save} busy={busy} />
             {editing && <Button label="Annuler la modification" onPress={resetEditor} busy={busy} secondary />}
           </View>
           <CalendarPeriod anchor={anchor} view={view} busy={busy} onChange={changePeriod} />
-          <Button label="Actualiser l’agenda" onPress={() => void run(() => list(scope, anchor, view))} busy={busy} secondary />
-          {!busy && page.events.length === 0 && <Text style={styles.body}>Aucun événement pour cette période.</Text>}
+          <Button label="Actualiser l’agenda" onPress={refresh} busy={busy} secondary />
+          {!busy && page.events.length === 0 && <Text style={styles.body}>{privateMode ? 'Aucun rendez-vous pour cette période.' : 'Aucun événement pour cette période.'}</Text>}
           {page.events.map((event) => (
             <AgendaEvent key={event.id} event={event}>
+              {privateMode && <Text style={styles.body}>{event.studentName} · {event.guardianReference}</Text>}
               <View style={styles.actions}>
                 {removing === event.id ? (
                   <>
-                    <Button label="Confirmer le retrait de l’événement" busy={busy} onPress={() => remove(event.id)} />
+                    <Button label={privateMode ? 'Confirmer le retrait du rendez-vous' : 'Confirmer le retrait de l’événement'} busy={busy} onPress={() => remove(event.id)} />
                     <Button label="Annuler le retrait" onPress={() => setRemoving(null)} busy={busy} secondary />
                   </>
                 ) : (

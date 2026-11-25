@@ -139,6 +139,13 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
     return { children };
   });
 
+  app.get('/parent/tutor-reference', async (request, reply) => {
+    const claims = await parentIdentity(request);
+    if (!claims) return unauthorized(reply);
+    const reference = await store.tutorReference(claims);
+    return reference ? { reference } : unauthorized(reply);
+  });
+
   app.get('/parent/children/:childId/homework', {
     schema: {
       params: jsonBody({ childId: uuidPattern }),

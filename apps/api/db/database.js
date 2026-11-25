@@ -5,6 +5,7 @@ import { readSecret } from '../installation/secrets.js';
 export const migrations = [
   '001-parent-auth.sql', '002-browser-sessions.sql', '003-homework-entries.sql',
   '004-school-name.sql', '005-direction.sql', '006-teachers.sql', '007-agenda.sql',
+  '008-private-appointments.sql',
 ];
 
 export function openDatabase(connectionString) {

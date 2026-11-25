@@ -76,6 +76,8 @@ L’enseignant retrouve le même formulaire de publication que la direction, ave
 
 Dans « Agenda », la direction peut publier pour l’école entière ou une classe. Un enseignant peut publier pour ses classes affectées. Dans l’espace parent, ouvrez l’agenda de l’enfant pour consulter les événements ou télécharger un fichier `.ics` depuis la web-app. [Guide de l’agenda](agenda.md)
 
+Pour un rendez-vous individuel, demandez au tuteur sa référence depuis « Vos enfants », puis créez le rendez-vous dans l’onglet de la classe. [Procédure de prise de rendez-vous](agenda.md#fixer-un-rendez-vous-individuel)
+
 ### Générer une invitation supplémentaire
 
 ```sh

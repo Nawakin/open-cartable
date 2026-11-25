@@ -94,6 +94,10 @@ export async function listChildren() {
   return (await get('/children'))?.children ?? null;
 }
 
+export async function getTutorReference() {
+  return (await get('/tutor-reference'))?.reference ?? null;
+}
+
 export function listHomework(childId, period) {
   return get(homeworkPath(childId, period));
 }

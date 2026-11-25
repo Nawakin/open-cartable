@@ -5,6 +5,7 @@ import { Button, styles } from '../parent/ui';
 
 const dayLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeZone: 'UTC' });
 const timeLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+const scopeLabels = { school: 'École', class: 'Classe', private: 'Rendez-vous individuel' };
 
 export function CalendarPeriod({ anchor, view, busy, onChange }) {
   const { from, to } = periodRange(anchor, view);
@@ -29,7 +30,7 @@ export function CalendarPeriod({ anchor, view, busy, onChange }) {
 export function AgendaEvent({ event, children }) {
   return (
     <View style={agendaStyles.event}>
-      <Text style={agendaStyles.scope}>{event.scope === 'school' ? 'École' : 'Classe'}</Text>
+      <Text style={agendaStyles.scope}>{scopeLabels[event.scope]}</Text>
       <Text accessibilityRole="header" style={agendaStyles.heading}>{event.title}</Text>
       <Text style={styles.body}>{timeLabel.format(new Date(event.startsAt))} → {timeLabel.format(new Date(event.endsAt))}</Text>
       {event.location ? <Text style={styles.body}>{event.location}</Text> : null}

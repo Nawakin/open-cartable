@@ -26,7 +26,7 @@ export function eventDetails(event) {
     title: event.title,
     location: event.location,
     description: event.description,
-    scope: event.class_id === null ? 'school' : 'class',
+    scope: event.private ? 'private' : (event.class_id === null ? 'school' : 'class'),
   };
 }
 
@@ -41,6 +41,7 @@ export async function listStaffEvents(db, schoolId, classId, { from, until, afte
     SELECT id, class_id, starts_at, ends_at, title, location, description
     FROM agenda_events
     WHERE school_id = $1 AND class_id IS NOT DISTINCT FROM $2::uuid
+      AND appointment_student_id IS NULL
       AND ends_at > $3 AND starts_at < $4
       AND ($5::timestamptz IS NULL OR (starts_at, id) > ($5, $6::uuid))
     ORDER BY starts_at, id
@@ -62,14 +63,15 @@ export async function createEvent(db, schoolId, classId, event) {
 export async function updateEvent(db, schoolId, classId, id, event) {
   const result = await db.query(`
     UPDATE agenda_events SET starts_at = $4, ends_at = $5, title = $6, location = $7, description = $8
-    WHERE school_id = $1 AND class_id IS NOT DISTINCT FROM $2::uuid AND id = $3
+    WHERE school_id = $1 AND class_id IS NOT DISTINCT FROM $2::uuid AND id = $3 AND appointment_student_id IS NULL
   `, [schoolId, classId, id, event.startsAt, event.endsAt, event.title, event.location, event.description]);
   return result.rowCount === 1;
 }
 
 export async function deleteEvent(db, schoolId, classId, id) {
   const result = await db.query(`
-    DELETE FROM agenda_events WHERE school_id = $1 AND class_id IS NOT DISTINCT FROM $2::uuid AND id = $3
+    DELETE FROM agenda_events
+    WHERE school_id = $1 AND class_id IS NOT DISTINCT FROM $2::uuid AND id = $3 AND appointment_student_id IS NULL
   `, [schoolId, classId, id]);
   return result.rowCount === 1;
 }

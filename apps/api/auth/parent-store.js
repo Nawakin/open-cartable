@@ -16,7 +16,7 @@ const activeParentQuery = `
 
 const permittedChildQuery = `
   WITH active_parent AS (${activeParentQuery}), permitted_child AS (
-    SELECT student.school_id, student.class_id, student.id, student.display_name, c.name AS class_name
+    SELECT student.school_id, student.class_id, student.id, student.display_name, p.guardian_id, c.name AS class_name
     FROM active_parent p
     JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
     JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
@@ -28,9 +28,12 @@ const childFields = `EXISTS (SELECT 1 FROM active_parent) AS authenticated,
   (SELECT json_build_object('id', id, 'displayName', display_name,
     'classId', class_id, 'className', class_name) FROM permitted_child) AS child`;
 
-const childAgendaEvents = `SELECT e.id, e.class_id, e.starts_at, e.ends_at, e.title, e.location, e.description
+const childAgendaEvents = `SELECT e.id, e.class_id, e.starts_at, e.ends_at, e.title, e.location, e.description,
+    e.appointment_student_id IS NOT NULL AS private
   FROM permitted_child c
-  JOIN agenda_events e ON e.school_id = c.school_id AND (e.class_id IS NULL OR e.class_id = c.class_id)`;
+  JOIN agenda_events e ON e.school_id = c.school_id AND (e.class_id IS NULL OR e.class_id = c.class_id)
+    AND (e.appointment_student_id IS NULL OR
+      (e.appointment_student_id, e.appointment_guardian_id) = (c.id, c.guardian_id))`;
 
 async function lockActiveGuardian(client, schoolId, guardianId) {
   const result = await client.query(`
@@ -187,6 +190,11 @@ export function createParentStore(pool, invitationKey) {
       return result.rows.filter(({ id }) => id !== null).map(({ id, display_name, class_name }) => ({
         id, displayName: display_name, className: class_name,
       }));
+    },
+
+    async tutorReference({ sessionId, guardianId }) {
+      const { rows } = await pool.query(`SELECT guardian_id FROM (${activeParentQuery}) parent`, [sessionId, guardianId]);
+      return rows[0]?.guardian_id ?? null;
     },
 
     async homework({ sessionId, guardianId }, childId, { from, to, domain, beforeDate, beforeId }) {

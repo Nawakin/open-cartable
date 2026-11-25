@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
-import { listAgenda, listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
+import { getTutorReference, listAgenda, listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
@@ -38,6 +38,7 @@ function ParentApp() {
   const [phase, setPhase] = useState('loading');
   const [installationToken, setInstallationToken] = useState(consumeInstallationLink);
   const [children, setChildren] = useState([]);
+  const [tutorReference, setTutorReference] = useState(null);
   const [schoolPanel, setSchoolPanel] = useState(null);
   const [address, setAddress] = useState('');
   const [school, setSchool] = useState('');
@@ -64,6 +65,7 @@ function ParentApp() {
   async function load(requireSession = false) {
     setPhase('loading');
     setChildren([]);
+    setTutorReference(null);
     setSchoolPanel(null);
     try {
       const roster = await listChildren();
@@ -132,7 +134,20 @@ function ParentApp() {
   }
 
   function openSchoolPanel(child, kind) {
+    setTutorReference(null);
     void run(() => loadSchoolPanel({ child, kind, anchor: dayInSchoolCalendar(), view: 'week', domain: '' }));
+  }
+
+  function toggleTutorReference() {
+    if (tutorReference) {
+      setTutorReference(null);
+      return;
+    }
+    void run(async () => {
+      const reference = await getTutorReference();
+      if (reference) setTutorReference(reference);
+      else await load();
+    });
   }
 
   useEffect(() => {
@@ -171,6 +186,7 @@ function ParentApp() {
     void run(async () => {
       await signOut();
       setChildren([]);
+      setTutorReference(null);
       setSchoolPanel(null);
       setInvitation('');
       setPhase('login');
@@ -249,8 +265,16 @@ function ParentApp() {
                 onPress={() => openSchoolPanel(child, 'agenda')} secondary />
             </View>
           ))}
+          {tutorReference && (
+            <View style={shell.child}>
+              <Text style={styles.body}>Transmettez cette référence à l’école pour fixer un rendez-vous individuel.</Text>
+              <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>
+            </View>
+          )}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
           <View style={styles.actions}>
+            <Button label={tutorReference ? 'Masquer ma référence tuteur' : 'Afficher ma référence tuteur'}
+              busy={busy} onPress={toggleTutorReference} secondary />
             <Button label="Actualiser" busy={busy} onPress={() => void run(load)} secondary />
             <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
             {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}

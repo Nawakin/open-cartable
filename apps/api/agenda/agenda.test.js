@@ -153,4 +153,73 @@ test('l’agenda et son export respectent l’école, la classe et la tutelle', 
   assert.equal(next.events.length, 3);
   assert.equal(next.nextCursor, null);
   assert.equal(new Set([...page.events, ...next.events].map(({ id }) => id)).size, 33);
+
+  const [guardianA, guardianB] = demo.guardians;
+  // Cette fois, les deux tuteurs peuvent consulter le même enfant.
+  await pool.query('INSERT INTO guardian_students (school_id, guardian_id, student_id) VALUES ($1, $2, $3)',
+    [demo.school.id, guardianB, childA.id]);
+  assert.deepEqual((await call('GET', '/parent/tutor-reference', { cookie: firstParent })).json(), { reference: guardianA });
+  assert.deepEqual((await call('GET', '/parent/tutor-reference', { cookie: secondParent })).json(), { reference: guardianB });
+  assert.equal((await call('GET', '/parent/tutor-reference', { cookie: teacher })).statusCode, 401);
+
+  const coworkerLogin = { schoolCode, login: 'deuxieme-enseignant', password };
+  const coworkerAccount = await call('POST', '/direction/teachers', {
+    cookie: director, payload: { login: coworkerLogin.login, classIds: [classA.id] },
+  });
+  assert.equal(coworkerAccount.statusCode, 201);
+  assert.equal((await call('POST', '/teacher/auth/activate', {
+    payload: { ...coworkerLogin, code: coworkerAccount.json().code },
+  })).statusCode, 204);
+  const coworker = cookieFrom(await call('POST', '/teacher/auth/login', { payload: coworkerLogin }));
+
+  const privateRoute = '/teacher/classes/' + classA.id + '/appointments';
+  const directionAppointments = '/direction/classes/' + classA.id + '/appointments';
+  const hiredStudents = await call('GET', privateRoute + '/students', { cookie: teacher });
+  assert.deepEqual(hiredStudents.json().students, [childA, childC].map(({ id, name }) => ({ id, displayName: name })));
+  assert.equal((await call('GET', '/teacher/classes/' + classB.id + '/appointments/students', { cookie: teacher })).statusCode, 404);
+
+  const appointment = { ...draft, title: 'Rendez-vous fictif', startsAt: '2026-12-01T16:00:00.000Z', endsAt: '2026-12-01T16:30:00.000Z' };
+  const recipient = { studentId: childA.id, guardianReference: guardianA };
+  const book = (path, cookie, details = recipient) => call('POST', path, { cookie, payload: { ...details, event: appointment } });
+  assert.equal((await book(privateRoute, firstParent)).statusCode, 401);
+  assert.equal((await book(privateRoute, teacher, { ...recipient, guardianReference: randomUUID() })).statusCode, 404);
+  assert.equal((await book(privateRoute, teacher, { ...recipient, studentId: childC.id })).statusCode, 404);
+  const createdAppointment = await book(privateRoute, teacher);
+  assert.equal(createdAppointment.statusCode, 201);
+  const appointmentId = createdAppointment.json().id;
+  const privateRange = '?from=2026-12-01T00:00:00.000Z&until=2026-12-07T00:00:00.000Z';
+  const privateList = (path, cookie) => call('GET', path + privateRange, { cookie });
+  const parentEvents = (child, cookie) => privateList(parentRoute(child.id), cookie);
+  const delivered = await parentEvents(childA, firstParent);
+  assert.deepEqual(delivered.json().events, [{ ...appointment, id: appointmentId, scope: 'private' }]);
+  assert.deepEqual((await parentEvents(childA, secondParent)).json().events, []);
+  assert.deepEqual((await parentEvents(childB, firstParent)).json().events, []);
+  assert.deepEqual((await privateList(teacherClass(classA.id), teacher)).json().events, []);
+  assert.deepEqual((await privateList(privateRoute, coworker)).json().events, []);
+  assert.equal((await privateList(directionAppointments, director)).json().events[0].guardianReference, guardianA);
+  assert.equal((await call('PUT', privateRoute + '/' + appointmentId, { cookie: coworker, payload: appointment })).statusCode, 404);
+  assert.equal((await call('DELETE', teacherClass(classA.id) + '/' + appointmentId, { cookie: teacher })).statusCode, 404);
+  assert.equal((await call('PUT', privateRoute + '/' + appointmentId, { cookie: teacher, payload: appointment })).statusCode, 204);
+
+  const calendar = await exportEvent(firstParent, childA, appointmentId);
+  assert.equal(calendar.statusCode, 200);
+  assert.match(calendar.body, /\r\nCLASS:PRIVATE\r\n/);
+  assert.equal(calendar.body.includes(guardianA), false);
+  assert.equal((await exportEvent(secondParent, childA, appointmentId)).statusCode, 404);
+  assert.equal((await exportEvent(firstParent, childB, appointmentId)).statusCode, 404);
+
+  await pool.query('UPDATE students SET class_id = $1 WHERE school_id = $2 AND id = $3', [classB.id, demo.school.id, childA.id]);
+  assert.deepEqual((await parentEvents(childA, firstParent)).json().events, []);
+  assert.deepEqual((await privateList(privateRoute, teacher)).json().events, []);
+  assert.equal((await exportEvent(firstParent, childA, appointmentId)).statusCode, 404);
+  assert.equal((await call('DELETE', privateRoute + '/' + appointmentId, { cookie: teacher })).statusCode, 404);
+  assert.equal((await call('DELETE', directionAppointments + '/' + appointmentId, { cookie: director })).statusCode, 204);
+
+  await pool.query('UPDATE students SET class_id = $1 WHERE school_id = $2 AND id = $3', [classA.id, demo.school.id, childA.id]);
+  const linkedAppointment = await book(privateRoute, teacher);
+  assert.equal(linkedAppointment.statusCode, 201);
+  await pool.query('DELETE FROM guardian_students WHERE school_id = $1 AND guardian_id = $2 AND student_id = $3',
+    [demo.school.id, guardianA, childA.id]);
+  assert.deepEqual((await privateList(directionAppointments, director)).json().events, []);
+  assert.equal((await exportEvent(firstParent, childA, linkedAppointment.json().id)).statusCode, 404);
 });
