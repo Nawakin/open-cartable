@@ -1,11 +1,11 @@
 name: open-cartable
 services:
   secrets:
-    image: node:24-bookworm-slim
-    command: ["node", "/generate-secrets.mjs"]
+    build:
+      context: .
+      target: secrets
     network_mode: none
     volumes:
-      - ./deploy/generate-secrets.mjs:/generate-secrets.mjs:ro
       - postgres-admin:/postgres-admin
       - postgres-secrets:/postgres-secrets
       - app-secrets:/app-secrets
@@ -29,7 +29,9 @@ services:
       retries: 20
     restart: unless-stopped
   database-role:
-    image: postgres:16-bookworm
+    build:
+      context: .
+      target: database-role
     depends_on:
       postgres:
         condition: service_healthy
@@ -41,7 +43,6 @@ services:
       PGDATABASE: open_cartable
     volumes:
       - postgres-admin:/run/postgres-admin:ro
-      - ./deploy/create-db-role.sql:/create-db-role.sql:ro
   api:
     build: .
     depends_on:

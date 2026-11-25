@@ -7,6 +7,8 @@
 !apps/mobile/
 !apps/mobile/**
 !deploy/
+!deploy/generate-secrets.mjs
+!deploy/create-db-role.sql
 !deploy/installation-link.mjs
 **/node_modules
 **/dist

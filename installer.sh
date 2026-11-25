@@ -10,7 +10,12 @@ fi
 if [ -n "${OPEN_CARTABLE_BUILD_CA:-}" ]; then
   export COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml}:compose.ca.yaml"
 fi
-docker compose up -d --build --wait --wait-timeout 180
+if ! docker compose up -d --build --wait --wait-timeout 180; then
+  docker compose ps -a >&2 || true
+  docker compose logs --tail=25 secrets >&2 || true
+  echo "Vérifiez l’état des services ci-dessus et relancez le lanceur après correction." >&2
+  exit 1
+fi
 url=$(docker compose exec -T api node deploy/installation-link.mjs)
 if [ "$(uname -s)" = Darwin ]; then
   open "$url" && exit 0

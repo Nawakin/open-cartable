@@ -110,7 +110,8 @@ Les binaires mobiles distribués via les stores et les autres fonctions de gesti
 
 - Relancez le même lanceur pour redémarrer. Il réutilise les volumes de la base et des clés. Pour suspendre les services, exécutez `docker compose stop`.
 - Pour mettre à jour, conservez le même dossier et le même nom de projet Compose. Sauvegardez PostgreSQL et les volumes de secrets, sur un support chiffré hors du dépôt. Remplacez le code par la version souhaitée puis relancez le lanceur pour reconstruire l’image et appliquer les migrations.
-- Si le port 3000 est occupé, ajoutez `OPEN_CARTABLE_PORT=3090` au fichier `.env` et relancez. Mettez également à jour la cible du proxy si vous en utilisez un.
+- Si le port 3000 est occupé, par exemple par `npm run dev:api`, ajoutez `OPEN_CARTABLE_PORT=3090` au fichier `.env` et relancez. Mettez également à jour la cible du proxy si vous en utilisez un. Metro et le serveur de développement sont facultatifs pour utiliser la web-app Docker.
 - Si le proxy de votre organisation utilise sa propre autorité de certification, indiquez le chemin absolu du fichier PEM dans la variable d’environnement `OPEN_CARTABLE_BUILD_CA` avant de lancer l’installateur. Compose transmet ce fichier aux étapes d’installation npm pendant la construction de l’image.
 - Consultez l’état et les journaux avec `docker compose ps` et `docker compose logs api postgres database-role secrets`. Exécutez ces commandes depuis le dossier du projet. Retirez les identifiants avant de transmettre des journaux.
+- Si `secrets` s’arrête pendant l’installation, consultez `docker compose logs --tail=40 secrets` depuis ce même dossier. Pour l’erreur `Cannot find module '/generate-secrets.mjs'` d’une ancienne version, mettez le dépôt à jour et relancez l’installateur. Les volumes existants sont réutilisés.
 - Évitez `docker compose down --volumes` sur une installation à conserver. Cette commande efface la base et les clés du projet.

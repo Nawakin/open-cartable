@@ -1,3 +1,10 @@
+FROM node:24-bookworm-slim AS secrets
+COPY --chmod=0444 deploy/generate-secrets.mjs /generate-secrets.mjs
+CMD ["node", "/generate-secrets.mjs"]
+
+FROM postgres:16-bookworm AS database-role
+COPY --chmod=0444 deploy/create-db-role.sql /create-db-role.sql
+
 FROM node:24-bookworm-slim AS web
 WORKDIR /app
 COPY package.json package-lock.json ./
