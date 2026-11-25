@@ -78,6 +78,8 @@ Dans « Agenda », la direction peut publier pour l’école entière ou une cla
 
 Pour un rendez-vous individuel, demandez au tuteur sa référence depuis « Vos enfants », puis créez le rendez-vous dans l’onglet de la classe. [Procédure de prise de rendez-vous](agenda.md#fixer-un-rendez-vous-individuel)
 
+Pour essayer les rappels, publiez un événement qui commence plus tard aujourd’hui ou demain, puis ouvrez ou actualisez l’accueil parent. [Rappels d’agenda](agenda.md#rappels-dagenda)
+
 ### Générer une invitation supplémentaire
 
 ```sh

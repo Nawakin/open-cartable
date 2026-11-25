@@ -5,6 +5,7 @@ import { Button, styles } from '../parent/ui';
 
 const dayLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeZone: 'UTC' });
 const timeLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
+const parisTime = new Intl.DateTimeFormat('fr-FR', { timeStyle: 'short', timeZone: 'Europe/Paris' });
 const scopeLabels = { school: 'École', class: 'Classe', private: 'Rendez-vous individuel' };
 
 export function CalendarPeriod({ anchor, view, busy, onChange }) {
@@ -36,6 +37,29 @@ export function AgendaEvent({ event, children }) {
       {event.location ? <Text style={styles.body}>{event.location}</Text> : null}
       {event.description ? <Text style={styles.body}>{event.description}</Text> : null}
       {children}
+    </View>
+  );
+}
+
+export function AgendaReminders({ page, busy, error, onOpen, onMore }) {
+  if (page.reminders.length === 0 && !error) return null;
+  return (
+    <View style={styles.panel}>
+      <Text accessibilityRole="header" style={styles.title}>Rappels d’agenda</Text>
+      {page.reminders.length > 0 && <Text style={styles.body}>Horaires de Paris</Text>}
+      {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+      {page.reminders.map((reminder) => (
+        <View key={reminder.id} style={agendaStyles.event}>
+          <Text style={agendaStyles.scope}>
+            {reminder.day === 'today' ? 'Aujourd’hui' : 'Demain'} à {parisTime.format(new Date(reminder.startsAt))}
+          </Text>
+          <Text style={agendaStyles.heading}>{reminder.title}</Text>
+          <Text style={styles.body}>{scopeLabels[reminder.scope]}{reminder.scope === 'school' ? '' : ` · ${reminder.child.displayName}`}</Text>
+          <Button label="Ouvrir l’agenda" accessibilityLabel={`Ouvrir l’agenda pour ${reminder.title}`}
+            busy={busy} secondary onPress={() => onOpen(reminder)} />
+        </View>
+      ))}
+      {page.nextCursor && <Button label="Afficher la suite des rappels" onPress={onMore} busy={busy} secondary />}
     </View>
   );
 }

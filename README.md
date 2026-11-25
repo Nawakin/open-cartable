@@ -47,4 +47,4 @@ Le parent peut consulter les publications de la classe de ses enfants depuis l�
 
 ## Agenda
 
-La direction publie les événements de l’école et les enseignants ceux de leurs classes affectées. Les familles consultent les événements et leurs rendez-vous individuels dans l’espace parent. Le [guide de l’agenda](docs/agenda.md) décrit la publication, la prise de rendez-vous et l’export web.
+La direction publie les événements de l’école et les enseignants ceux de leurs classes affectées. L’espace parent affiche les événements, les rendez-vous individuels et les rappels pour aujourd’hui et demain. Le [guide de l’agenda](docs/agenda.md) décrit les parcours et l’export web.

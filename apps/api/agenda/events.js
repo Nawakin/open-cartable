@@ -26,8 +26,12 @@ export function eventDetails(event) {
     title: event.title,
     location: event.location,
     description: event.description,
-    scope: event.private ? 'private' : (event.class_id === null ? 'school' : 'class'),
+    scope: eventScope(event),
   };
+}
+
+export function eventScope(event) {
+  return event.private ? 'private' : (event.class_id === null ? 'school' : 'class');
 }
 
 export function pageEvents(rows) {

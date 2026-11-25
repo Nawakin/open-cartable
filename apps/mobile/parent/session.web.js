@@ -1,4 +1,4 @@
-import { agendaPath, homeworkPath, request } from './http';
+import { agendaPath, agendaRemindersPath, homeworkPath, request } from './http';
 
 export const needsSchoolAddress = false;
 
@@ -29,6 +29,10 @@ export function listHomework(childId, period) {
 
 export function listAgenda(childId, period) {
   return get(agendaPath(childId, period));
+}
+
+export function listAgendaReminders(cursor) {
+  return get(agendaRemindersPath(cursor));
 }
 
 export async function signOut() {

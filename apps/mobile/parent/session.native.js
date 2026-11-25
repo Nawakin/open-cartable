@@ -1,6 +1,6 @@
 import { fetch } from 'expo/fetch';
 import * as SecureStore from 'expo-secure-store';
-import { agendaPath, homeworkPath, parseSchoolAddress, request } from './http';
+import { agendaPath, agendaRemindersPath, homeworkPath, parseSchoolAddress, request } from './http';
 
 const storageKey = 'open-cartable-parent-session';
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -104,6 +104,10 @@ export function listHomework(childId, period) {
 
 export function listAgenda(childId, period) {
   return get(agendaPath(childId, period));
+}
+
+export function listAgendaReminders(cursor) {
+  return get(agendaRemindersPath(cursor));
 }
 
 export async function signOut() {

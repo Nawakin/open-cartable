@@ -1,7 +1,7 @@
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
 import { eventCalendar } from '../agenda/ical.js';
-import { agendaPeriod, agendaQuerySchema } from '../agenda/period.js';
+import { agendaPeriod, agendaQuerySchema, readAgendaCursor, remindersQuerySchema } from '../agenda/period.js';
 import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCodePattern, uuidPattern, verifyAccessToken } from './credentials.js';
 import { parentSessionSeconds } from './parent-store.js';
 import { homeworkQuerySchema, readPeriod } from '../homework/period.js';
@@ -144,6 +144,15 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
     if (!claims) return unauthorized(reply);
     const reference = await store.tutorReference(claims);
     return reference ? { reference } : unauthorized(reply);
+  });
+
+  app.get('/parent/agenda/reminders', { schema: { querystring: remindersQuerySchema } }, async (request, reply) => {
+    const claims = await parentIdentity(request);
+    if (!claims) return unauthorized(reply);
+    const page = readAgendaCursor(request.query.cursor);
+    if (!page) return reply.code(400).send({ error: 'Page non valide.' });
+    const reminders = await store.agendaReminders(claims, page);
+    return reminders ?? unauthorized(reply);
   });
 
   app.get('/parent/children/:childId/homework', {

@@ -25,6 +25,12 @@ Dans l’espace parent, choisissez « Consulter l’agenda » sous l’enfant. L
 
 Dans la web-app, « Télécharger le fichier .ics » exporte l’événement choisi pour l’importer dans un calendrier. Ce fichier constitue une copie de l’événement au moment du téléchargement. Il faudra l’importer de nouveau si l’horaire change après téléchargement. L’export applique les mêmes contrôles de tutelle, d’école et de classe que la consultation.
 
+## Rappels d’agenda
+
+L’accueil parent affiche les événements à venir jusqu’à la fin du lendemain, avec les mentions « Aujourd’hui » et « Demain » selon l’heure de Paris. Les rappels sont recalculés à l’ouverture de l’accueil et via « Actualiser ». Un événement commun à plusieurs enfants apparaît une seule fois. Un rendez-vous individuel suit les droits de son tuteur destinataire.
+
+Choisissez « Ouvrir l’agenda » sur un rappel pour consulter la semaine de l’événement. Les rappels sont calculés par le serveur de l’école et affichés dans l’application web ou mobile.
+
 ## API
 
 - Les parents consultent `GET /api/v1/parent/children/{childId}/agenda` et téléchargent un événement avec `GET /api/v1/parent/children/{childId}/agenda/{eventId}/ical`.
@@ -32,5 +38,6 @@ Dans la web-app, « Télécharger le fichier .ics » exporte l’événement cho
 - La liste reçoit `from` et `until` au format UTC ISO 8601 avec millisecondes. La borne de fin est exclusive. Une réponse contient au plus 30 événements. Passer `nextCursor` dans `cursor` avec les mêmes bornes pour lire la suite.
 - Une écriture reçoit `startsAt`, `endsAt`, `title`, `location` et `description`. Les instants sont exprimés à la seconde dans le même format, par exemple `2026-11-25T09:00:00.000Z`. Le lieu et la description peuvent être vides.
 - Un parent obtient sa référence via `GET /api/v1/parent/tutor-reference`, avec sa session. Les rendez-vous se gèrent sous `/api/v1/{role}/classes/{classId}/appointments`. `GET .../appointments/students` liste les élèves de cette classe ayant un tuteur actif. La création reçoit `studentId`, `guardianReference` et `event`, avec les champs horaires et descriptifs ci-dessus. La référence sert à désigner un destinataire dans une opération authentifiée.
+- `GET /api/v1/parent/agenda/reminders` retourne jusqu’à 30 rappels de l’accueil parent. Passez `nextCursor` comme paramètre `cursor` pour lire la suite.
 
-Les rappels et l’export depuis l’application native restent à développer.
+Les notifications push et l’export depuis l’application native restent à développer.

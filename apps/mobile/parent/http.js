@@ -13,6 +13,11 @@ export function agendaPath(childId, { from, until, cursor }) {
   return `/children/${encodeURIComponent(childId)}/agenda?${search.toString()}`;
 }
 
+export function agendaRemindersPath(cursor) {
+  const path = '/agenda/reminders';
+  return cursor ? `${path}?cursor=${encodeURIComponent(cursor)}` : path;
+}
+
 export class RequestError extends Error {
   constructor(status) {
     super('La demande n’a pas abouti.');

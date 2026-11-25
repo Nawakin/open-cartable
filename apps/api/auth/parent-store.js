@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { agendaPageSize, eventDetails, pageEvents } from '../agenda/events.js';
+import { agendaPageSize, eventDetails, eventScope, pageEvents } from '../agenda/events.js';
 import { transaction } from '../db/database.js';
 import { homeworkPage, homeworkPageSize } from '../homework/entries.js';
 import { generateInvitationCode, generateRefreshToken, invitationDigest, refreshDigest } from './credentials.js';
@@ -14,26 +14,26 @@ const activeParentQuery = `
     AND s.expires_at > statement_timestamp() AND g.active
 `;
 
-const permittedChildQuery = `
-  WITH active_parent AS (${activeParentQuery}), permitted_child AS (
-    SELECT student.school_id, student.class_id, student.id, student.display_name, p.guardian_id, c.name AS class_name
-    FROM active_parent p
-    JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
-    JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
-    JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
-    WHERE l.student_id = $3
-  )
+const eligibleChildren = `
+  SELECT student.school_id, student.class_id, student.id, student.display_name, p.guardian_id, c.name AS class_name
+  FROM active_parent p
+  JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
+  JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
+  JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
 `;
+const permittedChildQuery = `WITH active_parent AS (${activeParentQuery}),
+  permitted_child AS (${eligibleChildren} WHERE l.student_id = $3)`;
 const childFields = `EXISTS (SELECT 1 FROM active_parent) AS authenticated,
   (SELECT json_build_object('id', id, 'displayName', display_name,
     'classId', class_id, 'className', class_name) FROM permitted_child) AS child`;
 
+const childAgendaJoin = `JOIN agenda_events e ON e.school_id = c.school_id AND (e.class_id IS NULL OR e.class_id = c.class_id)
+  AND (e.appointment_student_id IS NULL OR
+    (e.appointment_student_id, e.appointment_guardian_id) = (c.id, c.guardian_id))`;
+
 const childAgendaEvents = `SELECT e.id, e.class_id, e.starts_at, e.ends_at, e.title, e.location, e.description,
     e.appointment_student_id IS NOT NULL AS private
-  FROM permitted_child c
-  JOIN agenda_events e ON e.school_id = c.school_id AND (e.class_id IS NULL OR e.class_id = c.class_id)
-    AND (e.appointment_student_id IS NULL OR
-      (e.appointment_student_id, e.appointment_guardian_id) = (c.id, c.guardian_id))`;
+  FROM permitted_child c ${childAgendaJoin}`;
 
 async function lockActiveGuardian(client, schoolId, guardianId) {
   const result = await client.query(`
@@ -240,6 +240,40 @@ export function createParentStore(pool, invitationKey) {
                (SELECT row_to_json(visible) FROM visible) AS event
       `, [sessionId, guardianId, childId, eventId]);
       return { authenticated: result.authenticated, event: result.event ? eventDetails(result.event) : null };
+    },
+
+    async agendaReminders({ sessionId, guardianId }, { afterStartsAt, afterId }, now = new Date()) {
+      const { rows: [result] } = await pool.query(`
+        WITH active_parent AS (${activeParentQuery}), permitted_child AS (${eligibleChildren}),
+        bounds AS (
+          SELECT (school_day + 1)::timestamp AT TIME ZONE 'Europe/Paris' AS tomorrow,
+                 (school_day + 2)::timestamp AT TIME ZONE 'Europe/Paris' AS until
+          FROM (SELECT ($3::timestamptz AT TIME ZONE 'Europe/Paris')::date AS school_day) local_clock
+        ), page AS (
+          SELECT * FROM (
+            SELECT DISTINCT ON (e.id) e.id, e.class_id, e.starts_at, e.title,
+                   e.appointment_student_id IS NOT NULL AS private, e.starts_at >= bounds.tomorrow AS tomorrow,
+                   c.id AS child_id, c.display_name, c.class_name
+            FROM permitted_child c ${childAgendaJoin}
+            CROSS JOIN bounds
+            WHERE e.starts_at >= $3 AND e.starts_at < bounds.until
+              AND ($4::timestamptz IS NULL OR (e.starts_at, e.id) > ($4, $5::uuid))
+            ORDER BY e.id, c.display_name, c.id
+          ) matching
+          ORDER BY starts_at, id LIMIT $6
+        )
+        SELECT EXISTS (SELECT 1 FROM active_parent) AS authenticated,
+               COALESCE((SELECT json_agg(page ORDER BY starts_at, id) FROM page), '[]'::json) AS reminders
+      `, [sessionId, guardianId, now, afterStartsAt, afterId, agendaPageSize + 1]);
+      if (!result.authenticated) return null;
+
+      const reminders = result.reminders.slice(0, agendaPageSize).map((row) => ({
+        id: row.id, startsAt: new Date(row.starts_at).toISOString(), title: row.title,
+        scope: eventScope(row), day: row.tomorrow ? 'tomorrow' : 'today',
+        child: { id: row.child_id, displayName: row.display_name, className: row.class_name },
+      }));
+      const last = reminders.at(-1);
+      return { reminders, nextCursor: result.reminders.length > agendaPageSize ? `${last.startsAt}~${last.id}` : null };
     },
   };
 }

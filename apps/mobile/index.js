@@ -3,13 +3,15 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
-import { getTutorReference, listAgenda, listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
+import { getTutorReference, listAgenda, listAgendaReminders, listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
 import { Staff } from './staff/staff';
-import { ParentAgenda } from './agenda/agenda-view';
+import { AgendaReminders, ParentAgenda } from './agenda/agenda-view';
 import { agendaRange } from './agenda/dates';
+
+const emptyReminders = { reminders: [], nextCursor: null };
 
 function openDirection() {
   window.location.assign('/?espace=direction');
@@ -38,6 +40,8 @@ function ParentApp() {
   const [phase, setPhase] = useState('loading');
   const [installationToken, setInstallationToken] = useState(consumeInstallationLink);
   const [children, setChildren] = useState([]);
+  const [reminders, setReminders] = useState(emptyReminders);
+  const [reminderError, setReminderError] = useState('');
   const [tutorReference, setTutorReference] = useState(null);
   const [schoolPanel, setSchoolPanel] = useState(null);
   const [address, setAddress] = useState('');
@@ -67,6 +71,8 @@ function ParentApp() {
     setChildren([]);
     setTutorReference(null);
     setSchoolPanel(null);
+    setReminders(emptyReminders);
+    setReminderError('');
     try {
       const roster = await listChildren();
       if (roster === null) {
@@ -75,10 +81,32 @@ function ParentApp() {
       } else {
         setChildren(roster);
         setPhase('children');
+        if (roster.length) await loadReminders();
       }
     } catch (failure) {
       setPhase('unavailable');
       throw failure;
+    }
+  }
+
+  async function loadReminders(cursor) {
+    setReminderError('');
+    try {
+      const page = await listAgendaReminders(cursor);
+      if (page === null) {
+        setChildren([]);
+        setTutorReference(null);
+        setReminders(emptyReminders);
+        setPhase('login');
+        return;
+      }
+      setReminders((before) => cursor ? {
+        reminders: Array.from(new Map([...before.reminders, ...page.reminders].map((item) => [item.id, item])).values()),
+        nextCursor: page.nextCursor,
+      } : page);
+    } catch (failure) {
+      if (failure.status === 404) return;
+      setReminderError('Les rappels sont indisponibles. Utilisez « Actualiser » pour réessayer.');
     }
   }
 
@@ -133,9 +161,10 @@ function ParentApp() {
     }
   }
 
-  function openSchoolPanel(child, kind) {
+  function openSchoolPanel(child, kind, anchor = dayInSchoolCalendar()) {
     setTutorReference(null);
-    void run(() => loadSchoolPanel({ child, kind, anchor: dayInSchoolCalendar(), view: 'week', domain: '' }));
+    setReminders(emptyReminders);
+    void run(() => loadSchoolPanel({ child, kind, anchor, view: 'week', domain: '' }));
   }
 
   function toggleTutorReference() {
@@ -186,6 +215,8 @@ function ParentApp() {
     void run(async () => {
       await signOut();
       setChildren([]);
+      setReminders(emptyReminders);
+      setReminderError('');
       setTutorReference(null);
       setSchoolPanel(null);
       setInvitation('');
@@ -247,40 +278,45 @@ function ParentApp() {
       )}
 
       {phase === 'children' && (
-        <View style={styles.panel}>
-          <Text accessibilityRole="header" style={styles.title}>Vos enfants</Text>
-          {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
-          {children.map((child) => (
-            <View key={child.id} style={shell.child}>
-              <Text style={shell.childName}>{child.displayName}</Text>
-              <Text style={styles.body}>{child.className}</Text>
-              <Button
-                label="Consulter le cahier"
-                accessibilityLabel={`Cahier de texte de ${child.displayName}`}
-                busy={busy}
-                onPress={() => openSchoolPanel(child, 'homework')}
-                secondary
-              />
-              <Button label="Consulter l’agenda" accessibilityLabel={`Agenda de ${child.displayName}`} busy={busy}
-                onPress={() => openSchoolPanel(child, 'agenda')} secondary />
+        <>
+          <AgendaReminders page={reminders} busy={busy} error={reminderError}
+            onOpen={(reminder) => openSchoolPanel(reminder.child, 'agenda', dayInSchoolCalendar(new Date(reminder.startsAt)))}
+            onMore={() => void run(() => loadReminders(reminders.nextCursor))} />
+          <View style={styles.panel}>
+            <Text accessibilityRole="header" style={styles.title}>Vos enfants</Text>
+            {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
+            {children.map((child) => (
+              <View key={child.id} style={shell.child}>
+                <Text style={shell.childName}>{child.displayName}</Text>
+                <Text style={styles.body}>{child.className}</Text>
+                <Button
+                  label="Consulter le cahier"
+                  accessibilityLabel={`Cahier de texte de ${child.displayName}`}
+                  busy={busy}
+                  onPress={() => openSchoolPanel(child, 'homework')}
+                  secondary
+                />
+                <Button label="Consulter l’agenda" accessibilityLabel={`Agenda de ${child.displayName}`} busy={busy}
+                  onPress={() => openSchoolPanel(child, 'agenda')} secondary />
+              </View>
+            ))}
+            {tutorReference && (
+              <View style={shell.child}>
+                <Text style={styles.body}>Transmettez cette référence à l’école pour fixer un rendez-vous individuel.</Text>
+                <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>
+              </View>
+            )}
+            {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+            <View style={styles.actions}>
+              <Button label={tutorReference ? 'Masquer ma référence tuteur' : 'Afficher ma référence tuteur'}
+                busy={busy} onPress={toggleTutorReference} secondary />
+              <Button label="Actualiser" busy={busy} onPress={() => void run(load)} secondary />
+              <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
+              {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
+              {Platform.OS === 'web' && <Button label="Espace enseignant" busy={busy} onPress={openTeacher} secondary />}
             </View>
-          ))}
-          {tutorReference && (
-            <View style={shell.child}>
-              <Text style={styles.body}>Transmettez cette référence à l’école pour fixer un rendez-vous individuel.</Text>
-              <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>
-            </View>
-          )}
-          {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
-          <View style={styles.actions}>
-            <Button label={tutorReference ? 'Masquer ma référence tuteur' : 'Afficher ma référence tuteur'}
-              busy={busy} onPress={toggleTutorReference} secondary />
-            <Button label="Actualiser" busy={busy} onPress={() => void run(load)} secondary />
-            <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
-            {Platform.OS === 'web' && <Button label="Espace direction" busy={busy} onPress={openDirection} secondary />}
-            {Platform.OS === 'web' && <Button label="Espace enseignant" busy={busy} onPress={openTeacher} secondary />}
           </View>
-        </View>
+        </>
       )}
 
       {phase === 'homework' && schoolPanel && (

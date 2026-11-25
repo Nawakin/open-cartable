@@ -9,6 +9,7 @@ import { migrate, openDatabase, transaction } from '../db/database.js';
 import { demo, seedDemo } from '../db/demo.js';
 import { setDirectionPassword } from '../direction/store.js';
 import { eventCalendar } from './ical.js';
+import { readAgendaCursor } from './period.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const webOrigin = 'https://ent.ecole.example';
@@ -222,4 +223,76 @@ test('l’agenda et son export respectent l’école, la classe et la tutelle', 
     [demo.school.id, guardianA, childA.id]);
   assert.deepEqual((await privateList(directionAppointments, director)).json().events, []);
   assert.equal((await exportEvent(firstParent, childA, linkedAppointment.json().id)).statusCode, 404);
+
+  await context.test('les rappels dédupliquent les enfants et suivent les jours de Paris', async () => {
+    await pool.query(`INSERT INTO guardian_students (school_id, guardian_id, student_id)
+      VALUES ($1, $2, $3), ($1, $2, $4)`, [demo.school.id, guardianA, childA.id, childC.id]);
+    const clock = new Date('2026-03-28T23:30:00.000Z');
+    const firstCursor = readAgendaCursor();
+    // Le passage à l’heure d’été fait débuter le lendemain à 22 h UTC.
+    async function publish(path, cookie, title, startsAt, endsAt) {
+      const result = await create(path, cookie, { title, startsAt, endsAt });
+      assert.equal(result.statusCode, 201);
+      return result.json().id;
+    }
+    const common = await publish(schoolRoute, director, 'École aujourd’hui', '2026-03-29T08:00:00.000Z', '2026-03-29T09:00:00.000Z');
+    const classroom = await publish(teacherClass(classA.id), teacher, 'Classe aujourd’hui', '2026-03-29T21:59:00.000Z', '2026-03-29T22:05:00.000Z');
+    const tomorrow = await publish(schoolRoute, director, 'École demain', '2026-03-29T22:00:00.000Z', '2026-03-29T23:00:00.000Z');
+    await publish(schoolRoute, director, 'Déjà commencé', '2026-03-28T23:00:00.000Z', '2026-03-29T01:00:00.000Z');
+    await publish(schoolRoute, director, 'Après-demain', '2026-03-30T22:00:00.000Z', '2026-03-30T23:00:00.000Z');
+    await publish(schoolRoute, foreign, 'Autre école', '2026-03-29T12:00:00.000Z', '2026-03-29T13:00:00.000Z');
+    const privateResult = await call('POST', privateRoute, {
+      cookie: teacher, payload: { ...recipient, event: {
+        ...appointment, startsAt: '2026-03-30T05:00:00.000Z', endsAt: '2026-03-30T06:00:00.000Z',
+      } },
+    });
+    assert.equal(privateResult.statusCode, 201);
+    const appointmentId = privateResult.json().id;
+
+    async function claims(guardianId) {
+      const invitation = await store.invite(schoolCode, guardianId);
+      const { session } = await store.redeem(schoolCode, invitation.code);
+      return { sessionId: session.id, guardianId };
+    }
+    const firstClaims = await claims(guardianA);
+    const secondClaims = await claims(guardianB);
+    const first = await store.agendaReminders(firstClaims, firstCursor, clock);
+    assert.deepEqual(first.reminders.map(({ id, scope, day }) => [id, scope, day]), [
+      [common, 'school', 'today'], [classroom, 'class', 'today'], [tomorrow, 'school', 'tomorrow'],
+      [appointmentId, 'private', 'tomorrow'],
+    ]);
+    assert.equal(first.reminders.at(-1).child.id, childA.id);
+    assert.deepEqual(Object.keys(first.reminders.at(-1)).sort(), ['child', 'day', 'id', 'scope', 'startsAt', 'title']);
+    assert.deepEqual((await store.agendaReminders(secondClaims, firstCursor, clock)).reminders.map(({ id }) => id),
+      [common, classroom, tomorrow]);
+
+    await pool.query(`INSERT INTO agenda_events (school_id, id, starts_at, ends_at, title, location, description)
+      SELECT $1, gen_random_uuid(), '2026-03-29T09:00:00.000Z', '2026-03-29T10:00:00.000Z',
+        'Rappel ' || n, '', '' FROM generate_series(1, 31) n`, [demo.school.id]);
+    const firstPage = await store.agendaReminders(firstClaims, firstCursor, clock);
+    assert.equal(firstPage.reminders.length, 30);
+    const secondPage = await store.agendaReminders(firstClaims, readAgendaCursor(firstPage.nextCursor), clock);
+    assert.equal(secondPage.nextCursor, null);
+    assert.equal(secondPage.reminders.length, 5);
+    assert.equal(new Set([...firstPage.reminders, ...secondPage.reminders].map(({ id }) => id)).size, 35);
+
+    await pool.query('DELETE FROM guardian_students WHERE school_id = $1 AND guardian_id = $2 AND student_id = $3',
+      [demo.school.id, guardianA, childA.id]);
+    const afterSchoolEvent = readAgendaCursor(`2026-03-29T22:00:00.000Z~${tomorrow}`);
+    assert.deepEqual((await store.agendaReminders(firstClaims, afterSchoolEvent, clock)).reminders, []);
+    await store.revoke(firstClaims);
+    assert.equal(await store.agendaReminders(firstClaims, firstCursor, clock), null);
+
+    await pool.query('DELETE FROM agenda_events');
+    const liveRoute = '/parent/agenda/reminders';
+    const inAnHour = new Date(Math.floor(Date.now() / 1000) * 1000 + 3_600_000);
+    const liveId = await publish(schoolRoute, director, 'Rappel actuel', inAnHour.toISOString(),
+      new Date(inAnHour.getTime() + 3_600_000).toISOString());
+    assert.equal((await call('GET', liveRoute, { cookie: teacher })).statusCode, 401);
+    assert.equal((await call('GET', liveRoute + '?cursor=' + 'x'.repeat(61), { cookie: firstParent })).statusCode, 400);
+    const live = await call('GET', liveRoute, { cookie: firstParent });
+    assert.equal(live.headers['cache-control'], 'no-store');
+    assert.ok(live.json().reminders.some(({ id }) => id === liveId));
+
+  });
 });
