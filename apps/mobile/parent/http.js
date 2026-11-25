@@ -1,5 +1,12 @@
 const parentPath = '/api/v1/parent';
 
+export function homeworkPath(childId, { from, to, domain, cursor }) {
+  const search = new URLSearchParams({ from, to });
+  if (domain) search.set('domain', domain);
+  if (cursor) search.set('cursor', cursor);
+  return `/children/${encodeURIComponent(childId)}/homework?${search.toString()}`;
+}
+
 export class RequestError extends Error {
   constructor(status) {
     super('La demande n’a pas abouti.');

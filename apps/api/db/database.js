@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 
-export const migrations = ['001-parent-auth.sql', '002-browser-sessions.sql'];
+export const migrations = ['001-parent-auth.sql', '002-browser-sessions.sql', '003-homework-entries.sql'];
 
 export function openDatabase(connectionString) {
   if (!connectionString) throw new Error('DATABASE_URL est requise.');

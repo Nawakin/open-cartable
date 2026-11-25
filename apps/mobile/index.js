@@ -1,43 +1,16 @@
 import { registerRootComponent } from 'expo';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, AppState, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
-import { listChildren, needsSchoolAddress, signIn, signOut } from './parent/session';
-
-function Button({ label, onPress, busy, secondary = false }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ disabled: busy }}
-      disabled={busy}
-      onPress={onPress}
-      style={({ pressed }) => [styles.button, secondary && styles.secondaryButton, (pressed || busy) && styles.dimmed]}
-    >
-      <Text style={secondary ? styles.secondaryLabel : styles.buttonLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function Field({ label, ...props }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      <TextInput
-        accessibilityLabel={label}
-        autoCorrect={false}
-        autoComplete="off"
-        placeholderTextColor="#536158"
-        style={styles.input}
-        {...props}
-      />
-    </View>
-  );
-}
+import { listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
+import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
+import { Button, Field, styles } from './parent/ui';
 
 function ParentApp() {
   const [phase, setPhase] = useState('loading');
   const [children, setChildren] = useState([]);
+  const [notebook, setNotebook] = useState(null);
   const [address, setAddress] = useState('');
   const [school, setSchool] = useState('');
   const [invitation, setInvitation] = useState('');
@@ -63,6 +36,7 @@ function ParentApp() {
   async function load(requireSession = false) {
     setPhase('loading');
     setChildren([]);
+    setNotebook(null);
     try {
       const roster = await listChildren();
       if (roster === null) {
@@ -78,17 +52,53 @@ function ParentApp() {
     }
   }
 
+  async function loadNotebook(selection, append = false) {
+    if (!append) {
+      setNotebook({ ...selection, entries: [], nextCursor: null });
+      setPhase('homework');
+    }
+    try {
+      const page = await listHomework(selection.child.id, {
+        ...periodRange(selection.anchor, selection.view),
+        domain: selection.domain,
+        cursor: append ? selection.nextCursor : undefined,
+      });
+      if (page === null) {
+        setChildren([]);
+        setNotebook(null);
+        setPhase('login');
+        return;
+      }
+      if (append && selection.child.classId !== page.child.classId) {
+        await loadNotebook({ ...selection, child: page.child });
+        return;
+      }
+      const entries = append ? [...selection.entries, ...page.entries] : page.entries;
+      // Une entrée modifiée peut réapparaître sur une page suivante.
+      const uniqueEntries = Array.from(new Map(entries.map((entry) => [entry.id, entry])).values());
+      setNotebook({ ...selection, child: page.child, entries: uniqueEntries, nextCursor: page.nextCursor });
+    } catch (failure) {
+      if (failure.status !== 404) throw failure;
+      await load();
+      setError('Ce cahier n’est plus accessible pour votre compte.');
+    }
+  }
+
+  function openNotebook(child) {
+    void run(() => loadNotebook({ child, anchor: dayInSchoolCalendar(), view: 'week', domain: '' }));
+  }
+
   useEffect(() => {
     void run(load);
   }, []);
 
   useEffect(() => {
-    if (phase !== 'children') return undefined;
+    if (phase !== 'children' && phase !== 'homework') return undefined;
     const subscription = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void run(load);
+      if (state === 'active') void run(phase === 'homework' ? () => loadNotebook(notebook) : load);
     });
     return () => subscription.remove();
-  }, [phase]);
+  }, [phase, notebook]);
 
   function submit() {
     void run(async () => {
@@ -114,17 +124,18 @@ function ParentApp() {
     void run(async () => {
       await signOut();
       setChildren([]);
+      setNotebook(null);
       setInvitation('');
       setPhase('login');
     });
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <Text style={styles.brand}>Open Cartable</Text>
+    <SafeAreaView style={shell.safeArea}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={shell.scroll}>
+        <View style={shell.content}>
+          <View style={shell.header}>
+            <Text style={shell.brand}>Open Cartable</Text>
           </View>
 
           {phase === 'loading' && (
@@ -172,9 +183,16 @@ function ParentApp() {
               <Text accessibilityRole="header" style={styles.title}>Vos enfants</Text>
               {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
               {children.map((child) => (
-                <View key={child.id} style={styles.child}>
-                  <Text style={styles.childName}>{child.displayName}</Text>
+                <View key={child.id} style={shell.child}>
+                  <Text style={shell.childName}>{child.displayName}</Text>
                   <Text style={styles.body}>{child.className}</Text>
+                  <Button
+                    label="Consulter le cahier"
+                    accessibilityLabel={`Cahier de texte de ${child.displayName}`}
+                    busy={busy}
+                    onPress={() => openNotebook(child)}
+                    secondary
+                  />
                 </View>
               ))}
               {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -183,6 +201,19 @@ function ParentApp() {
                 <Button label={busy ? 'Déconnexion…' : 'Se déconnecter'} busy={busy} onPress={logout} secondary />
               </View>
             </View>
+          )}
+
+          {phase === 'homework' && notebook && (
+            <Homework
+              key={notebook.child.id}
+              notebook={notebook}
+              onChange={(selection) => void run(() => loadNotebook(selection))}
+              onMore={() => void run(() => loadNotebook(notebook, true))}
+              onBack={() => void run(load)}
+              onLogout={logout}
+              busy={busy}
+              error={error}
+            />
           )}
 
           {phase === 'unavailable' && (
@@ -205,27 +236,14 @@ function App() {
   return <SafeAreaProvider><ParentApp /></SafeAreaProvider>;
 }
 
-const styles = StyleSheet.create({
+const shell = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#f3f0e5' },
   scroll: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 20, paddingVertical: 36 },
   content: { width: '100%', maxWidth: 560, gap: 18 },
   header: { backgroundColor: '#17372d', paddingHorizontal: 24, paddingVertical: 18, borderRadius: 18 },
   brand: { color: '#fff7df', fontSize: 23, fontWeight: '800', letterSpacing: -0.5 },
-  panel: { borderColor: '#dddaca', borderWidth: 1, borderRadius: 18, padding: 24, backgroundColor: '#fffdf6', gap: 16 },
-  title: { color: '#132d25', fontSize: 29, fontWeight: '800', letterSpacing: -0.7 },
-  body: { color: '#3a4d43', fontSize: 16, lineHeight: 23 },
-  field: { gap: 6 },
-  label: { color: '#17372d', fontSize: 15, fontWeight: '700' },
-  input: { color: '#132d25', fontSize: 16, minHeight: 48, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#929e91', backgroundColor: '#fff' },
-  button: { minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, backgroundColor: '#225344' },
-  buttonLabel: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  secondaryButton: { backgroundColor: '#e7ede4' },
-  secondaryLabel: { color: '#17372d', fontSize: 16, fontWeight: '700' },
-  dimmed: { opacity: 0.65 },
-  error: { color: '#862929', fontSize: 15, lineHeight: 21 },
   child: { paddingVertical: 13, paddingHorizontal: 16, backgroundColor: '#eef1e9', borderRadius: 12, gap: 4 },
   childName: { color: '#132d25', fontSize: 18, fontWeight: '700' },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
 });
 
 registerRootComponent(App);

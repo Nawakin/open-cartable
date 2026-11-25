@@ -5,6 +5,7 @@ import pg from 'pg';
 import { buildApp } from '../app.js';
 import { migrate, openDatabase } from '../db/database.js';
 import { demo, seedDemo } from '../db/demo.js';
+import { createEntry, deleteEntry, readEntry, updateEntry } from '../homework/entries.js';
 import { generateInvitationCode, invitationDigest, refreshDigest } from './credentials.js';
 import { createParentStore } from './parent-store.js';
 
@@ -103,13 +104,102 @@ test('parcours parent sur PostgreSQL', { skip: !databaseUrl }, async (context) =
     ), { code: '23503' });
   });
 
+  const homework = (headers, childId, filters = { from: '2026-11-01', to: '2026-11-30' }) => app.inject({
+    url: `${endpoint}/children/${childId}/homework?${new URLSearchParams(filters)}`,
+    headers,
+  });
+
+  await context.test('le cahier suit l’enfant autorisé et sa classe, avec la même portée sur web et mobile', async () => {
+    const [childA, childB, childC] = demo.students.map(({ id }) => id);
+    const [classA, classB] = demo.classes.map(({ id }) => id);
+    const entry = { date: '2026-11-25', title: 'Lire une histoire', domain: 'Français', description: 'Relire la fiche fictive.' };
+    const id = await createEntry(pool, schoolCode, classA, entry);
+    await createEntry(pool, schoolCode, classA, { ...entry, date: '2026-11-24', title: 'Comparer des nombres', domain: 'Mathématiques' });
+    await createEntry(pool, schoolCode, classB, { ...entry, title: 'Travail de la classe B' });
+    await pool.query(`INSERT INTO classes (school_id, id, name)
+      SELECT id, $1, 'Classe fictive homonyme' FROM schools WHERE code = 'AUTRE-ECOLE'`, [classA]);
+    await createEntry(pool, 'AUTRE-ECOLE', classA, { ...entry, title: 'Travail d’une autre école' });
+
+    const credentials = await login(guardianA);
+    const first = authorize(credentials.accessToken);
+    const second = authorize((await login(guardianB)).accessToken);
+    assert.equal((await homework({}, childA)).statusCode, 401);
+    const result = await homework(first, childA);
+    assert.equal(result.statusCode, 200);
+    assert.equal(result.headers['cache-control'], 'no-store');
+    assert.equal(result.json().child.classId, classA);
+    assert.deepEqual(result.json().entries.map(({ title }) => title), ['Lire une histoire', 'Comparer des nombres']);
+    assert.deepEqual(result.json().entries[0], { ...entry, id });
+    assert.deepEqual((await homework(first, childB)).json().entries.map(({ title }) => title), ['Travail de la classe B']);
+    const forbidden = await homework(second, childB);
+    assert.equal(forbidden.statusCode, 404);
+    assert.deepEqual(forbidden.json(), (await homework(second, randomUUID())).json());
+    assert.equal((await homework(first, childC)).statusCode, 404);
+    const otherSchool = authorize((await login(guardianA, 'AUTRE-ECOLE')).accessToken);
+    assert.equal((await homework(otherSchool, childA)).statusCode, 404);
+
+    const { code } = await store.invite(schoolCode, guardianB);
+    const browser = await webPost('login', { origin: webOrigin, payload: { schoolCode, code } });
+    assert.equal(browser.statusCode, 204);
+    const browserHeaders = { cookie: browser.headers['set-cookie'].split(';')[0] };
+    const filtered = await homework(browserHeaders, childC, { from: '2026-11-24', to: '2026-11-24', domain: 'MATH' });
+    assert.equal(filtered.statusCode, 200);
+    assert.deepEqual(filtered.json().entries.map(({ title }) => title), ['Comparer des nombres']);
+    assert.equal((await homework(browserHeaders, childB)).statusCode, 404);
+
+    const moved = { ...entry, title: 'Réviser la lecture' };
+    assert.equal(await updateEntry(pool, 'AUTRE-ECOLE', classA, id, moved), false);
+    assert.equal(await updateEntry(pool, schoolCode, classB, id, moved), false);
+    assert.equal(await updateEntry(pool, schoolCode, classA, id, moved), true);
+    assert.equal((await homework(first, childA)).json().entries[0].title, moved.title);
+    assert.equal(await deleteEntry(pool, schoolCode, classB, id), false);
+    assert.equal(await deleteEntry(pool, schoolCode, classA, id), true);
+    assert.equal((await homework(first, childA)).json().entries.some((item) => item.id === id), false);
+
+    await pool.query('UPDATE students SET class_id = $1 WHERE school_id = $2 AND id = $3', [classB, demo.school.id, childA]);
+    const transferred = await homework(first, childA);
+    await pool.query('UPDATE students SET class_id = $1 WHERE school_id = $2 AND id = $3', [classA, demo.school.id, childA]);
+    assert.equal(transferred.json().child.classId, classB);
+    assert.deepEqual(transferred.json().entries.map(({ title }) => title), ['Travail de la classe B']);
+
+    assert.equal((await post('/auth/logout', { refreshToken: credentials.refreshToken })).statusCode, 204);
+    assert.equal((await homework(first, childA)).statusCode, 401);
+  });
+
+  await context.test('le cahier valide les dates et pagine sans doublon les entrées du même jour', async () => {
+    const childId = demo.students[0].id;
+    const classId = demo.classes[0].id;
+    const auth = authorize((await login(guardianA)).accessToken);
+    const period = { from: '2026-11-26', to: '2026-11-26' };
+    assert.equal((await homework(auth, childId, { from: '2026-11-31', to: '2026-11-31' })).statusCode, 400);
+    assert.equal((await homework(auth, childId, { from: '2026-10-01', to: '2026-11-30' })).statusCode, 400);
+    assert.equal((await homework(auth, childId, { ...period, cursor: `2026-11-25~${randomUUID()}` })).statusCode, 400);
+    assert.equal(readEntry({ date: '2026-02-29', title: 'Exemple', domain: 'Test', description: 'Fictif' }), null);
+    const empty = (await homework(auth, childId, period)).json();
+    assert.deepEqual(empty.entries, []);
+    assert.equal(empty.nextCursor, null);
+
+    await pool.query(`INSERT INTO homework_entries (school_id, class_id, id, entry_date, title, domain, description)
+      SELECT $1, $2, gen_random_uuid(), '2026-11-26', 'Fiche fictive ' || n, 'Domaine de test', 'Texte fictif'
+      FROM generate_series(1, 32) n`, [demo.school.id, classId]);
+    const firstPage = (await homework(auth, childId, period)).json();
+    assert.equal(firstPage.entries.length, 30);
+    assert.ok(firstPage.nextCursor);
+    const nextPage = (await homework(auth, childId, { ...period, cursor: firstPage.nextCursor })).json();
+    assert.equal(nextPage.entries.length, 2);
+    assert.equal(nextPage.nextCursor, null);
+    assert.equal(new Set([...firstPage.entries, ...nextPage.entries].map(({ id }) => id)).size, 32);
+  });
+
   await context.test('le périmètre suit immédiatement les liens de tutelle', async () => {
     const { accessToken } = await login(guardianA);
     const studentId = demo.students[1].id;
+    assert.equal((await homework(authorize(accessToken), studentId)).statusCode, 200);
     await pool.query('DELETE FROM guardian_students WHERE school_id = $1 AND guardian_id = $2 AND student_id = $3',
       [demo.school.id, guardianA, studentId]);
     const list = await children(accessToken);
     assert.deepEqual(list.json().children.map(({ id }) => id), [demo.students[0].id]);
+    assert.equal((await homework(authorize(accessToken), studentId)).statusCode, 404);
   });
 
   await context.test('la rotation concurrente n’accorde qu’un renouvellement et la réutilisation révoque la session', async () => {

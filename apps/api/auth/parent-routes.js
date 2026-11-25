@@ -1,7 +1,8 @@
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
-import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCodePattern, verifyAccessToken } from './credentials.js';
+import { invitationCodePattern, issueAccessToken, refreshTokenPattern, schoolCodePattern, uuidPattern, verifyAccessToken } from './credentials.js';
 import { parentSessionSeconds } from './parent-store.js';
+import { readPeriod } from '../homework/period.js';
 
 const browserCookie = '__Host-open-cartable';
 const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
@@ -49,6 +50,11 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
   function browserIdentity(request) {
     const token = request.cookies?.[browserCookie];
     return typeof token === 'string' && refreshTokenPattern.test(token) ? store.browserIdentity(token) : null;
+  }
+
+  function parentIdentity(request) {
+    return request.headers.authorization === undefined && webOrigin
+      ? browserIdentity(request) : bearerIdentity(request);
   }
 
   const invitationOptions = {
@@ -124,11 +130,37 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
       },
     },
   }, async (request, reply) => {
-    const claims = await (request.headers.authorization === undefined && webOrigin
-      ? browserIdentity(request) : bearerIdentity(request));
+    const claims = await parentIdentity(request);
     if (!claims) return unauthorized(reply);
     const children = await store.children(claims);
     if (!children) return unauthorized(reply);
     return { children };
+  });
+
+  app.get('/parent/children/:childId/homework', {
+    schema: {
+      params: jsonBody({ childId: uuidPattern }),
+      querystring: {
+        type: 'object',
+        required: ['from', 'to'],
+        additionalProperties: false,
+        properties: {
+          from: { type: 'string', minLength: 10, maxLength: 10 },
+          to: { type: 'string', minLength: 10, maxLength: 10 },
+          domain: { type: 'string', maxLength: 80 },
+          cursor: { type: 'string', minLength: 47, maxLength: 47 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const claims = await parentIdentity(request);
+    if (!claims) return unauthorized(reply);
+    const period = readPeriod(request.query);
+    if (!period) return reply.code(400).send({ error: 'Période ou page non valide.' });
+
+    const { authenticated, child, entries, nextCursor } = await store.homework(claims, request.params.childId, period);
+    if (!authenticated) return unauthorized(reply);
+    if (!child) return reply.code(404).send({ error: 'Enfant introuvable.' });
+    return { child, entries, nextCursor };
   });
 }

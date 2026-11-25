@@ -30,3 +30,7 @@ Ce dépôt est public. Utiliser des exemples entièrement fictifs, garder les se
 ## Authentification parent
 
 Le parcours parent permet de se connecter avec un code d’invitation, de consulter ses enfants et de se déconnecter. Les écrans Expo sont partagés entre web, iOS et Android. PostgreSQL persiste les invitations, les sessions et les liens de tutelle. Le [guide du parcours parent](docs/auth-parent.md) décrit le démarrage web et mobile avec des données fictives et les tests d’intégration.
+
+## Cahier de texte
+
+Le parent peut consulter les publications de la classe de ses enfants depuis l’app. Le [guide du cahier de texte](docs/cahier-texte.md) décrit les filtres et la publication locale avec des données fictives.

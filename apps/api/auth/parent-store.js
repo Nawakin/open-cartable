@@ -3,6 +3,15 @@ import { transaction } from '../db/database.js';
 import { generateInvitationCode, generateRefreshToken, invitationDigest, refreshDigest } from './credentials.js';
 
 export const parentSessionSeconds = 30 * 24 * 60 * 60;
+const homeworkPageSize = 30;
+
+const activeParentQuery = `
+  SELECT s.school_id, s.guardian_id
+  FROM parent_sessions s
+  JOIN guardians g ON (g.school_id, g.id) = (s.school_id, s.guardian_id)
+  WHERE s.id = $1 AND s.guardian_id = $2 AND s.revoked_at IS NULL
+    AND s.expires_at > statement_timestamp() AND g.active
+`;
 
 async function lockActiveGuardian(client, schoolId, guardianId) {
   const result = await client.query(`
@@ -143,20 +152,53 @@ export function createParentStore(pool, invitationKey) {
 
     async children({ sessionId, guardianId }) {
       const result = await pool.query(`
+        WITH active_parent AS (${activeParentQuery})
         SELECT student.id, student.display_name, c.name AS class_name
-        FROM parent_sessions s
-        JOIN guardians g ON (g.school_id, g.id) = (s.school_id, s.guardian_id)
-        LEFT JOIN guardian_students l ON (l.school_id, l.guardian_id) = (g.school_id, g.id)
+        FROM active_parent p
+        LEFT JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
         LEFT JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
         LEFT JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
-        WHERE s.id = $1 AND s.guardian_id = $2 AND s.revoked_at IS NULL
-          AND s.expires_at > statement_timestamp() AND g.active
         ORDER BY student.display_name, student.id
       `, [sessionId, guardianId]);
       if (!result.rowCount) return null;
       return result.rows.filter(({ id }) => id !== null).map(({ id, display_name, class_name }) => ({
         id, displayName: display_name, className: class_name,
       }));
+    },
+
+    async homework({ sessionId, guardianId }, childId, { from, to, domain, beforeDate, beforeId }) {
+      const result = await pool.query(`
+        WITH active_parent AS (${activeParentQuery}),
+        permitted_child AS (
+          SELECT student.school_id, student.class_id, student.id, student.display_name, c.name AS class_name
+          FROM active_parent p
+          JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
+          JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
+          JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
+          WHERE l.student_id = $3
+        ), page AS (
+          SELECT e.id, e.entry_date, e.title, e.domain, e.description
+          FROM permitted_child c
+          JOIN homework_entries e ON (e.school_id, e.class_id) = (c.school_id, c.class_id)
+          WHERE e.entry_date BETWEEN $4 AND $5
+            AND ($6::text IS NULL OR strpos(lower(e.domain), lower($6)) > 0)
+            AND ($7::date IS NULL OR (e.entry_date, e.id) < ($7, $8::uuid))
+          ORDER BY e.entry_date DESC, e.id DESC
+          LIMIT $9
+        )
+        SELECT EXISTS (SELECT 1 FROM active_parent) AS authenticated,
+               (SELECT json_build_object('id', id, 'displayName', display_name,
+                 'classId', class_id, 'className', class_name) FROM permitted_child) AS child,
+               COALESCE((SELECT json_agg(json_build_object(
+                 'id', id, 'date', to_char(entry_date, 'YYYY-MM-DD'),
+                 'title', title, 'domain', domain, 'description', description
+               ) ORDER BY entry_date DESC, id DESC) FROM page), '[]'::json) AS entries
+      `, [sessionId, guardianId, childId, from, to, domain, beforeDate, beforeId, homeworkPageSize + 1]);
+      const { authenticated, child, entries } = result.rows[0];
+      const hasMore = entries.length > homeworkPageSize;
+      if (hasMore) entries.pop();
+      const last = entries.at(-1);
+      return { authenticated, child, entries, nextCursor: hasMore ? `${last.date}~${last.id}` : null };
     },
   };
 }

@@ -1,6 +1,6 @@
 import { fetch } from 'expo/fetch';
 import * as SecureStore from 'expo-secure-store';
-import { parseSchoolAddress, request } from './http';
+import { homeworkPath, parseSchoolAddress, request } from './http';
 
 const storageKey = 'open-cartable-parent-session';
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -80,15 +80,22 @@ async function withSession(operation) {
   }
 }
 
-export async function listChildren() {
+async function get(path) {
   try {
-    const result = await withSession(({ origin, accessToken }) => request(fetch, origin, '/children', { token: accessToken }));
-    return result?.children ?? null;
+    return await withSession(({ origin, accessToken }) => request(fetch, origin, path, { token: accessToken }));
   } catch (error) {
     if (error.status !== 401) throw error;
     await forget();
     return null;
   }
+}
+
+export async function listChildren() {
+  return (await get('/children'))?.children ?? null;
+}
+
+export function listHomework(childId, period) {
+  return get(homeworkPath(childId, period));
 }
 
 export async function signOut() {

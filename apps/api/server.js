@@ -24,14 +24,14 @@ try {
   if (webOrigin) {
     webRoot = fileURLToPath(new URL('../mobile/dist/', import.meta.url));
     await access(new URL('../mobile/dist/index.html', import.meta.url)).catch(() => {
-      throw new Error('L’export web est absent. Exécuter npm run build:mobile.');
+      throw new Error('L’export web est absent. Exécuter npm run build:web.');
     });
   }
   if ([env.DATABASE_URL, env.AUTH_SIGNING_KEY, env.AUTH_INVITE_KEY, webOrigin].some((value) => value !== undefined)) {
     const { signingKey, invitationKey } = readAuthKeys(env);
     pool = openDatabase(env.DATABASE_URL);
     pool.on('error', () => console.error('Une connexion PostgreSQL inactive a été interrompue.'));
-    const requiredMigrations = webOrigin ? migrations : migrations.slice(0, 1);
+    const requiredMigrations = webOrigin ? migrations : migrations.filter((name) => name !== '002-browser-sessions.sql');
     const schema = await pool.query('SELECT 1 FROM schema_migrations WHERE name = ANY($1::text[])', [requiredMigrations])
       .catch(() => null);
     if (schema?.rowCount !== requiredMigrations.length) throw new Error('PostgreSQL est inaccessible ou des migrations doivent être exécutées.');
