@@ -28,6 +28,14 @@ const threadColumns = `
 `;
 const threadStudent = 'JOIN students student ON (student.school_id, student.id) = (c.school_id, c.student_id)';
 
+const unread = `EXISTS (
+  SELECT 1 FROM conversation_messages m
+  WHERE (m.school_id, m.conversation_id) = (c.school_id, c.id)
+    AND m.sender = CASE WHEN $2::uuid IS NULL THEN 'parent' ELSE c.channel END
+    AND m.sent_at > ${retainedSince}
+    AND m.sent_at > COALESCE(CASE WHEN $2::uuid IS NULL THEN c.staff_read_at ELSE c.parent_read_at END, '-infinity')
+)`;
+
 function actorScope(actor) {
   return [actor.school_id, actor.guardian_id ?? null, actor.teacher_id ?? null];
 }
@@ -40,12 +48,41 @@ function page(rows, field) {
 
 export async function listConversations(db, actor, { beforeAt, beforeId }) {
   const { rows } = await db.query(`
-    SELECT ${threadColumns} FROM message_conversations c ${threadStudent}
+    SELECT ${threadColumns}, ${unread} AS unread, (
+      SELECT json_build_object('sender', m.sender, 'body',
+        CASE WHEN char_length(m.body) > 140 THEN left(m.body, 140) || '…' ELSE m.body END)
+      FROM conversation_messages m
+      WHERE (m.school_id, m.conversation_id) = (c.school_id, c.id) AND m.sent_at > ${retainedSince}
+      ORDER BY m.sent_at DESC, m.id DESC LIMIT 1
+    ) AS "lastMessage"
+    FROM message_conversations c ${threadStudent}
     WHERE ${visibleThread} AND ($4::timestamptz IS NULL OR (c.last_message_at, c.id) < ($4, $5::uuid))
     ORDER BY c.last_message_at DESC, c.id DESC LIMIT $6
   `, [...actorScope(actor), beforeAt, beforeId, pageSize + 1]);
   const { items, nextCursor } = page(rows, 'lastMessageAt');
   return { conversations: items, nextCursor };
+}
+
+export async function countUnreadConversations(db, actor) {
+  const { rows: [result] } = await db.query(`
+    SELECT count(*)::integer AS "unreadCount" FROM message_conversations c
+    WHERE ${visibleThread} AND ${unread}
+  `, actorScope(actor));
+  return result;
+}
+
+export async function markConversationRead(db, actor, id, messageId) {
+  // Le client confirme uniquement les messages chargés, même si le fil a reçu une réponse depuis.
+  const result = await db.query(`
+    UPDATE message_conversations c
+    SET parent_read_at = CASE WHEN $2::uuid IS NOT NULL THEN greatest(c.parent_read_at, m.sent_at) ELSE c.parent_read_at END,
+        staff_read_at = CASE WHEN $2::uuid IS NULL THEN greatest(c.staff_read_at, m.sent_at) ELSE c.staff_read_at END
+    FROM conversation_messages m
+    WHERE ${visibleThread} AND c.id = $4
+      AND (m.school_id, m.conversation_id, m.id) = (c.school_id, c.id, $5)
+      AND m.sent_at > ${retainedSince}
+  `, [...actorScope(actor), id, messageId]);
+  return result.rowCount === 1;
 }
 
 export async function readConversation(db, actor, id, { beforeAt, beforeId }) {

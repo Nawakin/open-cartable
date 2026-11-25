@@ -33,14 +33,21 @@ export function SectionNav({ label, items, active, busy }) {
   const twoColumns = items.length === 4 && width < 360 * fontScale;
   return (
     <View accessibilityRole="navigation" accessibilityLabel={label} style={nav.container}>
-      {items.map(({ id, icon, label: title, onPress }) => {
+      {items.map(({ id, icon, label: title, onPress, unreadCount = 0 }) => {
         const selected = active === id;
         const color = selected ? '#fff' : '#244439';
+        const navLabel = unreadCount > 0
+          ? `${title}, ${unreadCount} ${unreadCount === 1 ? 'conversation non lue' : 'conversations non lues'}` : title;
         return (
-          <Pressable key={id} accessibilityRole="button" accessibilityLabel={title}
+          <Pressable key={id} accessibilityRole="button" accessibilityLabel={navLabel}
             accessibilityState={{ selected, disabled: busy }} disabled={busy} onPress={onPress}
             style={({ pressed }) => [nav.item, twoColumns && nav.half, selected && nav.selected, (pressed || busy) && nav.dimmed]}>
-            <Ionicons name={icon} color={color} size={21} accessible={false} aria-hidden />
+            <View style={nav.iconRow}>
+              <Ionicons name={icon} color={color} size={21} accessible={false} aria-hidden />
+              {unreadCount > 0 && <Text style={nav.badge} accessible={false} aria-hidden>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </Text>}
+            </View>
             <Text style={[nav.label, { color }]}>{title}</Text>
           </Pressable>
         );
@@ -72,5 +79,8 @@ const nav = StyleSheet.create({
   selected: { backgroundColor: '#225344' },
   half: { flexBasis: '44%' },
   label: { textAlign: 'center', fontSize: 13, fontWeight: '700' },
+  iconRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  badge: { color: '#402b09', backgroundColor: '#ffdd9b', borderRadius: 12, minWidth: 20,
+    paddingVertical: 1, paddingHorizontal: 4, textAlign: 'center', fontSize: 12, fontWeight: '800' },
   dimmed: { opacity: 0.72 },
 });

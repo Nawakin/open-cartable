@@ -20,6 +20,12 @@
 2. Dans « Messagerie », ouvrez « Nouveau message ». Choisissez la classe et l’élève, puis collez la référence du tuteur destinataire.
 3. Saisissez l’objet et le message, puis choisissez « Envoyer ». Le serveur vérifie le lien entre le tuteur et l’élève et votre affectation à sa classe.
 
+## Repérer les nouvelles réponses
+
+Le menu « Messagerie » affiche le nombre de conversations non lues. Dans la liste, chaque conversation affiche un aperçu du dernier message et, si nécessaire, la mention « Non lue ». Le compteur se rafraîchit toutes les 30 secondes lorsque l’application est au premier plan. Le bouton « Actualiser » recharge la liste ou la conversation ouverte.
+
+Ouvrir une conversation confirme la lecture jusqu’au dernier message chargé. L’état de lecture est partagé entre les appareils connectés au même compte. Pour la direction, il est commun aux personnes qui utilisent le compte direction de l’école. Après la mise à jour, les conversations qui contiennent déjà des messages reçus apparaissent comme non lues lors du premier accès.
+
 ## Accès et conservation
 
 Chaque conversation est accessible au tuteur et à son interlocuteur, direction ou enseignant. Les tuteurs d’un même élève disposent chacun de leurs conversations. Deux enseignants d’une même classe ont chacun leurs échanges avec les familles.

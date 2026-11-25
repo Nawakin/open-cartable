@@ -49,6 +49,14 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
   });
 
   const call = (method, path, headers, payload) => app.inject({ method, url: '/api/v1' + path, headers, payload });
+  const markRead = (path, headers, messageId) => call('PUT', path + '/read', headers, { messageId });
+  async function unreadCount(role, headers) {
+    const response = await call('GET', '/' + role + '/messages/unread', headers);
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.headers['cache-control'], 'no-store');
+    assert.deepEqual(Object.keys(response.json()), ['unreadCount']);
+    return response.json().unreadCount;
+  }
   function cookie(response) {
     assert.equal(response.statusCode, 204);
     return { cookie: response.headers['set-cookie'].split(';')[0], origin: webOrigin };
@@ -91,6 +99,15 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
   assert.equal(staffThread.headers['cache-control'], 'no-store');
   assert.equal(staffThread.json().conversation.guardianReference, demo.guardians[0]);
   assert.equal((await call('POST', directionItem, { ...direction, origin: 'https://ailleurs.example' }, { body: 'Intrus' })).statusCode, 403);
+  const firstMessageId = read.json().messages[0].id;
+  assert.equal(await unreadCount('parent', first), 0);
+  assert.equal(await unreadCount('direction', direction), 1);
+  assert.equal(await unreadCount('direction', foreign), 0);
+  assert.equal((await markRead(directionItem, foreign, firstMessageId)).statusCode, 404);
+  assert.equal((await markRead(parentItem, second, firstMessageId)).statusCode, 404);
+  assert.equal((await markRead(directionItem, { ...direction, origin: 'https://ailleurs.example' }, firstMessageId)).statusCode, 403);
+  assert.equal((await markRead(directionItem, direction, firstMessageId)).statusCode, 204);
+  assert.equal(await unreadCount('direction', direction), 0);
 
   const answer = await call('POST', directionItem, direction, { body: 'Réponse fictive.' });
   assert.equal(answer.statusCode, 201);
@@ -130,6 +147,30 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
   assert.equal((await pool.query("SELECT 1 FROM conversation_messages WHERE body = 'Message expiré'")).rowCount, 0);
   assert.equal((await pool.query('SELECT 1 FROM conversation_messages WHERE conversation_id = $1', [id])).rowCount, 32);
 
+  await context.test('la lecture est partagée par compte et une réponse concurrente reste non lue', async () => {
+    assert.equal(await unreadCount('parent', firstBrowser), 1);
+    assert.equal(await unreadCount('parent', second), 0);
+    assert.equal(await unreadCount('direction', direction), 0);
+    const entries = (await call('GET', parentPath, first)).json().conversations;
+    assert.equal(entries[0].unread, true);
+    assert.deepEqual(entries[0].lastMessage, { sender: 'direction', body: 'Réponse fictive.' });
+
+    const sentAfterOpening = await call('POST', directionItem, direction, { body: 'É'.repeat(160) });
+    assert.equal(sentAfterOpening.statusCode, 201);
+    const newestId = sentAfterOpening.json().id;
+    assert.equal((await markRead(parentItem, firstBrowser, randomUUID())).statusCode, 404);
+    assert.equal((await markRead(parentItem, { ...firstBrowser, origin: 'https://ailleurs.example' }, newestId)).statusCode, 403);
+    assert.equal((await markRead(parentItem, first, answer.json().id)).statusCode, 204);
+    assert.equal(await unreadCount('parent', firstBrowser), 1);
+    assert.equal((await markRead(parentItem, firstBrowser, newestId)).statusCode, 204);
+    assert.equal((await markRead(parentItem, first, answer.json().id)).statusCode, 204);
+    assert.equal(await unreadCount('parent', first), 0);
+    const { conversations: [latestConversation] } = (await call('GET', parentPath, first)).json();
+    assert.equal(latestConversation.unread, false);
+    assert.equal(latestConversation.lastMessage.body, 'É'.repeat(140) + '…');
+    assert.equal(await unreadCount('direction', direction), 0);
+  });
+
   await context.test('les échanges enseignant restent privés après une réaffectation ou un retrait', async () => {
     const [classA, classB] = demo.classes;
     const [childA, childB, childC] = demo.students;
@@ -165,6 +206,13 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
     const teacherThread = teacherPath + '/' + teacherConversationId;
     const readTeacher = (profile) => call('GET', teacherThread, profile.headers);
     const replyTeacher = (profile) => call('POST', teacherThread, profile.headers, { body: 'Réponse de l’enseignant.' });
+    assert.equal(await unreadCount('teacher', a.headers), 1);
+    assert.equal(await unreadCount('teacher', b.headers), 0);
+    const { id: teacherFirstMessageId } = (await readTeacher(a)).json().messages[0];
+    assert.equal((await markRead(teacherThread, b.headers, teacherFirstMessageId)).statusCode, 404);
+    assert.equal((await markRead(directionPath + '/' + teacherConversationId, direction, teacherFirstMessageId)).statusCode, 404);
+    assert.equal((await markRead(teacherThread, a.headers, teacherFirstMessageId)).statusCode, 204);
+    assert.equal(await unreadCount('teacher', a.headers), 0);
     assert.deepEqual((await call('GET', teacherPath, a.headers)).json().conversations.map(({ id }) => id), [teacherConversationId]);
     assert.equal((await call('GET', teacherPath + '/' + id, a.headers)).statusCode, 404);
     assert.equal((await call('GET', directionPath + '/' + teacherConversationId, direction)).statusCode, 404);
@@ -177,6 +225,7 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
     assert.equal(paired.conversation.teacherLabel, 'enseignant-a');
     assert.equal(paired.conversation.canReply, true);
     assert.equal(paired.messages[0].sender, 'teacher');
+    assert.equal(await unreadCount('parent', first), 1);
 
     const teacherDraft = { ...draft, guardianReference: demo.guardians[0] };
     const schoolOrigin = { ...a.headers, origin: 'https://ailleurs.example' };
@@ -194,6 +243,7 @@ test('La messagerie isole les familles et écoles, pagine et purge les messages 
     assert.equal((await assign([classB.id])).statusCode, 204);
     assert.equal((await readTeacher(a)).statusCode, 404);
     assert.equal((await replyTeacher(a)).statusCode, 404);
+    assert.equal((await markRead(teacherThread, a.headers, teacherFirstMessageId)).statusCode, 404);
     assert.equal((await call('POST', familyThread, first, { body: 'Suite fictive.' })).statusCode, 404);
     assert.equal((await call('GET', familyThread, first)).json().conversation.canReply, false);
     assert.equal((await assign([classA.id])).statusCode, 204);

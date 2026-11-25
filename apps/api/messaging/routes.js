@@ -1,7 +1,10 @@
 import { isInstant } from '../agenda/period.js';
 import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
-import { addMessage, createConversation, listConversations, listParentRecipients, readConversation } from './store.js';
+import {
+  addMessage, countUnreadConversations, createConversation, listConversations, listParentRecipients,
+  markConversationRead, readConversation,
+} from './store.js';
 
 const uuid = { type: 'string', pattern: uuidPattern.source };
 const message = { type: 'string', minLength: 1, maxLength: 4000 };
@@ -37,6 +40,7 @@ function registerConversations(app, prefix, authenticated, writeOptions = {}) {
   const item = collection + '/:conversationId';
   const params = uuidParams('conversationId');
 
+  app.get(prefix + '/messages/unread', authenticated((_request, db, actor) => countUnreadConversations(db, actor)));
   app.get(collection, { schema: { querystring } },
     authenticated((request, db, actor) => listConversations(db, actor, requireCursor(request.query.cursor))));
   app.get(item, { schema: { params, querystring } },
@@ -48,6 +52,14 @@ function registerConversations(app, prefix, authenticated, writeOptions = {}) {
     schema: { params, body: bodySchema({ body: message }) },
   }, authenticated((request, db, actor) =>
     addMessage(db, actor, request.params.conversationId, requireText(request.body.body)), 201));
+  app.put(item + '/read', {
+    ...writeOptions,
+    bodyLimit: 1024,
+    schema: { params, body: bodySchema({ messageId: uuid }) },
+  }, authenticated(async (request, db, actor) => {
+    const marked = await markConversationRead(db, actor, request.params.conversationId, request.body.messageId);
+    return marked ? undefined : null;
+  }, 204));
 
   return collection;
 }

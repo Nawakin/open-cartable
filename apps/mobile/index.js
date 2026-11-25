@@ -12,6 +12,7 @@ import { Staff } from './staff/staff';
 import { AgendaReminders, ParentAgenda } from './agenda/agenda-view';
 import { agendaRange } from './agenda/dates';
 import { Messages } from './messaging/messages';
+import { useUnreadMessages } from './messaging/unread';
 import { AppFrame, SectionNav } from './navigation';
 
 const emptyReminders = { reminders: [], nextCursor: null };
@@ -40,6 +41,8 @@ function ParentApp() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const inProgress = useRef(false);
+  const signedIn = parentSections.includes(phase);
+  const unread = useUnreadMessages(requestMessages, signedIn);
 
   async function run(operation) {
     if (inProgress.current) return;
@@ -222,11 +225,12 @@ function ParentApp() {
     if (section === 'children' && children.length) void run(() => loadReminders());
   }
 
-  const menu = parentSections.includes(phase) && <SectionNav label="Menu parent" busy={busy}
+  const menu = signedIn && <SectionNav label="Menu parent" busy={busy}
     active={phase === 'homework' || phase === 'agenda' ? 'children' : phase}
     items={[
       { id: 'children', icon: 'home-outline', label: 'Accueil', onPress: () => showParentSection('children') },
-      { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie', onPress: () => showParentSection('messages') },
+      { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie', unreadCount: unread.count,
+        onPress: () => showParentSection('messages') },
       { id: 'account', icon: 'person-circle-outline', label: 'Compte', onPress: () => showParentSection('account') },
     ]} />;
 
@@ -322,7 +326,7 @@ function ParentApp() {
       )}
 
       {phase === 'messages' && <View style={styles.panel}>
-        <Messages children={children} request={requestMessages} onExpired={() => void run(load)} />
+        <Messages children={children} request={requestMessages} refreshUnread={unread.refresh} onExpired={() => void run(load)} />
       </View>}
 
       {phase === 'account' && <View style={styles.panel}>

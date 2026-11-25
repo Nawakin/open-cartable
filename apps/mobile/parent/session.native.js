@@ -6,6 +6,8 @@ const storageKey = 'open-cartable-parent-session';
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 let current;
 let refreshing;
+let sessionVersion = 0;
+let signingOut = false;
 
 export const needsSchoolAddress = true;
 
@@ -16,13 +18,17 @@ async function remember(origin, { accessToken, refreshToken }) {
 }
 
 async function forget() {
+  sessionVersion += 1;
   current = undefined;
   await SecureStore.deleteItemAsync(storageKey, storageOptions);
 }
 
 async function restore() {
   if (current) return current;
+  const version = sessionVersion;
   const saved = await SecureStore.getItemAsync(storageKey, storageOptions);
+  if (version !== sessionVersion) return null;
+  if (current) return current;
   if (!saved) return null;
   let previous;
   try {
@@ -39,18 +45,21 @@ async function restore() {
   return previous;
 }
 
-function refresh(session) {
+function refresh(session, version) {
+  if (signingOut || version !== sessionVersion) return null;
   if (refreshing) return refreshing;
+  // Une autre requête peut avoir renouvelé le jeton pendant cette requête.
+  if (current && current !== session) return current;
   refreshing = (async () => {
     try {
       const result = await request(fetch, session.origin, '/auth/refresh', {
         method: 'POST', body: { refreshToken: session.refreshToken },
       });
-      return await remember(session.origin, result);
+      return version === sessionVersion ? await remember(session.origin, result) : null;
     } catch (error) {
       // Une réponse perdue peut avoir consommé le jeton. Éviter de le réutiliser.
       if (error.status === 429) throw error;
-      await forget();
+      if (version === sessionVersion && !signingOut) await forget();
       return null;
     }
   })().finally(() => { refreshing = undefined; });
@@ -61,31 +70,36 @@ export async function signIn({ origin, schoolCode, code }) {
   const result = await request(fetch, origin, '/auth/invitations/redeem', {
     method: 'POST', body: { schoolCode, code },
   });
+  sessionVersion += 1;
+  await refreshing?.catch(() => {});
   await remember(origin, result);
 }
 
 async function withSession(operation) {
-  let session = await restore();
-  if (!session) return null;
-  if (!session.accessToken) {
-    session = await refresh(session);
-    return session ? operation(session) : null;
+  const version = sessionVersion;
+  const session = await restore();
+  if (!session || signingOut || version !== sessionVersion) return null;
+  if (session.accessToken) {
+    try {
+      const result = await operation(session);
+      return !signingOut && version === sessionVersion ? result : null;
+    } catch (error) {
+      if (error.status !== 401) throw error;
+    }
   }
-  try {
-    return await operation(session);
-  } catch (error) {
-    if (error.status !== 401) throw error;
-    const renewed = await refresh(session);
-    return renewed ? operation(renewed) : null;
-  }
+  const renewed = await refresh(session, version);
+  if (!renewed || signingOut || version !== sessionVersion) return null;
+  const result = await operation(renewed);
+  return !signingOut && version === sessionVersion ? result : null;
 }
 
 async function get(path, options) {
+  const version = sessionVersion;
   try {
     return await withSession(({ origin, accessToken }) => request(fetch, origin, path, { ...options, token: accessToken }));
   } catch (error) {
     if (error.status !== 401) throw error;
-    await forget();
+    if (version === sessionVersion && !signingOut) await forget();
     return null;
   }
 }
@@ -117,11 +131,17 @@ export async function requestMessages(path, options) {
 }
 
 export async function signOut() {
-  const session = await restore();
-  if (session) {
-    await request(fetch, session.origin, '/auth/logout', {
-      method: 'POST', body: { refreshToken: session.refreshToken },
-    });
+  signingOut = true;
+  try {
+    await refreshing?.catch(() => {});
+    const session = await restore();
+    if (session) {
+      await request(fetch, session.origin, '/auth/logout', {
+        method: 'POST', body: { refreshToken: session.refreshToken },
+      });
+    }
+    await forget();
+  } finally {
+    signingOut = false;
   }
-  await forget();
 }

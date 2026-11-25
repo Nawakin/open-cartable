@@ -36,7 +36,7 @@ function messageError(error, sending) {
   }
 }
 
-export function Messages({ request, role = 'parent', children = [], classes = [], loadStudents, onExpired }) {
+export function Messages({ request, role = 'parent', children = [], classes = [], loadStudents, refreshUnread, onExpired }) {
   const isParent = role === 'parent';
   const isTeacher = role === 'teacher';
   const canStart = isParent ? children.length > 0 : isTeacher && classes.length > 0;
@@ -55,6 +55,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
   const [problem, setProblem] = useState('');
   const [notice, setNotice] = useState('');
   const inProgress = useRef(false);
+  const lastMarkedMessage = useRef(null);
 
   async function run(operation, { sending = false } = {}) {
     if (inProgress.current) return;
@@ -85,6 +86,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
     setInbox((before) => cursor
       ? { ...result, conversations: appendById(before.conversations, result.conversations) }
       : result);
+    if (!cursor) refreshUnread();
   }
 
   async function loadThread(id, cursor) {
@@ -197,6 +199,22 @@ export function Messages({ request, role = 'parent', children = [], classes = []
     return () => subscription.remove();
   }, [view]);
 
+  useEffect(() => {
+    const messageId = thread?.messages[0]?.id;
+    if (view.kind !== 'thread' || !messageId || lastMarkedMessage.current === messageId
+        || (AppState.currentState && AppState.currentState !== 'active')) return undefined;
+
+    let displayed = true;
+    void request(conversationPath(view.id) + '/read', { method: 'PUT', body: { messageId } }).then(() => {
+      if (!displayed) return;
+      lastMarkedMessage.current = messageId;
+      refreshUnread();
+    }).catch(() => {
+      // Une actualisation du fil retentera la confirmation de lecture.
+    });
+    return () => { displayed = false; };
+  }, [request, refreshUnread, thread, view]);
+
   const { conversations, nextCursor } = inbox ?? emptyInbox;
   const composing = view.kind === 'compose';
   const messageField = (
@@ -232,14 +250,21 @@ export function Messages({ request, role = 'parent', children = [], classes = []
             : (isTeacher && !canStart ? 'Vous pourrez écrire aux familles dès qu’une classe vous sera affectée.' : 'Vos échanges avec les familles s’afficheront ici.')}</Text>
         </View>}
         {conversations.map((entry) => (
-          <Pressable accessibilityRole="button" accessibilityLabel={[entry.subject, entry.studentName, isParent && contactLabel(entry)].filter(Boolean).join(' · ')}
+          <Pressable accessibilityRole="button"
+            accessibilityLabel={[entry.subject, entry.studentName, isParent && contactLabel(entry), entry.unread && 'Non lue'].filter(Boolean).join(' · ')}
             key={entry.id} disabled={busy} onPress={() => openThread(entry.id)}
-            style={({ pressed }) => [ui.conversation, pressed && ui.pressed]}>
+            style={({ pressed }) => [ui.conversation, entry.unread && ui.unread, pressed && ui.pressed]}>
             <View style={ui.summary}>
               <Text style={[ui.heading, ui.text]}>{entry.subject}</Text>
               <Text style={[styles.body, ui.text]}>{entry.studentName}</Text>
               {isParent && <Text style={[ui.date, ui.text]}>{contactLabel(entry)}</Text>}
-              <Text style={ui.date}>{dateLabel.format(new Date(entry.lastMessageAt))}</Text>
+              {entry.lastMessage && <Text style={[styles.body, ui.text]} numberOfLines={2}>
+                {entry.lastMessage.sender === role ? 'Vous · ' : ''}{entry.lastMessage.body.replace(/\s+/g, ' ')}
+              </Text>}
+              <View style={ui.conversationFooter}>
+                {entry.unread && <Text style={ui.unreadLabel}>Non lue</Text>}
+                <Text style={ui.date}>{dateLabel.format(new Date(entry.lastMessageAt))}</Text>
+              </View>
             </View>
             <Ionicons name="chevron-forward-outline" size={19} color="#225344" accessible={false} aria-hidden />
           </Pressable>
@@ -336,6 +361,10 @@ const ui = StyleSheet.create({
     padding: 14, backgroundColor: '#f7f8f1', borderWidth: 1, borderColor: '#dbe3d5', borderRadius: 12,
   },
   summary: { flex: 1, minWidth: 0, gap: 3 },
+  conversationFooter: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8, marginTop: 3 },
+  unread: { backgroundColor: '#eaf3e7', borderColor: '#78977e' },
+  unreadLabel: { color: '#17372d', backgroundColor: '#d7e9d7', borderRadius: 8,
+    paddingHorizontal: 7, paddingVertical: 2, fontSize: 13, fontWeight: '700' },
   pressed: { opacity: 0.72 },
   messageInput: { minHeight: 96, textAlignVertical: 'top' },
   notice: { color: '#225344', fontSize: 15, fontWeight: '700' },
