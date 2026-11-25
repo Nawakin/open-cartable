@@ -59,4 +59,4 @@ L’enseignant publie un mot du jour pour sa classe. Chaque tuteur peut répondr
 
 ## Blog de classe
 
-Les enseignants préparent des articles texte en brouillon, les prévisualisent et les publient pour les familles de leurs classes. Le fil parent est disponible sur le web et sur mobile. [Guide du blog de classe](docs/blog-de-classe.md)
+Les enseignants préparent des articles avec plusieurs photos, choisissent la couverture et prévisualisent le résultat avant publication. Les familles retrouvent la couverture et le carrousel dans le fil de la classe, sur le web et sur mobile. [Guide du blog de classe](docs/blog-de-classe.md)

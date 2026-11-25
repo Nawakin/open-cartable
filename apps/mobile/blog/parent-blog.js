@@ -4,14 +4,17 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useScrollToTop } from '../navigation';
 import { Button, styles } from '../parent/ui';
 import { ArticleContent, ArticleRow, blog, useBlogTask } from './ui';
+import { GalleryPreview, PhotoCarousel } from './gallery';
 
 export function ParentBlog({ child, request, onBack, onExpired }) {
   const path = '/children/' + encodeURIComponent(child.id) + '/blog';
   const [page, setPage] = useState(null);
   const [articleId, setArticleId] = useState(null);
   const [article, setArticle] = useState(null);
+  const [photoIndex, setPhotoIndex] = useState(null);
   const { busy, problem, run } = useBlogTask(onExpired);
   const scrollToTop = useScrollToTop();
+  const articlePath = (id) => path + '/' + encodeURIComponent(id);
 
   function list(cursor) {
     void run(async () => {
@@ -22,12 +25,13 @@ export function ParentBlog({ child, request, onBack, onExpired }) {
     });
   }
 
-  function open(id) {
+  function open(id, photo = null) {
     void run(async () => {
       setArticleId(id);
       setArticle(null);
+      setPhotoIndex(photo);
       scrollToTop();
-      const current = await request(path + '/' + encodeURIComponent(id));
+      const current = await request(articlePath(id));
       setArticle(current);
     });
   }
@@ -35,6 +39,7 @@ export function ParentBlog({ child, request, onBack, onExpired }) {
   function backToFeed() {
     setArticleId(null);
     setArticle(null);
+    setPhotoIndex(null);
     scrollToTop();
     list();
   }
@@ -65,7 +70,8 @@ export function ParentBlog({ child, request, onBack, onExpired }) {
       {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
       {busy && <Text accessibilityLiveRegion="polite" style={styles.body}>Chargement…</Text>}
       {articleId ? (
-        article && <ArticleContent article={article} />
+        article && <ArticleContent article={article} gallery={article.photoCount > 0 && <GalleryPreview article={article}
+          articlePath={articlePath(articleId)} role="parent" request={request} onOpen={setPhotoIndex} busy={busy} />} />
       ) : (
         <>
           {page?.articles.length === 0 && <View style={blog.empty}>
@@ -73,10 +79,14 @@ export function ParentBlog({ child, request, onBack, onExpired }) {
             <Text style={blog.heading}>Aucun article pour le moment</Text>
             <Text style={styles.body}>Les nouvelles de la classe s’afficheront ici.</Text>
           </View>}
-          {page?.articles.map((entry) => <ArticleRow key={entry.id} article={entry} onPress={() => open(entry.id)} busy={busy} />)}
+          {page?.articles.map((entry) => <ArticleRow key={entry.id} article={entry} onPress={() => open(entry.id)} busy={busy}
+            gallery={entry.photoCount > 0 && <GalleryPreview article={entry} articlePath={articlePath(entry.id)}
+              role="parent" request={request} onOpen={(index) => open(entry.id, index)} busy={busy} />} />)}
           {page?.nextCursor && <Button label="Articles précédents" onPress={() => list(page.nextCursor)} busy={busy} secondary />}
         </>
       )}
+      <PhotoCarousel article={article} articlePath={articlePath(articleId ?? '')} index={photoIndex}
+        role="parent" request={request} onChange={setPhotoIndex} onClose={() => setPhotoIndex(null)} />
     </View>
   );
 }

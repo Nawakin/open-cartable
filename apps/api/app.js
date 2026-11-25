@@ -5,7 +5,7 @@ import { installationRoutes } from './installation/setup.js';
 import { directionRoutes } from './direction/routes.js';
 import { teacherRoutes } from './teacher/routes.js';
 
-export function buildApp({ parentAuth, webRoot, installation, direction } = {}) {
+export function buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey } = {}) {
   const app = Fastify({
     trustProxy: false,
     bodyLimit: 64 * 1024,
@@ -15,12 +15,12 @@ export function buildApp({ parentAuth, webRoot, installation, direction } = {}) 
     return reply.header('Cache-Control', 'no-store').send({ status: 'ok' });
   });
   if (parentAuth) {
-    app.register(parentRoutes, { prefix: '/api/v1', ...parentAuth });
+    app.register(parentRoutes, { prefix: '/api/v1', ...parentAuth, blogMediaKey });
   }
   if (installation) app.register(installationRoutes, { prefix: '/api/v1', ...installation });
   if (direction) {
     app.register(directionRoutes, { prefix: '/api/v1', ...direction });
-    app.register(teacherRoutes, { prefix: '/api/v1', ...direction });
+    app.register(teacherRoutes, { prefix: '/api/v1', ...direction, blogMediaKey });
   }
   if (webRoot) {
     app.register(fastifyStatic, {

@@ -27,7 +27,7 @@ function unauthorized(reply) {
   return reply.code(401).send({ error: 'Identifiants non valides.' });
 }
 
-export async function parentRoutes(app, { store, signingKey, webOrigin }) {
+export async function parentRoutes(app, { store, signingKey, webOrigin, blogMediaKey }) {
   await app.register(rateLimit, { global: false, cache: 10_000 });
   if (webOrigin) await app.register(cookie);
   app.addHook('onRequest', async (_request, reply) => {
@@ -83,7 +83,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin }) {
   };
   registerParentMessages(app, { authenticated, writes });
   registerParentLiaison(app, { authenticated, writes });
-  registerParentBlog(app, { authenticated });
+  registerParentBlog(app, { authenticated, mediaKey: blogMediaKey });
 
   const invitationOptions = {
     bodyLimit: 1024,

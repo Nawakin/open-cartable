@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import pg from 'pg';
+import sharp from 'sharp';
 import { buildApp } from '../app.js';
 import { createParentStore } from '../auth/parent-store.js';
 import { migrate, openDatabase, transaction } from '../db/database.js';
 import { demo, seedDemo } from '../db/demo.js';
 import { activateTeacher, createTeacher } from '../teacher/store.js';
+import { purgeExpiredBlogPhotos } from './photos.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const origin = 'https://ent.ecole.example';
@@ -16,7 +18,8 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
   const admin = openDatabase(databaseUrl);
   const pool = new pg.Pool({ connectionString: databaseUrl, options: '-c search_path=' + schema });
   const store = createParentStore(pool, randomBytes(32));
-  const app = buildApp({ parentAuth: { store, signingKey: randomBytes(32), webOrigin: origin }, direction: { pool, webOrigin: origin } });
+  const app = buildApp({ parentAuth: { store, signingKey: randomBytes(32), webOrigin: origin }, direction: { pool, webOrigin: origin },
+    blogMediaKey: randomBytes(32) });
   context.after(async () => {
     await app.close();
     await pool.end();
@@ -71,7 +74,7 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
   assert.equal((await call('POST', classPath, b.headers, { title, body: draftBody })).statusCode, 404);
   assert.equal((await call('POST', classPath, { ...a.headers, origin: 'https://ailleurs.example' }, { title, body: draftBody })).statusCode, 403);
   assert.equal((await call('POST', classPath, a.headers, { title: 'Titre\nsur deux lignes', body: draftBody })).statusCode, 400);
-  assert.equal((await call('POST', classPath, a.headers, { title, body: ' ' })).statusCode, 400);
+  assert.equal((await call('POST', classPath, a.headers, { title, body: '\0' })).statusCode, 400);
   assert.equal((await call('POST', classPath, a.headers, { title, body: 'x'.repeat(8001) })).statusCode, 400);
 
   const created = await call('POST', classPath, a.headers, { title, body: draftBody });
@@ -102,12 +105,12 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
   const live = publication.json();
   const familyArticle = await call('GET', parentArticle, family);
   assert.equal(familyArticle.headers['cache-control'], 'no-store');
-  assert.deepEqual(familyArticle.json(), { id: first.id, title, body, publishedAt: live.publishedAt });
+  assert.deepEqual(familyArticle.json(), { id: first.id, title, body, publishedAt: live.publishedAt, photos: [], photoCount: 0 });
   assert.equal((await call('GET', blogFor(childB.id) + '/' + first.id, family)).statusCode, 404);
   assert.equal((await call('GET', blogFor(childC.id) + '/' + first.id, family)).statusCode, 404);
   assert.equal((await call('GET', blogFor(childC.id) + '/' + first.id, second)).statusCode, 200);
   const previewRow = (await call('GET', familyPath, family)).json().articles[0];
-  assert.deepEqual(previewRow, { id: first.id, title, excerpt: body.slice(0, 240) + '…', publishedAt: live.publishedAt });
+  assert.deepEqual(previewRow, { id: first.id, title, excerpt: body.slice(0, 240) + '…', publishedAt: live.publishedAt, photos: [], photoCount: 0 });
   assert.equal((await call('PUT', staffArticle, a.headers, { title, body: 'Modification directe', version: live.version })).statusCode, 409);
   assert.equal((await call('DELETE', staffArticle, a.headers, { version: live.version })).statusCode, 409);
 
@@ -121,6 +124,86 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
   assert.equal((await call('DELETE', staffArticle, a.headers, { version: live.version })).statusCode, 409);
   assert.equal((await call('DELETE', staffArticle, a.headers, { version: withdrawn.json().version })).statusCode, 204);
   assert.equal((await call('GET', staffArticle, a.headers)).statusCode, 404);
+
+  await context.test('les galeries photo vérifiées restent privées et expirent', async () => {
+    const image = await sharp({ create: { width: 800, height: 500, channels: 3, background: '#315545' } })
+      .jpeg().withMetadata({ orientation: 6 }).toBuffer();
+    assert.ok((await sharp(image).metadata()).exif);
+    const draft = await call('POST', classPath, a.headers, { title: 'Galerie fictive', body: '' });
+    assert.equal(draft.statusCode, 201);
+    let article = draft.json();
+    const articleURL = classPath + '/' + article.id;
+    const photoCollection = articleURL + '/photos';
+    const familyURL = familyPath + '/' + article.id;
+    const upload = (bytes, headers = a.headers) => call('POST', photoCollection + '?version=' + article.version,
+      { ...headers, 'content-type': 'application/octet-stream' }, bytes);
+    const setPublished = (published) => call('PUT', articleURL + '/publication', a.headers, { published, version: article.version });
+    assert.equal((await setPublished(true)).statusCode, 422);
+    assert.equal((await upload(image, { origin })).statusCode, 401);
+    assert.equal((await upload(image, b.headers)).statusCode, 404);
+    assert.equal((await upload(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).statusCode, 415);
+    for (let index = 0; index < 3; index += 1) {
+      const uploaded = await upload(image);
+      assert.equal(uploaded.statusCode, 201);
+      article = uploaded.json();
+    }
+    assert.equal(article.photoCount, 3);
+    const [firstPhoto, , cover] = article.photos;
+    const photoURL = familyURL + '/photos/' + firstPhoto.id;
+    const staffPhoto = photoCollection + '/' + firstPhoto.id;
+    assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+    assert.equal((await call('GET', staffPhoto, foreign.headers)).statusCode, 404);
+    assert.equal((await setPublished(true)).statusCode, 422);
+
+    const moved = await call('PUT', photoCollection + '/' + cover.id + '/cover', a.headers, { version: article.version });
+    assert.equal(moved.statusCode, 200);
+    article = moved.json();
+    assert.equal(article.photos[0].id, cover.id);
+    for (const photo of article.photos) {
+      const review = await call('PUT', photoCollection + '/' + photo.id, a.headers,
+        { version: article.version, reviewed: true, description: 'Matériel fictif' });
+      assert.equal(review.statusCode, 200);
+      article = review.json();
+    }
+    const published = await setPublished(true);
+    assert.equal(published.statusCode, 200);
+    article = published.json();
+    const entry = (await call('GET', familyPath, family)).json().articles[0];
+    assert.equal(entry.photoCount, 3);
+    assert.deepEqual(entry.photos.map(({ id }) => id), article.photos.slice(0, 2).map(({ id }) => id));
+    assert.equal((await call('GET', familyURL, family)).json().photos.length, 3);
+    assert.equal((await call('GET', photoURL, {})).statusCode, 401);
+    assert.equal((await call('GET', photoURL.replace(childA.id, childB.id), family)).statusCode, 404);
+    const file = await call('GET', photoURL, family);
+    assert.equal(file.statusCode, 200);
+    assert.equal(file.headers['content-type'], 'image/jpeg');
+    assert.equal(file.headers['cache-control'], 'no-store');
+    assert.equal(file.headers['x-content-type-options'], 'nosniff');
+    const output = await sharp(file.rawPayload).metadata();
+    assert.equal(output.exif, undefined);
+    assert.equal(output.width, 500);
+    assert.equal(output.height, 800);
+    const thumb = await call('GET', photoURL + '?size=thumb', family);
+    assert.equal((await sharp(thumb.rawPayload).metadata()).height, 560);
+    const stored = (await pool.query('SELECT full_data, expires_at FROM class_blog_photos WHERE id = $1', [firstPhoto.id])).rows[0];
+    assert.equal(stored.full_data.length, file.rawPayload.length + 28);
+    assert.ok(!stored.full_data.subarray(28).equals(file.rawPayload));
+
+    const withdrawn = await setPublished(false);
+    article = withdrawn.json();
+    assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+    const republished = await setPublished(true);
+    assert.equal(republished.statusCode, 200);
+    const { rows: [{ expires_at: expiry }] } = await pool.query('SELECT expires_at FROM class_blog_photos WHERE id = $1', [firstPhoto.id]);
+    assert.deepEqual(expiry, stored.expires_at);
+    await pool.query("UPDATE class_blog_photos SET expires_at = statement_timestamp() - interval '1 minute' WHERE article_id = $1", [article.id]);
+    assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+    assert.equal((await call('GET', familyURL, family)).statusCode, 404);
+    await purgeExpiredBlogPhotos(pool);
+    const after = (await call('GET', articleURL, a.headers)).json();
+    assert.equal(after.publishedAt, null);
+    assert.deepEqual(after.photos, []);
+  });
 
   await pool.query(`
     INSERT INTO class_blog_articles (school_id, id, class_id, title, body, updated_at, published_at)

@@ -90,7 +90,7 @@ Connectez-vous à l’espace enseignant dans la web-app, ouvrez « Cahier de lia
 
 ### Essayer le blog de classe
 
-Dans l’espace enseignant, ouvrez « Blog de classe » et créez un article fictif. Choisissez « Prévisualiser », puis « Publier cet article ». Les familles de la classe peuvent ensuite le lire depuis « Blog de classe » sous le nom de leur enfant. [Guide du blog de classe](blog-de-classe.md)
+Dans l’espace enseignant, ouvrez « Blog de classe » et créez un article fictif. Ajoutez deux photos d’objets et validez-les dans le brouillon. Choisissez « Prévisualiser », puis « Publier cet article ». Dans l’espace parent, ouvrez « Blog de classe » sous le nom de l’enfant et sélectionnez `+1` pour ouvrir le carrousel. [Guide du blog de classe](blog-de-classe.md)
 
 ### Générer une invitation supplémentaire
 

@@ -28,7 +28,7 @@ function credentialsOptions(properties) {
   };
 }
 
-export async function teacherRoutes(app, { pool, webOrigin }) {
+export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey }) {
   const { tokenFor, authenticated } = await registerStaffWeb(app, {
     webOrigin, cookieName, withSession: (token, operation) => withTeacherSession(pool, token, operation),
   });
@@ -65,5 +65,5 @@ export async function teacherRoutes(app, { pool, webOrigin }) {
   registerStaffAgenda(app, '/teacher', authenticated, canTeachClass);
   registerTeacherMessages(app, authenticated);
   registerTeacherLiaison(app, authenticated);
-  registerTeacherBlog(app, authenticated);
+  registerTeacherBlog(app, { authenticated, mediaKey: blogMediaKey, tokenFor, unauthorized });
 }

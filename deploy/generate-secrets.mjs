@@ -26,6 +26,6 @@ async function supplySecret(path) {
 }
 
 for (const path of ['/postgres-admin/password', '/postgres-secrets/password', '/app-secrets/signing-key',
-  '/app-secrets/invitation-key', '/app-secrets/installation-token']) {
+  '/app-secrets/invitation-key', '/app-secrets/installation-token', '/app-secrets/blog-media-key']) {
   await supplySecret(path);
 }

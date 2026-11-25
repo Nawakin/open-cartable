@@ -28,6 +28,10 @@ export function useBlogTask(onExpired) {
       else if (error.status === 400) setProblem('Vérifiez le titre, le texte et leur longueur.');
       else if (error.status === 404) setProblem('Cet article ou cette classe n’est plus accessible.');
       else if (error.status === 409) setProblem('L’article a changé. Rechargez sa version enregistrée avant de continuer.');
+      else if (error.status === 413) setProblem('Une photo dépasse 10 Mo ou le stockage de l’école est plein. Les photos déjà ajoutées sont conservées.');
+      else if (error.status === 415) setProblem('Une image n’a pas pu être lue. Choisissez un fichier JPEG, PNG ou WebP statique. Les photos déjà ajoutées sont conservées.');
+      else if (error.status === 422) setProblem('Vérifiez le contenu, la validation des photos et la limite de 12 photos par article.');
+      else if (error.status === 503) setProblem('Le stockage des photos est indisponible sur ce serveur.');
       else if (error.status === 0) setProblem('La connexion a été interrompue. Actualisez pour vérifier l’état de l’article.');
       else setProblem('L’opération a échoué. Réessayez dans un instant.');
     } finally {
@@ -39,33 +43,37 @@ export function useBlogTask(onExpired) {
   return { busy, problem, run };
 }
 
-export function ArticleRow({ article, onPress, busy, staff = false }) {
+export function ArticleRow({ article, onPress, busy, staff = false, gallery }) {
   const published = Boolean(article.publishedAt);
   const date = article.publishedAt ?? article.updatedAt;
   const status = published ? 'Publié' : 'Brouillon';
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={staff ? `${article.title}, ${status.toLowerCase()}` : article.title}
-      disabled={busy} accessibilityState={{ disabled: busy }} onPress={onPress}
-      style={({ pressed }) => [blog.row, pressed && blog.pressed]}>
-      <View style={blog.rowContent}>
-        <View style={blog.metaRow}>
-          <Text style={blog.date}>{displayDate(date)}</Text>
-          {staff && <Text style={[blog.status, published && blog.published]}>{status}</Text>}
+    <View style={blog.row}>
+      {gallery && <View style={blog.rowGallery}>{gallery}</View>}
+      <Pressable accessibilityRole="button" accessibilityLabel={staff ? `${article.title}, ${status.toLowerCase()}` : article.title}
+        disabled={busy} accessibilityState={{ disabled: busy }} onPress={onPress}
+        style={({ pressed }) => [blog.rowLink, pressed && blog.pressed]}>
+        <View style={blog.rowContent}>
+          <View style={blog.metaRow}>
+            <Text style={blog.date}>{displayDate(date)}</Text>
+            {staff && <Text style={[blog.status, published && blog.published]}>{status}</Text>}
+          </View>
+          <Text style={[blog.heading, blog.wrap]}>{article.title}</Text>
+          {article.excerpt ? <Text numberOfLines={2} style={[styles.body, blog.wrap]}>{article.excerpt.replace(/\s+/g, ' ')}</Text> : null}
         </View>
-        <Text style={[blog.heading, blog.wrap]}>{article.title}</Text>
-        <Text numberOfLines={2} style={[styles.body, blog.wrap]}>{article.excerpt.replace(/\s+/g, ' ')}</Text>
-      </View>
-      <Ionicons name="chevron-forward-outline" size={19} color="#225344" accessible={false} aria-hidden />
-    </Pressable>
+        <Ionicons name="chevron-forward-outline" size={19} color="#225344" accessible={false} aria-hidden />
+      </Pressable>
+    </View>
   );
 }
 
-export function ArticleContent({ article }) {
+export function ArticleContent({ article, gallery }) {
   return (
     <View style={blog.article}>
+      {gallery}
       {article.publishedAt && <Text style={blog.date}>{displayDate(article.publishedAt)}</Text>}
       <Text accessibilityRole="header" style={[styles.title, blog.wrap]}>{article.title}</Text>
-      <Text selectable style={[styles.body, blog.articleBody, blog.wrap]}>{article.body}</Text>
+      {article.body ? <Text selectable style={[styles.body, blog.articleBody, blog.wrap]}>{article.body}</Text> : null}
     </View>
   );
 }
@@ -73,9 +81,10 @@ export function ArticleContent({ article }) {
 export const blog = StyleSheet.create({
   layout: { minWidth: 0, gap: 16 },
   row: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16,
     borderWidth: 1, borderColor: '#d5dfd1', borderRadius: 14, backgroundColor: '#f4f6ee',
   },
+  rowLink: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  rowGallery: { paddingHorizontal: 7, paddingTop: 7 },
   rowContent: { flex: 1, minWidth: 0, gap: 6 },
   metaRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   date: { color: '#43584c', fontSize: 14, fontWeight: '600' },

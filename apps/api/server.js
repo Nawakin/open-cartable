@@ -20,6 +20,10 @@ let pool;
 
 try {
   const env = process.env;
+  const mediaSecret = readSecret(env, 'BLOG_MEDIA_KEY');
+  if (mediaSecret !== undefined && !/^[0-9a-f]{64}$/.test(mediaSecret)) {
+    throw new Error('La clé de chiffrement des photos doit contenir 64 caractères hexadécimaux.');
+  }
   let parentAuth;
   let webRoot;
   let installation;
@@ -48,7 +52,8 @@ try {
     if (token) installation = { pool, token, invitationKey, webOrigin };
   }
   const direction = webOrigin ? { pool, webOrigin } : undefined;
-  const app = buildApp({ parentAuth, webRoot, installation, direction });
+  const blogMediaKey = mediaSecret === undefined ? undefined : Buffer.from(mediaSecret, 'hex');
+  const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey });
   let stopRetention;
   if (pool) app.addHook('onClose', async () => {
     await stopRetention?.();

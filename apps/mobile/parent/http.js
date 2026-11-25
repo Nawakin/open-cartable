@@ -40,25 +40,28 @@ export function request(fetcher, origin, path, options) {
   return requestJson(fetcher, origin + parentPath + path, options);
 }
 
-export async function requestJson(fetcher, url, { method = 'GET', body, token, credentials, cache } = {}) {
-  const headers = { Accept: 'application/json' };
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+export async function requestJson(fetcher, url, {
+  method = 'GET', body, token, credentials, cache, binary = false, responseType = 'json',
+} = {}) {
+  const headers = { Accept: responseType === 'bytes' ? 'image/jpeg' : 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = binary ? 'application/octet-stream' : 'application/json';
   if (token) headers.Authorization = 'Bearer ' + token;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12_000);
+  const timeout = setTimeout(() => controller.abort(), binary ? 60_000 : 12_000);
   try {
     const response = await fetcher(url, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: binary || body === undefined ? body : JSON.stringify(body),
       credentials,
       cache,
       redirect: 'error',
       signal: controller.signal,
     });
     if (!response.ok) throw new RequestError(response.status);
-    return response.status === 204 ? undefined : await response.json();
+    if (response.status === 204) return undefined;
+    return responseType === 'bytes' ? await response.arrayBuffer() : await response.json();
   } catch (error) {
     if (error instanceof RequestError) throw error;
     throw new RequestError(0);

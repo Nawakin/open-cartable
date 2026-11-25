@@ -56,6 +56,7 @@ services:
       AUTH_SIGNING_KEY_FILE: /run/app-secrets/signing-key
       AUTH_INVITE_KEY_FILE: /run/app-secrets/invitation-key
       INSTALLATION_TOKEN_FILE: /run/app-secrets/installation-token
+      BLOG_MEDIA_KEY_FILE: /run/app-secrets/blog-media-key
       OPEN_CARTABLE_AUTO_MIGRATE: "1"
       OPEN_CARTABLE_HOST: 0.0.0.0
       WEB_ORIGIN: "${OPEN_CARTABLE_ORIGIN:-http://127.0.0.1:${OPEN_CARTABLE_PORT:-3000}}"

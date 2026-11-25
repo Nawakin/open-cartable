@@ -1,9 +1,11 @@
 import { purgeExpiredLiaison } from '../liaison/store.js';
 import { purgeExpiredMessages } from '../messaging/retention.js';
+import { purgeExpiredBlogPhotos } from '../blog/photos.js';
 
 const purges = [
   { run: purgeExpiredMessages, label: 'messagerie' },
   { run: purgeExpiredLiaison, label: 'cahier de liaison' },
+  { run: purgeExpiredBlogPhotos, label: 'photos du blog' },
 ];
 
 export function startRetention(pool) {

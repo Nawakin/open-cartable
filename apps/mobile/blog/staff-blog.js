@@ -2,7 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useScrollToTop } from '../navigation';
 import { Button, Field, styles } from '../parent/ui';
+import { RequestError } from '../parent/http';
 import { ArticleContent, ArticleRow, blog, useBlogTask } from './ui';
+import { GalleryPreview, PhotoCarousel } from './gallery';
+import { DraftGallery, PhotoPicker } from './photo-editor';
 
 const statusOptions = [
   { id: 'all', label: 'Tous' },
@@ -10,6 +13,8 @@ const statusOptions = [
   { id: 'published', label: 'Publiés' },
 ];
 const emptyDraft = { title: '', body: '' };
+const maxPhotos = 12;
+const maxPhotoBytes = 10 * 1024 * 1024;
 
 function classPath(id) {
   return '/classes/' + encodeURIComponent(id) + '/blog';
@@ -28,10 +33,14 @@ export function StaffBlog({ classes, request, onExpired }) {
   const [draft, setDraft] = useState(emptyDraft);
   const [confirmation, setConfirmation] = useState(null);
   const [notice, setNotice] = useState('');
+  const [photoIndex, setPhotoIndex] = useState(null);
   const { busy, problem, run } = useBlogTask(onExpired);
   const scrollToTop = useScrollToTop();
   const selected = classes.some(({ id }) => id === classId);
-  const valid = Boolean(draft.title.trim() && draft.body.trim());
+  const valid = Boolean(draft.title.trim());
+  const photos = article?.photos ?? [];
+  const missingReview = photos.filter((photo) => !photo.reviewed).length;
+  const canPublish = Boolean(article?.body || photos.length) && !missingReview;
   const dirty = draft.title !== (article?.title ?? '') || draft.body !== (article?.body ?? '');
 
   async function loadList(id, status, cursor) {
@@ -60,6 +69,7 @@ export function StaffBlog({ classes, request, onExpired }) {
     setDraft({ title: current.title, body: current.body });
     setView(current.publishedAt ? 'published' : 'edit');
     setConfirmation(null);
+    setPhotoIndex(null);
     scrollToTop();
   }
 
@@ -76,6 +86,7 @@ export function StaffBlog({ classes, request, onExpired }) {
     setFilter('all');
     setArticle(null);
     setDraft(emptyDraft);
+    setPhotoIndex(null);
     setView('edit');
     scrollToTop();
   }
@@ -89,23 +100,57 @@ export function StaffBlog({ classes, request, onExpired }) {
     list(classId);
   }
 
+  async function saveDraft() {
+    if (article && !dirty) return article;
+    const current = await request(article ? articlePath(classId, article.id) : classPath(classId), {
+      method: article ? 'PUT' : 'POST',
+      body: article ? { ...draft, version: article.version } : draft,
+    });
+    setArticle(current);
+    setDraft({ title: current.title, body: current.body });
+    return current;
+  }
+
   function save(preview) {
     void run(async () => {
-      let current = article;
-      if (!article || dirty) {
-        current = await request(article ? articlePath(classId, article.id) : classPath(classId), {
-          method: article ? 'PUT' : 'POST',
-          body: article ? { ...draft, version: article.version } : draft,
-        });
-        setArticle(current);
-        setDraft({ title: current.title, body: current.body });
-      }
+      await saveDraft();
       setNotice(preview ? '' : 'Brouillon enregistré.');
       setConfirmation(null);
       if (preview) {
         setView('preview');
         scrollToTop();
       }
+    });
+  }
+
+  function upload(files) {
+    void run(async () => {
+      setNotice('');
+      if (files.length + photos.length > maxPhotos) throw new RequestError(422);
+      if (files.some((file) => file.size > maxPhotoBytes)) throw new RequestError(413);
+      let current = await saveDraft();
+      const endpoint = articlePath(classId, current.id) + '/photos';
+      for (const [index, file] of files.entries()) {
+        setNotice(`Envoi de la photo ${index + 1} sur ${files.length}…`);
+        try {
+          current = await request(endpoint + '?version=' + current.version, { method: 'POST', body: file, binary: true });
+          setArticle(current);
+        } catch (error) {
+          setNotice(index ? `${index} ${index === 1 ? 'photo ajoutée' : 'photos ajoutées'}.` : '');
+          throw error;
+        }
+      }
+      setNotice(files.length === 1 ? 'Photo ajoutée au brouillon.' : `${files.length} photos ajoutées au brouillon.`);
+    });
+  }
+
+  function changePhoto(id, action, options, onSuccess) {
+    void run(async () => {
+      const endpoint = articlePath(classId, article.id) + '/photos/' + encodeURIComponent(id) + action;
+      const updated = await request(endpoint, { ...options, body: { ...options.body, version: article.version } });
+      setArticle(updated);
+      setNotice('Galerie mise à jour.');
+      onSuccess();
     });
   }
 
@@ -125,6 +170,7 @@ export function StaffBlog({ classes, request, onExpired }) {
       setView('list');
       setArticle(null);
       setDraft(emptyDraft);
+      setPhotoIndex(null);
       setConfirmation(null);
       setPage(null);
       scrollToTop();
@@ -145,6 +191,9 @@ export function StaffBlog({ classes, request, onExpired }) {
       list(classes[0].id);
     }
   }, [classId, classes, selected, busy]);
+
+  const gallery = photos.length > 0 && <GalleryPreview article={article} articlePath={articlePath(classId, article.id)}
+    role="teacher" request={request} onOpen={setPhotoIndex} busy={busy} />;
 
   return (
     <View style={blog.layout}>
@@ -191,7 +240,12 @@ export function StaffBlog({ classes, request, onExpired }) {
         <Text accessibilityRole="header" style={blog.heading}>{article ? 'Modifier le brouillon' : 'Nouvel article'}</Text>
         <Field label="Titre" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })}
           maxLength={120} editable={!busy} />
-        <Field label="Texte de l’article" value={draft.body} onChangeText={(body) => setDraft({ ...draft, body })}
+        <Text accessibilityRole="header" style={blog.heading}>Photos</Text>
+        <PhotoPicker onPick={upload} busy={busy || !valid || photos.length >= maxPhotos} />
+        <Text style={styles.body}>JPEG, PNG ou WebP · 10 Mo par photo · {photos.length} sur {maxPhotos}</Text>
+        {article && <DraftGallery photos={photos} articlePath={articlePath(classId, article.id)}
+          request={request} onChange={changePhoto} onOpen={setPhotoIndex} busy={busy} />}
+        <Field label="Texte de l’article (facultatif)" value={draft.body} onChangeText={(body) => setDraft({ ...draft, body })}
           maxLength={8000} multiline editable={!busy} style={[styles.input, blog.editor]} />
         <View style={styles.actions}>
           <Button label="Enregistrer le brouillon" icon="save-outline" onPress={() => save(false)} busy={busy || !valid} secondary />
@@ -210,9 +264,11 @@ export function StaffBlog({ classes, request, onExpired }) {
 
       {selected && view === 'preview' && article && <>
         <Text accessibilityRole="header" style={blog.heading}>Aperçu côté familles</Text>
-        <ArticleContent article={article} />
+        <ArticleContent article={article} gallery={gallery} />
+        {missingReview > 0 && <Text style={styles.body}>Revenez au brouillon pour vérifier les photos avant de publier.</Text>}
+        {!article.body && !photos.length && <Text style={styles.body}>Ajoutez une photo ou un texte avant de publier.</Text>}
         <View style={styles.actions}>
-          <Button label="Publier cet article" icon="paper-plane-outline" onPress={() => publish(true)} busy={busy} />
+          <Button label="Publier cet article" icon="paper-plane-outline" onPress={() => publish(true)} busy={busy || !canPublish} />
           <Button label="Revenir au brouillon" icon="create-outline" onPress={() => show(article)} busy={busy} secondary />
           {problem && <Button label="Recharger l’article" icon="refresh-outline" onPress={() => open(article.id)} busy={busy} secondary />}
         </View>
@@ -220,7 +276,7 @@ export function StaffBlog({ classes, request, onExpired }) {
 
       {selected && view === 'published' && article && <>
         <Text accessibilityRole="header" style={blog.heading}>Article publié</Text>
-        <ArticleContent article={article} />
+        <ArticleContent article={article} gallery={gallery} />
         {confirmation === 'withdraw' ? <View style={blog.empty}>
           <Text style={styles.body}>L’article sera retiré du fil des familles et reviendra en brouillon.</Text>
           <View style={styles.actions}>
@@ -231,6 +287,8 @@ export function StaffBlog({ classes, request, onExpired }) {
           <Button label="Retirer de la publication" icon="eye-off-outline" onPress={() => setConfirmation('withdraw')} busy={busy} secondary />
         </View>}
       </>}
+      {article && selected && <PhotoCarousel article={article} articlePath={articlePath(classId, article.id)} index={photoIndex}
+        role="teacher" request={request} onChange={setPhotoIndex} onClose={() => setPhotoIndex(null)} />}
     </View>
   );
 }
