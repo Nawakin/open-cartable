@@ -12,11 +12,11 @@
 
 La suite de la v0.2 prévoit le floutage. Le blog dispose du contrôle d’accès au téléchargement, de la conversion des images et des limites de stockage. Ces mécanismes serviront aussi à la médiathèque et aux pièces jointes de la v0.1.
 
-### Interface et personnalisation à traiter
+### Interface et personnalisation
 
-- Permettre à la direction de personnaliser le bandeau d’en-tête de l’école. Le réglage porte sur le texte, sa couleur et le fond. Prévoir un aperçu, une vérification de la lisibilité et une remise aux valeurs par défaut sur le web et sur mobile.
-- Revoir les parcours parent, enseignant et direction pour réduire le nombre d’entrées de menu et d’actions visibles à la fois. Regrouper les actions liées, rendre l’action suivante évidente et afficher les réglages secondaires au moment où ils deviennent utiles.
-- Vérifier sur téléphone et ordinateur que les utilisateurs trouvent où consulter, publier ou gérer une autorisation sans tutoriel.
+La rubrique « École » de la direction regroupe les comptes enseignants, les autorisations photo et le bandeau. Le texte, sa couleur et le fond du bandeau sont modifiables avec aperçu, contrôle de contraste et retour aux valeurs par défaut. « Vie de classe » regroupe le blog et le cahier de liaison dans l’espace enseignant. [Tutoriel d’installation](installation.md#personnaliser-le-bandeau-de-lécole)
+
+Il reste à simplifier les écrans les plus chargés. Regrouper les actions liées, rendre l’action suivante évidente et afficher les réglages secondaires au moment où ils deviennent utiles. Vérifier sur téléphone et ordinateur que les utilisateurs trouvent où consulter, publier ou gérer une autorisation sans tutoriel.
 
 ## Architecture cible
 

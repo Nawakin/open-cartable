@@ -17,6 +17,7 @@ import { AppFrame, SectionNav } from './navigation';
 import { ParentLiaison } from './liaison/parent-liaison';
 import { ParentBlog } from './blog/parent-blog';
 import { FamilyPhotoAuthorizations } from './photo-authorizations/family';
+import { useSchoolBanner } from './school-banner/session';
 
 const emptyReminders = { reminders: [], nextCursor: null };
 const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'messages', 'account'];
@@ -45,6 +46,7 @@ function ParentApp() {
   const [busy, setBusy] = useState(false);
   const inProgress = useRef(false);
   const signedIn = parentSections.includes(phase);
+  const { banner } = useSchoolBanner(requestParent, signedIn);
   const unread = useUnreadMessages(requestMessages, signedIn);
 
   async function run(operation) {
@@ -238,7 +240,7 @@ function ParentApp() {
     ]} />;
 
   return (
-    <AppFrame menu={menu} scrollKey={phase}>
+    <AppFrame menu={menu} scrollKey={phase} banner={banner}>
       {phase === 'loading' && (
         <View style={styles.panel}>
           <ActivityIndicator accessibilityLabel="Chargement" color="#225344" />

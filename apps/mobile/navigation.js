@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useRef } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { SchoolBanner } from './school-banner/banner';
 
 const ScrollToTop = createContext(() => {});
 
@@ -9,7 +10,7 @@ export function useScrollToTop() {
   return useContext(ScrollToTop);
 }
 
-export function AppFrame({ menu, scrollKey, onLogout, busy, wide = false, children }) {
+export function AppFrame({ menu, scrollKey, onLogout, busy, banner, wide = false, children }) {
   const content = [nav.content, wide && nav.wide];
   const scroll = useRef(null);
   const scrollToTop = useCallback(() => scroll.current?.scrollTo({ y: 0, animated: false }), []);
@@ -17,15 +18,7 @@ export function AppFrame({ menu, scrollKey, onLogout, busy, wide = false, childr
     <SafeAreaView style={nav.safeArea}>
       <View style={nav.headerArea}>
         <View style={content}>
-          <View style={nav.brandBar}>
-            <Ionicons name="book-outline" size={24} color="#ffdd9b" accessible={false} aria-hidden />
-            <Text style={nav.brand}>Open Cartable</Text>
-            {onLogout && <Pressable accessibilityRole="button" accessibilityLabel="Se déconnecter" disabled={busy}
-              accessibilityState={{ disabled: busy }} onPress={onLogout}
-              style={({ pressed }) => [nav.logout, (pressed || busy) && nav.dimmed]}>
-              <Ionicons name="log-out-outline" size={23} color="#fff7df" accessible={false} aria-hidden />
-            </Pressable>}
-          </View>
+          <SchoolBanner banner={banner} onLogout={onLogout} busy={busy} />
           {menu}
         </View>
       </View>
@@ -39,7 +32,6 @@ export function AppFrame({ menu, scrollKey, onLogout, busy, wide = false, childr
 export function SectionNav({ label, items, active, busy }) {
   const { width, fontScale } = useWindowDimensions();
   const twoColumns = items.length === 4 && width < 360 * fontScale;
-  const threeColumns = items.length === 5 && width < 440 * fontScale;
   return (
     <View accessibilityRole="navigation" accessibilityLabel={label} style={nav.container}>
       {items.map(({ id, icon, label: title, onPress, unreadCount = 0 }) => {
@@ -50,7 +42,7 @@ export function SectionNav({ label, items, active, busy }) {
         return (
           <Pressable key={id} accessibilityRole="button" accessibilityLabel={navLabel}
             accessibilityState={{ selected, disabled: busy }} disabled={busy} onPress={onPress}
-            style={({ pressed }) => [nav.item, twoColumns && nav.half, threeColumns && nav.third,
+            style={({ pressed }) => [nav.item, twoColumns && nav.half,
               selected && nav.selected, (pressed || busy) && nav.dimmed]}>
             <View style={nav.iconRow}>
               <Ionicons name={icon} color={color} size={21} accessible={false} aria-hidden />
@@ -71,12 +63,6 @@ const nav = StyleSheet.create({
   headerArea: { alignItems: 'center', paddingHorizontal: 20, paddingTop: 16 },
   content: { width: '100%', maxWidth: 560, gap: 12 },
   wide: { maxWidth: 680 },
-  brandBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#17372d',
-    paddingHorizontal: 18, minHeight: 54, borderRadius: 16,
-  },
-  brand: { flex: 1, color: '#fff7df', fontSize: 23, fontWeight: '800', letterSpacing: -0.5 },
-  logout: { height: 44, width: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 9, backgroundColor: '#2b4f41' },
   scroll: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 20, paddingTop: 14, paddingBottom: 28 },
   container: {
     flexDirection: 'row', flexWrap: 'wrap', gap: 6, padding: 6, borderWidth: 1,
@@ -88,7 +74,6 @@ const nav = StyleSheet.create({
   },
   selected: { backgroundColor: '#225344' },
   half: { flexBasis: '44%' },
-  third: { flexBasis: '29%' },
   label: { textAlign: 'center', fontSize: 13, fontWeight: '700' },
   iconRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 },
   badge: { color: '#402b09', backgroundColor: '#ffdd9b', borderRadius: 12, minWidth: 20,

@@ -7,6 +7,7 @@ import { registerTeacherMessages } from '../messaging/routes.js';
 import { registerTeacherLiaison } from '../liaison/routes.js';
 import { registerTeacherBlog } from '../blog/routes.js';
 import { registerTeacherPhotoAuthorizations } from '../photo-authorizations/routes.js';
+import { registerSchoolBanner } from '../school-banner/routes.js';
 import {
   activateTeacher, canTeachClass, signInTeacher, signOutTeacher, teacherActivationPattern,
   teacherLoginPattern, teacherSessionSeconds, withTeacherSession,
@@ -68,4 +69,5 @@ export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey }) {
   registerTeacherLiaison(app, authenticated);
   registerTeacherBlog(app, { authenticated, mediaKey: blogMediaKey, tokenFor, unauthorized });
   registerTeacherPhotoAuthorizations(app, authenticated);
+  registerSchoolBanner(app, '/teacher', authenticated);
 }

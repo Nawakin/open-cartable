@@ -11,6 +11,8 @@ import { AppFrame, SectionNav } from '../navigation';
 import { StaffLiaison } from '../liaison/staff-liaison';
 import { StaffBlog } from '../blog/staff-blog';
 import { DirectionPhotoAuthorizations } from '../photo-authorizations/direction';
+import { useSchoolBanner } from '../school-banner/session';
+import { BannerSettings } from '../school-banner/settings';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -26,6 +28,14 @@ const directionSections = [
 ];
 const teacherSections = [
   ...commonSections,
+  { id: 'class-life', icon: 'school-outline', label: 'Vie de classe' },
+];
+const schoolPages = [
+  { id: 'directory', icon: 'people-outline', label: 'Enseignants' },
+  { id: 'photo-authorizations', icon: 'shield-checkmark-outline', label: 'Autorisations photo' },
+  { id: 'banner', icon: 'color-palette-outline', label: 'Bandeau d’en-tête' },
+];
+const classLifePages = [
   { id: 'liaison', icon: 'reader-outline', label: 'Cahier de liaison' },
   { id: 'blog', icon: 'newspaper-outline', label: 'Blog de classe' },
 ];
@@ -45,11 +55,11 @@ function message(error, activating) {
 export function Staff({ role, onParent, onOtherStaff }) {
   const isTeacher = role === 'teacher';
   const title = isTeacher ? 'Espace enseignant' : 'Espace direction';
-  const request = (path, options) => staffRequest(role, path, options);
+  const request = useCallback((path, options) => staffRequest(role, path, options), [role]);
   const requestMessages = useCallback((path, options) => staffRequest(role, '/messages' + path, options), [role]);
   const [phase, setPhase] = useState('loading');
   const [section, setSection] = useState('homework');
-  const [schoolPage, setSchoolPage] = useState(null);
+  const [subpage, setSubpage] = useState(null);
   const [messageDraft, setMessageDraft] = useState(null);
   const [desk, setDesk] = useState(null);
   const [school, setSchool] = useState('');
@@ -69,12 +79,13 @@ export function Staff({ role, onParent, onOtherStaff }) {
   const [notice, setNotice] = useState('');
   const inProgress = useRef(false);
   const unread = useUnreadMessages(requestMessages, phase === 'desk');
+  const { banner, replace: replaceBanner } = useSchoolBanner(request, phase === 'desk');
 
   function resetDesk() {
     setDesk(null);
     setMessageDraft(null);
     setSection('homework');
-    setSchoolPage(null);
+    setSubpage(null);
     resetClass();
     setPassword('');
     setPhase('login');
@@ -268,8 +279,11 @@ export function Staff({ role, onParent, onOtherStaff }) {
   const menu = phase === 'desk' && <SectionNav label={isTeacher ? 'Menu enseignant' : 'Menu direction'} active={section} busy={busy}
     items={(isTeacher ? teacherSections : directionSections).map((item) => ({
       ...item, unreadCount: item.id === 'messages' ? unread.count : 0,
-      onPress: () => { setMessageDraft(null); setSchoolPage(null); setSection(item.id); },
+      onPress: () => { setMessageDraft(null); setSubpage(null); setSection(item.id); },
     }))} />;
+  const schoolGroup = !isTeacher && section === 'school';
+  const classLifeGroup = isTeacher && section === 'class-life';
+  const subpages = schoolGroup ? schoolPages : (classLifeGroup ? classLifePages : null);
   const spaceLinks = <View style={styles.actions}>
     <Button label="Espace parent" icon="home-outline" onPress={onParent} busy={busy} secondary />
     <Button label={isTeacher ? 'Espace direction' : 'Espace enseignant'} icon={isTeacher ? 'business-outline' : 'school-outline'}
@@ -306,26 +320,26 @@ export function Staff({ role, onParent, onOtherStaff }) {
       )}
       {phase === 'desk' && (
         <>
-          {!isTeacher && section === 'school' && <>
-            {schoolPage ? <View style={styles.actions}>
-              <Button label="Retour" accessibilityLabel="Retour à École" icon="arrow-back-outline"
-                secondary busy={busy} onPress={() => setSchoolPage(null)} />
+          {subpages && <>
+            {subpage ? <View style={styles.actions}>
+              <Button label="Retour" accessibilityLabel={schoolGroup ? 'Retour à École' : 'Retour à Vie de classe'} icon="arrow-back-outline"
+                secondary busy={busy} onPress={() => setSubpage(null)} />
             </View> : <>
-              <Text accessibilityRole="header" style={styles.title}>Gérer l’école</Text>
+              <Text accessibilityRole="header" style={styles.title}>{schoolGroup ? 'Gérer l’école' : 'Vie de classe'}</Text>
               <View style={styles.actions}>
-                <Button label="Enseignants" icon="people-outline" secondary busy={busy} onPress={() => setSchoolPage('directory')} />
-                <Button label="Autorisations photo" icon="shield-checkmark-outline" secondary busy={busy}
-                  onPress={() => setSchoolPage('photo-authorizations')} />
+                {subpages.map(({ id, icon, label }) => <Button key={id} label={label} icon={icon} secondary busy={busy}
+                  onPress={() => setSubpage(id)} />)}
               </View>
             </>}
-            {schoolPage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
-            {schoolPage === 'photo-authorizations' && <DirectionPhotoAuthorizations classes={desk.classes}
+            {schoolGroup && subpage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
+            {schoolGroup && subpage === 'photo-authorizations' && <DirectionPhotoAuthorizations classes={desk.classes}
               request={request} run={run} busy={busy} />}
+            {schoolGroup && subpage === 'banner' && <BannerSettings request={request} run={run} busy={busy} onSaved={replaceBanner} />}
+            {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
+              onReply={(target) => { setMessageDraft(target); setSubpage(null); setSection('messages'); }} />}
+            {classLifeGroup && subpage === 'blog' && <StaffBlog classes={desk.classes} request={request} onExpired={expireSession} />}
           </>}
           {section === 'agenda' && <StaffAgenda classes={desk.classes} isTeacher={isTeacher} request={request} run={run} busy={busy} />}
-          {isTeacher && section === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
-            onReply={(target) => { setMessageDraft(target); setSection('messages'); }} />}
-          {isTeacher && section === 'blog' && <StaffBlog classes={desk.classes} request={request} onExpired={expireSession} />}
           {section === 'messages' && <Messages role={role} classes={desk.classes} request={requestMessages} refreshUnread={unread.refresh}
             initialDraft={messageDraft}
             loadStudents={(id) => request('/classes/' + encodeURIComponent(id) + '/appointments/students')}
@@ -390,7 +404,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
   );
 
   return (
-    <AppFrame menu={menu} scrollKey={phase === 'desk' ? (schoolPage ?? section) : phase} busy={busy}
+    <AppFrame menu={menu} scrollKey={phase === 'desk' ? (subpage ?? section) : phase} busy={busy} banner={banner}
       onLogout={phase === 'desk' ? logout : undefined} wide>
       {panel}
       {spaceLinks}

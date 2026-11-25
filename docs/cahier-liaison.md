@@ -2,7 +2,7 @@
 
 ## Publier le mot du jour
 
-1. Connectez-vous à l’espace enseignant dans la web-app et ouvrez « Cahier de liaison ».
+1. Connectez-vous à l’espace enseignant dans la web-app et ouvrez « Vie de classe », puis « Cahier de liaison ».
 2. Choisissez une classe qui vous est affectée. Saisissez un texte de 1 000 caractères maximum, puis cliquez sur « Publier le mot ».
 3. Pour corriger le mot du jour, modifiez le texte et choisissez « Enregistrer les modifications ». Les réponses déjà reçues restent liées au mot.
 

@@ -2,7 +2,7 @@
 
 ## Préparer et publier un article
 
-1. Dans l’espace enseignant de la web-app, ouvrez « Blog de classe » et choisissez une classe qui vous est affectée.
+1. Dans l’espace enseignant de la web-app, ouvrez « Vie de classe », puis « Blog de classe », et choisissez une classe qui vous est affectée.
 2. Choisissez « Nouvel article ». Saisissez un titre de 120 caractères maximum. Le texte est facultatif si l’article contient des photos. Il peut contenir jusqu’à 8 000 caractères.
 3. Choisissez « Enregistrer le brouillon » pour reprendre la rédaction plus tard ou « Prévisualiser » pour enregistrer le texte et voir le rendu côté familles.
 4. Dans l’aperçu, choisissez « Publier cet article ». Le texte devient visible dans le fil de la classe.
