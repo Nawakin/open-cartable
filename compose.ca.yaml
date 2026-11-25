@@ -1,0 +1,9 @@
+services:
+  api:
+    build:
+      secrets:
+        - build_ca
+
+secrets:
+  build_ca:
+    file: '${OPEN_CARTABLE_BUILD_CA:?Indiquez le fichier PEM de votre autorité de certification}'

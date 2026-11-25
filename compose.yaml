@@ -1,0 +1,77 @@
+name: open-cartable
+services:
+  secrets:
+    image: node:24-bookworm-slim
+    command: ["node", "/generate-secrets.mjs"]
+    network_mode: none
+    volumes:
+      - ./deploy/generate-secrets.mjs:/generate-secrets.mjs:ro
+      - postgres-admin:/postgres-admin
+      - postgres-secrets:/postgres-secrets
+      - app-secrets:/app-secrets
+  postgres:
+    image: postgres:16-bookworm
+    depends_on:
+      secrets:
+        condition: service_completed_successfully
+    environment:
+      POSTGRES_DB: open_cartable
+      POSTGRES_PASSWORD_FILE: /run/postgres-admin/password
+      POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - postgres-admin:/run/postgres-admin:ro
+      - postgres-secrets:/run/postgres-secrets:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "postgres", "-d", "open_cartable"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  database-role:
+    image: postgres:16-bookworm
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-ec"]
+    command: ['export PGPASSWORD="$$(cat /run/postgres-admin/password)"; exec psql --no-password --set=ON_ERROR_STOP=1 --single-transaction --file=/create-db-role.sql']
+    environment:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGDATABASE: open_cartable
+    volumes:
+      - postgres-admin:/run/postgres-admin:ro
+      - ./deploy/create-db-role.sql:/create-db-role.sql:ro
+  api:
+    build: .
+    depends_on:
+      database-role:
+        condition: service_completed_successfully
+    environment:
+      PGHOST: postgres
+      PGUSER: open_cartable
+      PGDATABASE: open_cartable
+      PGPASSWORD_FILE: /run/postgres-secrets/password
+      AUTH_SIGNING_KEY_FILE: /run/app-secrets/signing-key
+      AUTH_INVITE_KEY_FILE: /run/app-secrets/invitation-key
+      INSTALLATION_TOKEN_FILE: /run/app-secrets/installation-token
+      OPEN_CARTABLE_AUTO_MIGRATE: "1"
+      OPEN_CARTABLE_HOST: 0.0.0.0
+      WEB_ORIGIN: "${OPEN_CARTABLE_ORIGIN:-http://127.0.0.1:${OPEN_CARTABLE_PORT:-3000}}"
+    ports:
+      - "127.0.0.1:${OPEN_CARTABLE_PORT:-3000}:3000"
+    volumes:
+      - postgres-secrets:/run/postgres-secrets:ro
+      - app-secrets:/run/app-secrets:ro
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  postgres-admin:
+  postgres-secrets:
+  app-secrets:

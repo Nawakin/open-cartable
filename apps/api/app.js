@@ -1,8 +1,9 @@
 import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import { parentRoutes } from './auth/parent-routes.js';
+import { installationRoutes } from './installation/setup.js';
 
-export function buildApp({ parentAuth, webRoot } = {}) {
+export function buildApp({ parentAuth, webRoot, installation } = {}) {
   const app = Fastify({
     trustProxy: false,
     bodyLimit: 64 * 1024,
@@ -14,6 +15,7 @@ export function buildApp({ parentAuth, webRoot } = {}) {
   if (parentAuth) {
     app.register(parentRoutes, { prefix: '/api/v1', ...parentAuth });
   }
+  if (installation) app.register(installationRoutes, { prefix: '/api/v1', ...installation });
   if (webRoot) {
     app.register(fastifyStatic, {
       root: webRoot,

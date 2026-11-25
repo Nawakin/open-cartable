@@ -1,12 +1,14 @@
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
+import { readSecret } from '../installation/secrets.js';
 
-export const migrations = ['001-parent-auth.sql', '002-browser-sessions.sql', '003-homework-entries.sql'];
+export const migrations = ['001-parent-auth.sql', '002-browser-sessions.sql', '003-homework-entries.sql', '004-school-name.sql'];
 
 export function openDatabase(connectionString) {
-  if (!connectionString) throw new Error('DATABASE_URL est requise.');
+  const password = connectionString ? undefined : readSecret(process.env, 'PGPASSWORD');
+  if (!connectionString && (!password || !process.env.PGHOST)) throw new Error('La connexion PostgreSQL doit être configurée.');
   return new pg.Pool({
-    connectionString,
+    ...(connectionString ? { connectionString } : { password }),
     connectionTimeoutMillis: 3000,
     statement_timeout: 5000,
     max: 10,

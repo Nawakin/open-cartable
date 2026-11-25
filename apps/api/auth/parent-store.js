@@ -22,11 +22,20 @@ async function lockActiveGuardian(client, schoolId, guardianId) {
   return result.rowCount === 1;
 }
 
+export async function insertParentInvitation(client, invitationKey, { schoolCode, schoolId, guardianId }) {
+  const code = generateInvitationCode();
+  const digest = invitationDigest(invitationKey, schoolCode, code);
+  const result = await client.query(`
+    INSERT INTO parent_invitations (digest, school_id, guardian_id, expires_at)
+    VALUES ($1, $2, $3, statement_timestamp() + interval '7 days')
+    RETURNING expires_at
+  `, [digest, schoolId, guardianId]);
+  return { code, expiresAt: result.rows[0].expires_at };
+}
+
 export function createParentStore(pool, invitationKey) {
   return {
     async invite(schoolCode, guardianId, replaceSessions = false) {
-      const code = generateInvitationCode();
-      const digest = invitationDigest(invitationKey, schoolCode, code);
       return transaction(pool, async (client) => {
         const school = await client.query('SELECT id FROM schools WHERE code = $1', [schoolCode]);
         const schoolId = school.rows[0]?.id;
@@ -42,12 +51,7 @@ export function createParentStore(pool, invitationKey) {
             WHERE school_id = $1 AND guardian_id = $2 AND revoked_at IS NULL
           `, [schoolId, guardianId]);
         }
-        const result = await client.query(`
-          INSERT INTO parent_invitations (digest, school_id, guardian_id, expires_at)
-          VALUES ($1, $2, $3, statement_timestamp() + interval '7 days')
-          RETURNING expires_at
-        `, [digest, schoolId, guardianId]);
-        return { code, expiresAt: result.rows[0].expires_at };
+        return insertParentInvitation(client, invitationKey, { schoolCode, schoolId, guardianId });
       });
     },
 

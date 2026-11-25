@@ -4,6 +4,16 @@ ENT libre et auto-hébergé pour le premier degré, sous licence GPLv3.
 Le dépôt contient le socle de développement Expo/React Native et Fastify.
 Il peut être utilisé avec des données fictives uniquement.
 
+## Installation
+
+Installez Docker avec Compose, puis ouvrez le lanceur de votre système. Open Cartable démarre le serveur et l’application web. L’assistant crée la première école dans le navigateur.
+
+- Windows · `Installer-Windows.cmd`
+- macOS · `Installer.command`
+- Linux · `./installer.sh`
+
+Le [tutoriel d’installation](docs/installation.md) couvre la configuration initiale, la web-app, l’accès mobile et les mises à jour.
+
 ## Développement
 
 Utiliser Node.js 24 et npm. Depuis la racine du dépôt :

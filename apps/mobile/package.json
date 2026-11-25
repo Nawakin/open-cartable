@@ -3,8 +3,9 @@
   "private": true,
   "main": "index.js",
   "scripts": {
-    "dev": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo start --localhost",
-    "build:web": "EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo export --platform web --max-workers 2"
+    "dev": "node run-expo.mjs start --localhost",
+    "build:web": "node run-expo.mjs export --platform web --max-workers 2",
+    "dev:lan": "node run-expo.mjs start --lan"
   },
   "dependencies": {
     "@expo/metro-runtime": "6.1.2",

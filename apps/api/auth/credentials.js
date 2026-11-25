@@ -1,5 +1,6 @@
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { jwtVerify, SignJWT } from 'jose';
+import { readSecret } from '../installation/secrets.js';
 
 const issuer = 'open-cartable';
 const audience = 'open-cartable-parent-api';
@@ -12,7 +13,7 @@ export const refreshTokenPattern = /^[A-Za-z0-9_-]{43}$/;
 export const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function readKey(env, name) {
-  const value = env[name];
+  const value = readSecret(env, name);
   if (typeof value !== 'string' || !/^[0-9a-fA-F]{64}$/.test(value)) {
     throw new Error(`${name} doit être une clé de 32 octets encodée en hexadécimal.`);
   }

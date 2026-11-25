@@ -6,9 +6,11 @@ import { errorMessage, parseSchoolAddress } from './parent/http';
 import { listChildren, listHomework, needsSchoolAddress, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
+import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
 
 function ParentApp() {
   const [phase, setPhase] = useState('loading');
+  const [installationToken, setInstallationToken] = useState(consumeInstallationLink);
   const [children, setChildren] = useState([]);
   const [notebook, setNotebook] = useState(null);
   const [address, setAddress] = useState('');
@@ -52,6 +54,21 @@ function ParentApp() {
     }
   }
 
+  async function initialize() {
+    setPhase('loading');
+    try {
+      if (await needsInstallation()) {
+        setPhase('setup');
+        return;
+      }
+    } catch (failure) {
+      setPhase('unavailable');
+      throw failure;
+    }
+    setInstallationToken('');
+    await load();
+  }
+
   async function loadNotebook(selection, append = false) {
     if (!append) {
       setNotebook({ ...selection, entries: [], nextCursor: null });
@@ -89,7 +106,7 @@ function ParentApp() {
   }
 
   useEffect(() => {
-    void run(load);
+    void run(initialize);
   }, []);
 
   useEffect(() => {
@@ -143,6 +160,15 @@ function ParentApp() {
               <ActivityIndicator accessibilityLabel="Chargement" color="#225344" />
               <Text style={styles.body}>Chargement de votre espace…</Text>
             </View>
+          )}
+
+          {phase === 'setup' && (
+            <FirstRun token={installationToken} onComplete={(result) => {
+              setInstallationToken('');
+              setSchool(result?.schoolCode ?? '');
+              setInvitation(result?.code ?? '');
+              setPhase('login');
+            }} />
           )}
 
           {phase === 'login' && (
@@ -221,7 +247,7 @@ function ParentApp() {
               <Text accessibilityRole="header" style={styles.title}>Votre espace est indisponible</Text>
               {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
               <View style={styles.actions}>
-                <Button label="Réessayer" busy={busy} onPress={() => void run(load)} />
+                <Button label="Réessayer" busy={busy} onPress={() => void run(initialize)} />
                 <Button label="Se déconnecter" busy={busy} onPress={logout} secondary />
               </View>
             </View>

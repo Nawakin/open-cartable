@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url';
 import { buildApp } from './app.js';
 import { readAuthKeys } from './auth/credentials.js';
 import { createParentStore } from './auth/parent-store.js';
-import { migrations, openDatabase } from './db/database.js';
+import { migrate, migrations, openDatabase } from './db/database.js';
+import { readSecret } from './installation/secrets.js';
 
 function readWebOrigin(value) {
   const url = URL.parse(value);
@@ -20,26 +21,34 @@ try {
   const env = process.env;
   let parentAuth;
   let webRoot;
+  let installation;
+  const token = readSecret(env, 'INSTALLATION_TOKEN');
   const webOrigin = env.WEB_ORIGIN === undefined ? undefined : readWebOrigin(env.WEB_ORIGIN);
+  if (token !== undefined && (!webOrigin || !/^[0-9a-f]{64}$/.test(token))) {
+    throw new Error('La configuration de l’installation web est invalide.');
+  }
   if (webOrigin) {
     webRoot = fileURLToPath(new URL('../mobile/dist/', import.meta.url));
     await access(new URL('../mobile/dist/index.html', import.meta.url)).catch(() => {
       throw new Error('L’export web est absent. Exécuter npm run build:web.');
     });
   }
-  if ([env.DATABASE_URL, env.AUTH_SIGNING_KEY, env.AUTH_INVITE_KEY, webOrigin].some((value) => value !== undefined)) {
+  if ([env.DATABASE_URL, env.PGPASSWORD_FILE, env.AUTH_SIGNING_KEY, env.AUTH_SIGNING_KEY_FILE,
+    env.AUTH_INVITE_KEY, env.AUTH_INVITE_KEY_FILE, webOrigin].some((value) => value !== undefined)) {
     const { signingKey, invitationKey } = readAuthKeys(env);
     pool = openDatabase(env.DATABASE_URL);
     pool.on('error', () => console.error('Une connexion PostgreSQL inactive a été interrompue.'));
+    if (env.OPEN_CARTABLE_AUTO_MIGRATE === '1') await migrate(pool);
     const requiredMigrations = webOrigin ? migrations : migrations.filter((name) => name !== '002-browser-sessions.sql');
     const schema = await pool.query('SELECT 1 FROM schema_migrations WHERE name = ANY($1::text[])', [requiredMigrations])
       .catch(() => null);
     if (schema?.rowCount !== requiredMigrations.length) throw new Error('PostgreSQL est inaccessible ou des migrations doivent être exécutées.');
     parentAuth = { signingKey, store: createParentStore(pool, invitationKey), webOrigin };
+    if (token) installation = { pool, token, invitationKey, webOrigin };
   }
-  const app = buildApp({ parentAuth, webRoot });
+  const app = buildApp({ parentAuth, webRoot, installation });
   if (pool) app.addHook('onClose', async () => pool.end());
-  const address = await app.listen({ host: '127.0.0.1', port: 3000 });
+  const address = await app.listen({ host: env.OPEN_CARTABLE_HOST ?? '127.0.0.1', port: 3000 });
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, async () => {
       try {
