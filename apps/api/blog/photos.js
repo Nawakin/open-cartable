@@ -33,11 +33,22 @@ export function gallerySummary(publicFeed, limit = 2) {
   `;
 }
 
-export function hasPublicPhoto(alias) {
+export function hasPublicPhoto(alias, verifiedOnly = false) {
   return `EXISTS (
     SELECT 1 FROM class_blog_photos p
     WHERE (p.school_id, p.article_id) = (${alias}.school_id, ${alias}.id) AND ${active} AND ${canShowPhoto}
+      ${verifiedOnly ? "AND p.review_basis <> 'legacy'" : ''}
   )`;
+}
+
+export function exportGallery() {
+  return `COALESCE((
+    SELECT json_agg(json_build_object('id', p.id, 'description', p.description,
+      'fullBytes', octet_length(p.full_data), 'thumbBytes', octet_length(p.thumbnail_data)) ORDER BY ${order})
+    FROM class_blog_photos p
+    WHERE (p.school_id, p.article_id) = (a.school_id, a.id) AND ${active} AND ${canShowPhoto}
+      AND p.review_basis <> 'legacy'
+  ), '[]'::json)`;
 }
 
 export async function listPhotos(db, [schoolId, , articleId]) {

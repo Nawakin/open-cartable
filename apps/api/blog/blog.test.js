@@ -165,8 +165,9 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     assert.equal((await upload(image, { origin })).statusCode, 401);
     assert.equal((await upload(image, b.headers)).statusCode, 404);
     assert.equal((await upload(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).statusCode, 415);
-    for (let index = 0; index < 3; index += 1) {
-      const uploaded = await upload(image);
+    const otherImage = await sharp({ create: { width: 800, height: 500, channels: 3, background: '#b26739' } }).jpeg().toBuffer();
+    for (const bytes of [image, otherImage, otherImage]) {
+      const uploaded = await upload(bytes);
       assert.equal(uploaded.statusCode, 201);
       article = uploaded.json();
     }
@@ -225,6 +226,42 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     assert.equal(stored.full_data.length, file.rawPayload.length + 28);
     assert.ok(!stored.full_data.subarray(28).equals(file.rawPayload));
 
+    const { rows: [{ year, month }] } = await pool.query(`
+      SELECT date_part('year', local_date)::integer - (date_part('month', local_date) < 9)::integer AS year,
+        to_char(local_date, 'YYYY-MM') AS month
+      FROM (SELECT $1::timestamptz AT TIME ZONE 'Europe/Paris' AS local_date) stamp
+    `, [article.publishedAt]);
+    const exportPath = '/direction/classes/' + classA.id + '/blog-export';
+    const previewPath = exportPath + '?year=' + year + '&month=' + month;
+    const pdfPath = exportPath + '/pdf?year=' + year + '&month=' + month;
+    assert.equal((await call('GET', previewPath, a.headers)).statusCode, 401);
+    assert.equal((await call('GET', exportPath + '?year=' + year + '&month=' + (year + 1) + '-09', direction)).statusCode, 400);
+    assert.equal((await call('POST', pdfPath, { ...direction, origin: 'https://ailleurs.example' })).statusCode, 403);
+    assert.equal((await call('GET', previewPath, otherDirection)).json().articleCount, 0);
+    assert.equal((await call('POST', pdfPath, otherDirection)).statusCode, 422);
+    const draftExport = await call('POST', classPath, a.headers, { title: 'Brouillon exclu du PDF', body: 'Texte fictif.' });
+    assert.equal(draftExport.statusCode, 201);
+    const { rows: [boundary] } = await pool.query(`
+      INSERT INTO class_blog_articles (school_id, id, class_id, title, body, updated_at, published_at)
+      VALUES ($1, gen_random_uuid(), $2, 'Publication de la rentrée', 'Texte fictif.', now(),
+        ($3::date::timestamp AT TIME ZONE 'Europe/Paris') - interval '1 minute') RETURNING id
+    `, [schoolId, classA.id, year + '-09-01']);
+    const annual = await call('GET', exportPath + '?year=' + year, direction);
+    assert.equal(annual.statusCode, 200);
+    assert.equal(annual.headers['cache-control'], 'no-store');
+    assert.deepEqual(annual.json().articles.map(({ id }) => id), [article.id]);
+    await pool.query(`
+      UPDATE class_blog_articles SET published_at = $1::date::timestamp AT TIME ZONE 'Europe/Paris'
+      WHERE id = $2
+    `, [year + '-09-01', boundary.id]);
+    const fromSeptember = await call('GET', exportPath + '?year=' + year, direction);
+    assert.deepEqual(fromSeptember.json().articles.map(({ id }) => id), [boundary.id, article.id]);
+    await pool.query('DELETE FROM class_blog_articles WHERE id = $1', [boundary.id]);
+    await pool.query("UPDATE class_blog_photos SET review_basis = 'legacy' WHERE id = $1", [otherPhoto.id]);
+    assert.equal((await call('GET', previewPath, direction)).json().photoCount, 2);
+    await pool.query("UPDATE class_blog_photos SET review_basis = 'none' WHERE id = $1", [otherPhoto.id]);
+    assert.equal((await call('GET', previewPath, direction)).json().photoCount, 3);
+
     assert.equal((await setConsent('refused', null)).statusCode, 409);
     const withdrawal = await setConsent('refused', granted.revision);
     assert.equal(withdrawal.statusCode, 200);
@@ -233,6 +270,15 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     const familyGallery = (await call('GET', familyURL, family)).json();
     assert.equal(familyGallery.photoCount, 2);
     assert.equal(familyGallery.photos.some(({ id }) => id === firstPhoto.id), false);
+    const afterWithdrawal = await call('POST', pdfPath, direction);
+    assert.equal(afterWithdrawal.statusCode, 200);
+    assert.equal(afterWithdrawal.headers['content-type'], 'application/pdf');
+    assert.equal(afterWithdrawal.headers['cache-control'], 'no-store');
+    assert.equal(afterWithdrawal.headers['x-content-type-options'], 'nosniff');
+    assert.equal(afterWithdrawal.headers['content-disposition'], `attachment; filename="blog-${month}.pdf"`);
+    assert.ok(afterWithdrawal.rawPayload.subarray(0, 5).equals(Buffer.from('%PDF-')));
+    assert.equal((afterWithdrawal.rawPayload.toString('latin1').match(/\/Subtype \/Image\b/g) ?? []).length, 2);
+    assert.ok(!afterWithdrawal.rawPayload.includes(thumb.rawPayload));
     assert.equal((await setConsent('allowed', withdrawal.json().revision)).statusCode, 200);
     assert.equal((await call('GET', photoURL, family)).statusCode, 404);
 
@@ -284,6 +330,10 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     assert.equal((await setPublished(true)).statusCode, 200);
     const publicReplacement = familyURL + '/photos/' + edited.id;
     assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+    const maskedExport = await call('POST', pdfPath, direction);
+    assert.equal(maskedExport.statusCode, 200);
+    assert.equal((maskedExport.rawPayload.toString('latin1').match(/\/Subtype \/Image\b/g) ?? []).length, 3);
+    assert.ok(!maskedExport.rawPayload.includes(thumb.rawPayload));
     for (const [size, expectedHeight] of [['full', 800], ['thumb', 560]]) {
       const masked = await call('GET', publicReplacement + '?size=' + size, family);
       assert.equal(masked.statusCode, 200);
@@ -297,6 +347,7 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
       assert.deepEqual(pixel(0.5, 0.5), [0, 0, 0]);
       assert.deepEqual(pixel(0.23, 0.18), [0, 0, 0]);
       assert.ok(pixel(0.1, 0.1)[1] > 65);
+      if (size === 'thumb') assert.ok(maskedExport.rawPayload.includes(masked.rawPayload));
     }
     await pool.query("UPDATE class_blog_photos SET expires_at = statement_timestamp() - interval '1 minute' WHERE article_id = $1", [article.id]);
     assert.equal((await call('GET', publicReplacement, family)).statusCode, 404);

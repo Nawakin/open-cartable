@@ -1,6 +1,6 @@
 # Clôture de l’année scolaire
 
-Le brouillon de rentrée est disponible dans « École → Clôture d’année », côté direction. L’export PDF, l’archivage et la bascule figurent dans les étapes suivantes de la v0.3.
+Le brouillon de rentrée et l’export PDF du blog sont disponibles dans « École → Clôture d’année », côté direction. L’archivage dans l’ENT et la bascule figurent dans les étapes suivantes de la v0.3.
 
 ## Préparer la rentrée
 
@@ -13,9 +13,11 @@ Les décisions s’enregistrent dans le brouillon. Les élèves restent dans leu
 
 ## Exporter le blog en PDF
 
-Dans le parcours prévu, la direction choisit une année et une classe. L’aperçu liste les articles publiés et les photos qui peuvent figurer dans l’export. Le PDF, généré sur le serveur de l’école, reprend le nom de la classe et l’année en couverture, puis les articles dans l’ordre chronologique avec leur date, leur texte, leur photo de couverture et leur galerie.
+1. Dans « École → Clôture d’année », ouvrez « PDF du blog » et choisissez la classe. Saisissez l’année de début. L’année scolaire va du 1ᵉʳ septembre au 1ᵉʳ septembre suivant, à l’heure de Paris. Choisissez un mois pour produire un volume plus court.
+2. Cliquez sur « Afficher l’aperçu ». Vérifiez les titres et le nombre de photos retenues. L’aperçu montre les 20 premiers articles et indique le nombre total. Le PDF reprend tous les articles de la période sélectionnée, dans la limite de 300 articles et 48 Mio de photos par fichier. Au-delà, téléchargez le blog par mois.
+3. Cliquez sur « Télécharger le PDF ». Le serveur de l’école produit un document A4 avec une couverture de classe, les articles par ordre de publication, leurs dates, leurs textes et leurs galeries. Le texte latin est sélectionnable.
 
-Le serveur applique les règles de visibilité et d’autorisation photo en vigueur à la génération et au téléchargement. Un changement de visibilité invalide le fichier préparé et déclenche son recalcul à la demande. Le PDF contient les images publiées encore autorisées, avec les masques déjà appliqués. Les aperçus et téléchargements exigent une session direction de la même école. Les copies téléchargées suivent la politique de conservation de l’école.
+Le serveur vérifie les autorisations photo au moment du téléchargement et à la fin de la génération. Si les droits changent pendant la génération, affichez de nouveau l’aperçu et relancez le téléchargement. Le PDF reprend les photos admissibles, avec les masques appliqués. Les anciennes photos vérifiées avant le registre nécessitent une nouvelle vérification avant de figurer dans l’export. Les aperçus et téléchargements exigent une session direction de la même école. Les copies téléchargées suivent la politique de conservation de l’école.
 
 ## Ouvrir la nouvelle année
 

@@ -8,6 +8,7 @@ import { registerDirectionPhotoAuthorizations } from '../photo-authorizations/ro
 import { registerSchoolBanner } from '../school-banner/routes.js';
 import { registerDirectionAttendance } from '../attendance/routes.js';
 import { registerYearTransition } from '../year-transition/routes.js';
+import { registerBlogExport } from '../blog/export-routes.js';
 import { createTeacher, deleteTeacher, listTeachers, resetTeacher, teacherLoginPattern, updateTeacherClasses } from '../teacher/store.js';
 import { directionSessionSeconds, signInDirection, signOutDirection, withDirectionSession } from './store.js';
 
@@ -15,7 +16,7 @@ const cookieName = '__Host-open-cartable-direction';
 const teacherParams = uuidParams('teacherId');
 const classIds = { type: 'array', maxItems: 100, uniqueItems: true, items: { type: 'string', pattern: uuidPattern.source } };
 
-export async function directionRoutes(app, { pool, webOrigin }) {
+export async function directionRoutes(app, { pool, webOrigin, blogMediaKey }) {
   const { tokenFor, authenticated } = await registerStaffWeb(app, {
     webOrigin, cookieName, withSession: (token, operation) => withDirectionSession(pool, token, operation),
   });
@@ -57,6 +58,7 @@ export async function directionRoutes(app, { pool, webOrigin }) {
   registerSchoolBanner(app, '/direction', authenticated);
   registerDirectionAttendance(app, authenticated);
   registerYearTransition(app, authenticated);
+  registerBlogExport(app, authenticated, blogMediaKey);
 
   app.get('/direction/teachers', authenticated(async (_request, db, actor) => ({
     teachers: await listTeachers(db, actor.school_id),

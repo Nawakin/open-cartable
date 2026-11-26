@@ -19,7 +19,7 @@ export function buildApp({ parentAuth, webRoot, installation, direction, blogMed
   }
   if (installation) app.register(installationRoutes, { prefix: '/api/v1', ...installation });
   if (direction) {
-    app.register(directionRoutes, { prefix: '/api/v1', ...direction });
+    app.register(directionRoutes, { prefix: '/api/v1', ...direction, blogMediaKey });
     app.register(teacherRoutes, { prefix: '/api/v1', ...direction, blogMediaKey });
   }
   if (webRoot) {

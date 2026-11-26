@@ -3,15 +3,17 @@ import { Text, View } from 'react-native';
 import { Button, Field, styles } from '../parent/ui';
 import { ClassesForNextYear } from './classes';
 import { Passages } from './passages';
+import { BlogExport } from './blog-export';
 import { layout } from './ui';
 
 const path = '/year-transition';
 const emptyDraft = { revision: null, classes: [], sourceLevels: [], overrides: [], assignments: [] };
 const uiYear = (year) => year + '–' + (year + 1);
 
-export function YearTransition({ request, onExpired }) {
+export function YearTransition({ classes, request, onExpired }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState('classes');
+  const [exporting, setExporting] = useState(false);
   const [year, setYear] = useState('');
   const [editingYear, setEditingYear] = useState(false);
   const [notice, setNotice] = useState('');
@@ -63,11 +65,18 @@ export function YearTransition({ request, onExpired }) {
   return <View style={layout.group}>
     <Text accessibilityRole="header" style={styles.title}>Clôture d’année</Text>
     {busy && !data && <Text style={styles.body}>Chargement de la préparation…</Text>}
-    {error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-    {error && <View style={styles.actions}><Button label="Actualiser" icon="refresh-outline" busy={busy} secondary onPress={load} /></View>}
-    {notice && <Text accessibilityLiveRegion="polite" style={styles.label}>{notice}</Text>}
+    {!exporting && error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+    {!exporting && error && <View style={styles.actions}><Button label="Actualiser" icon="refresh-outline" busy={busy} secondary onPress={load} /></View>}
+    {!exporting && notice && <Text accessibilityLiveRegion="polite" style={styles.label}>{notice}</Text>}
     {data && <>
-      {(!plan || editingYear) ? <View style={layout.card}>
+      <View style={styles.actions}>
+        <Button label="Préparation" icon="calendar-outline" selected={!exporting} secondary={exporting}
+          busy={busy} onPress={() => setExporting(false)} />
+        <Button label="PDF du blog" icon="document-outline" selected={exporting} secondary={!exporting}
+          busy={busy} onPress={() => setExporting(true)} />
+      </View>
+      {exporting ? <BlogExport classes={classes} startYear={plan?.startYear ?? data.suggestedStartYear}
+        request={request} onExpired={onExpired} /> : (!plan || editingYear) ? <View style={layout.card}>
         <Field label="Année de début à clôturer" value={year} maxLength={4} keyboardType="number-pad" editable={!busy}
           onChangeText={setYear} />
         {validYear && <Text style={styles.body}>Année à clôturer {uiYear(Number(year))} · Rentrée {uiYear(Number(year) + 1)}</Text>}

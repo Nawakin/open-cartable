@@ -342,7 +342,8 @@ export function Staff({ role, onParent, onOtherStaff }) {
               request={request} run={run} busy={busy} />}
             {schoolGroup && subpage === 'banner' && <BannerSettings request={request} run={run} busy={busy} onSaved={replaceBanner} />}
             {schoolGroup && subpage === 'attendance' && <DirectionAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
-            {schoolGroup && subpage === 'year-transition' && <YearTransition request={request} onExpired={expireSession} />}
+            {schoolGroup && subpage === 'year-transition' && <YearTransition classes={desk.classes}
+              request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
               onReply={(target) => { setMessageDraft(target); setSubpage(null); setSection('messages'); }} />}

@@ -117,6 +117,10 @@ Pour vérifier le registre avec les données fictives de l’assistant, ouvrez �
 2. Ajoutez une classe de rentrée de niveau « CE2 ». Dans « Passages », enregistrez « CE1 » comme niveau de la classe fictive actuelle.
 3. Ouvrez la ligne de l’élève fictif et validez la proposition. Revenez dans « Classes » pour vérifier le compteur de décisions validées. [Guide de la clôture d’année](cloture-annee.md)
 
+### Télécharger le blog fictif en PDF
+
+Après avoir publié l’article de démonstration, ouvrez « École → Clôture d’année → PDF du blog » dans l’espace direction. Choisissez sa classe, affichez l’aperçu et téléchargez le PDF. Ouvrez le fichier pour contrôler la couverture, le texte et les photos. [Guide de l’export](cloture-annee.md#exporter-le-blog-en-pdf)
+
 ### Générer une invitation supplémentaire
 
 ```sh
