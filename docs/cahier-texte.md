@@ -33,4 +33,4 @@ La date doit être réelle et au format `AAAA-MM-JJ`. Le titre, le domaine et la
 
 La réponse contient `child` avec la classe actuelle, `entries` et `nextCursor`. Chaque entrée comporte `id`, `date`, `title`, `domain` et `description`. Le serveur vérifie la session et le rattachement actuel du tuteur à l’enfant dans la même requête que la lecture des entrées. L’accès à un enfant hors périmètre renvoie `404`, comme pour un identifiant inconnu. Les réponses portent `Cache-Control: no-store`.
 
-Les pièces jointes, les notifications et l’archivage annuel restent à développer.
+Les pièces jointes, les notifications et l’archivage annuel restent à développer. [Clôture de l’année scolaire](cloture-annee.md)
