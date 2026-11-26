@@ -1,4 +1,5 @@
 import { uuidPattern } from '../auth/credentials.js';
+import { lockActiveClass } from '../auth/class-access.js';
 import { uuidParams } from '../auth/staff-web.js';
 import { createAppointment, deleteAppointment, listAppointments, listAppointmentStudents, updateAppointment } from './appointments.js';
 import { createEvent, deleteEvent, listStaffEvents, readEvent, updateEvent } from './events.js';
@@ -21,11 +22,7 @@ export function registerStaffAgenda(app, prefix, authenticated, canAccessClass) 
     return authenticated(async (request, db, actor) => {
       const classId = request.params?.classId ?? null;
       if (canAccessClass && (!classId || !await canAccessClass(db, actor, classId))) return null;
-      if (classId) {
-        const current = await db.query('SELECT 1 FROM classes WHERE school_id = $1 AND id = $2 FOR SHARE',
-          [actor.school_id, classId]);
-        if (!current.rowCount) return null;
-      }
+      if (classId && !await lockActiveClass(db, actor.school_id, classId)) return null;
       return operation(request, db, actor, classId);
     }, status);
   }

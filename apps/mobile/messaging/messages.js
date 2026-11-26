@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { downloadDocument, encodedFile, FileButton } from '../files/documents';
 import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Field, styles } from '../parent/ui';
@@ -51,6 +52,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
   const [guardianReference, setGuardianReference] = useState(initialDraft?.guardianReference ?? '');
   const [subject, setSubject] = useState(initialDraft?.subject ?? '');
   const [body, setBody] = useState('');
+  const [attachment, setAttachment] = useState(null);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [notice, setNotice] = useState('');
@@ -72,6 +74,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
         if (error.status === 404 && view.kind === 'thread') {
           setThread(null);
           setBody('');
+          setAttachment(null);
         }
         setProblem(messageError(error, sending));
       }
@@ -100,6 +103,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
     setView({ kind: 'thread', id });
     setThread(null);
     setBody('');
+    setAttachment(null);
     void run(() => loadThread(id));
   }
 
@@ -108,6 +112,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
     setThread(null);
     setSubject('');
     setBody('');
+    setAttachment(null);
     void run(() => loadInbox());
   }
 
@@ -120,6 +125,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
     setGuardianReference('');
     setSubject('');
     setBody('');
+    setAttachment(null);
     setNotice('');
     setProblem('');
     setView({ kind: 'compose' });
@@ -151,19 +157,21 @@ export function Messages({ request, role = 'parent', children = [], classes = []
   }
 
   const reference = guardianReference.trim().toLowerCase();
-  const readyToCompose = Boolean(childId && subject.trim() && body.trim()
+  const readyToCompose = Boolean(childId && subject.trim() && (body.trim() || attachment)
     && (isParent ? recipient : tutorReferencePattern.test(reference)));
 
   function send() {
-    if (!body.trim()) return;
+    if (!body.trim() && !attachment) return;
     if (view.kind === 'compose' && !readyToCompose) return;
     void run(async () => {
+      const content = { body: body.trim() || 'Pièce jointe', ...(attachment ? { document: await encodedFile(attachment) } : {}) };
       if (view.kind === 'compose') {
-        const draft = { childId, subject, body };
+        const draft = { childId, subject, ...content };
         if (isTeacher) draft.guardianReference = reference;
         else if (recipient !== 'direction') draft.teacherId = recipient;
         const { id } = await request(collection, { method: 'POST', body: draft });
         setBody('');
+        setAttachment(null);
         setSubject('');
         setGuardianReference('');
         setNotice('Message envoyé.');
@@ -172,7 +180,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
         return;
       }
       try {
-        await request(conversationPath(view.id), { method: 'POST', body: { body } });
+        await request(conversationPath(view.id), { method: 'POST', body: content });
       } catch (error) {
         if (error.status !== 404 || !isParent || thread.conversation.channel !== 'teacher') throw error;
         await loadThread(view.id);
@@ -180,6 +188,7 @@ export function Messages({ request, role = 'parent', children = [], classes = []
         return;
       }
       setBody('');
+      setAttachment(null);
       setNotice('Message envoyé.');
       await loadThread(view.id);
     }, { sending: true });
@@ -218,8 +227,15 @@ export function Messages({ request, role = 'parent', children = [], classes = []
   const { conversations, nextCursor } = inbox ?? emptyInbox;
   const composing = view.kind === 'compose';
   const messageField = (
-    <Field label={composing ? 'Message' : 'Votre réponse'} value={body} onChangeText={setBody}
-      maxLength={4000} multiline editable={!busy} style={[styles.input, ui.messageInput]} />
+    <>
+      <Field label={composing ? 'Message' : 'Votre réponse'} value={body} onChangeText={setBody}
+        maxLength={4000} multiline editable={!busy} style={[styles.input, ui.messageInput]} />
+      <View style={styles.actions}>
+        <FileButton label={attachment ? 'Remplacer la pièce jointe' : 'Joindre un document'} busy={busy} onFile={setAttachment} />
+        {attachment && <Button label="Retirer la pièce jointe" secondary busy={busy} onPress={() => setAttachment(null)} />}
+      </View>
+      {attachment && <Text style={styles.body}>{attachment.name}</Text>}
+    </>
   );
 
   return (
@@ -339,13 +355,18 @@ export function Messages({ request, role = 'parent', children = [], classes = []
             <View key={entry.id} style={[ui.bubble, own && ui.ownBubble]}>
               <Text style={styles.label}>{own ? 'Vous' : (isParent ? contactLabel(thread.conversation) : 'Tuteur')}</Text>
               <Text selectable style={[styles.body, ui.text]}>{entry.body}</Text>
+              {entry.hasDocument && typeof document !== 'undefined' && <Button label="Télécharger la pièce jointe"
+                icon="download-outline" secondary busy={busy} onPress={() => void run(async () => {
+                  const url = conversationPath(view.id) + '/' + entry.id + '/document';
+                  downloadDocument(await request(url, { responseType: 'attachment' }), 'message-' + entry.id);
+                })} />}
               <Text style={ui.date}>{dateLabel.format(new Date(entry.sentAt))}</Text>
             </View>
           );
         })}
         {thread.conversation.canReply ? <>
           {messageField}
-          <Button label="Envoyer la réponse" icon="send-outline" busy={busy || !body.trim()} onPress={send} />
+          <Button label="Envoyer la réponse" icon="send-outline" busy={busy || (!body.trim() && !attachment)} onPress={send} />
         </> : <Text style={styles.body}>Cet enseignant n’est plus joignable pour cet élève. L’historique reste consultable.</Text>}
       </>}
     </View>

@@ -7,7 +7,12 @@ import { registerDirectionMessages } from '../messaging/routes.js';
 import { registerDirectionPhotoAuthorizations } from '../photo-authorizations/routes.js';
 import { registerSchoolBanner } from '../school-banner/routes.js';
 import { registerDirectionAttendance } from '../attendance/routes.js';
+import { registerDirectionJustifications } from '../attendance/justifications.js';
+import { registerDirectionReports } from '../school-reports/routes.js';
+import { registerHomeworkAttachments } from '../homework/attachments.js';
+import { registerStaffMedia } from '../files/class-media.js';
 import { registerYearTransition } from '../year-transition/routes.js';
+import { registerSchoolDirectory } from './directory.js';
 import { registerBlogExport } from '../blog/export-routes.js';
 import { registerDirectionSecurity } from './security-routes.js';
 import { authenticatorCode } from './totp.js';
@@ -18,7 +23,7 @@ const cookieName = '__Host-open-cartable-direction';
 const teacherParams = uuidParams('teacherId');
 const classIds = { type: 'array', maxItems: 100, uniqueItems: true, items: { type: 'string', pattern: uuidPattern.source } };
 
-export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mailer, totpKey }) {
+export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mailer, totpKey, invitationKey, classMediaQuota }) {
   const { tokenFor, authenticated } = await registerStaffWeb(app, {
     webOrigin, cookieName, withSession: (token, operation, options) => withDirectionSession(pool, token, operation, options),
   });
@@ -51,17 +56,23 @@ export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mail
   });
 
   app.get('/direction/classes', authenticated(async (_request, db, school) => {
-    const { rows } = await db.query('SELECT id, name FROM classes WHERE school_id = $1 ORDER BY name, id', [school.school_id]);
+    const { rows } = await db.query('SELECT id, name FROM classes WHERE school_id = $1 AND archived_year IS NULL ORDER BY name, id',
+      [school.school_id]);
     return { schoolName: school.school_name ?? school.school_code, classes: rows };
   }));
 
   registerStaffHomework(app, '/direction', authenticated);
   registerStaffAgenda(app, '/direction', authenticated);
-  registerDirectionMessages(app, authenticated);
+  registerDirectionMessages(app, authenticated, blogMediaKey);
+  registerHomeworkAttachments(app, '/direction', authenticated, blogMediaKey);
+  registerStaffMedia(app, '/direction', authenticated, blogMediaKey, classMediaQuota);
   registerDirectionPhotoAuthorizations(app, authenticated);
   registerSchoolBanner(app, '/direction', authenticated);
   registerDirectionAttendance(app, authenticated);
+  registerDirectionJustifications(app, authenticated, blogMediaKey);
+  registerDirectionReports(app, authenticated);
   registerYearTransition(app, authenticated);
+  registerSchoolDirectory(app, authenticated, invitationKey);
   registerBlogExport(app, authenticated, blogMediaKey);
   registerDirectionSecurity(app, { pool, tokenFor, authenticated, mailer, totpKey, cookieName });
 

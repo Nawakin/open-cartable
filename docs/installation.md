@@ -142,13 +142,15 @@ Pour vérifier le registre avec les données fictives de l’assistant, ouvrez �
 
 1. Dans l’espace enseignant, ouvrez « Vie de classe », puis « Faire l’appel ». Ouvrez la ligne de l’élève fictif, choisissez « Absent » et enregistrez l’appel.
 2. Dans l’espace parent, ouvrez « Absences » sous son nom et vérifiez que l’absence est affichée.
-3. Dans l’espace direction, ouvrez « École », puis « Suivi des absences ». Ouvrez la ligne de l’élève et marquez son absence comme justifiée. Actualisez l’historique parent pour voir la nouvelle mention. [Guide de l’appel et des absences](absences.md)
+3. Cliquez sur « Envoyer un justificatif » et sélectionnez un PDF fictif ou une photo sans donnée personnelle.
+4. Dans l’espace direction, ouvrez « École », puis « Suivi des absences ». Ouvrez la ligne de l’élève, téléchargez le justificatif et acceptez-le. Actualisez l’historique parent pour voir la nouvelle mention. [Guide de l’appel et des absences](absences.md)
 
 ### Préparer une rentrée fictive
 
 1. Dans l’espace direction, ouvrez « École », puis « Clôture d’année » et choisissez « Préparer la rentrée ».
 2. Ajoutez une classe de rentrée de niveau « CE2 ». Dans « Passages », enregistrez « CE1 » comme niveau de la classe fictive actuelle.
-3. Ouvrez la ligne de l’élève fictif et validez la proposition. Revenez dans « Classes » pour vérifier le compteur de décisions validées. [Guide de la clôture d’année](cloture-annee.md)
+3. Ouvrez la ligne de l’élève fictif et validez la proposition. Dans « Ouverture », préparez les affectations et vérifiez le récapitulatif.
+4. Sur l’école fictive, confirmez l’ouverture en saisissant l’année demandée. Retrouvez l’ancienne classe dans « Archives » et contrôlez les nouvelles affectations dans les espaces parent et enseignant. [Guide de la clôture d’année](cloture-annee.md)
 
 ### Télécharger le blog fictif en PDF
 
@@ -156,12 +158,23 @@ Après avoir publié l’article de démonstration, ouvrez « École → Clôtur
 
 ### Générer une invitation supplémentaire
 
-```sh
-docker compose exec -T postgres psql -U postgres -d open_cartable -c "SELECT s.code AS ecole, g.id AS tuteur FROM guardians g JOIN schools s ON s.id = g.school_id"
-docker compose exec -T api npm run --silent auth:admin -- invite CODE_ECOLE UUID_TUTEUR
-```
+1. Ouvrez « École → Classes et familles » dans l’espace direction. Créez ou ouvrez une classe, puis ajoutez une fiche élève.
+2. Dans « Tuteurs », associez le compte responsable à l’enfant. Dans « Invitations », sélectionnez un ou plusieurs tuteurs et générez les codes.
+3. Remettez les codes séparément à chaque famille par un canal privé. Le CSV est proposé pour la préparation. En cas de perte d’un appareil, choisissez aussi de révoquer les anciennes sessions.
 
-Le second ordre affiche l’invitation dans le terminal. Transmettez-la par un canal privé. Pour une perte d’appareil, utilisez `replace` avec les mêmes arguments. Cette commande révoque les sessions existantes du tuteur.
+### Publier un livret d’essai
+
+1. Dans l’espace enseignant, ouvrez « Vie de classe → Livret scolaire ». Choisissez la classe, l’élève et le trimestre.
+2. Renseignez les domaines et les appréciations. Enregistrez le brouillon et vérifiez le contenu avant publication.
+3. Dans l’espace parent, ouvrez « Vie de classe → Livret scolaire » sous le nom de l’enfant. Ouvrez le bilan publié et téléchargez le PDF.
+
+### Partager une ressource et activer les notifications web
+
+1. Dans l’espace enseignant, ouvrez « Vie de classe → Médiathèque ». Ajoutez un PDF fictif, donnez-lui un titre et choisissez une matière dans le champ de dossier. La famille le retrouve dans sa médiathèque de classe. Les dossiers, la recherche, l’aperçu et le téléchargement se font dans le navigateur.
+2. Pour voir une vidéo du blog, enregistrez d’abord un brouillon et ajoutez un court MP4 ou WebM. Vérifiez la prévisualisation, puis publiez l’article et ouvrez-le avec le compte parent. [Guide du blog](blog-de-classe.md#ajouter-une-vidéo)
+3. Sur l’instance HTTPS, ouvrez « Compte → Notifications » dans l’espace parent avec un navigateur compatible, puis « Activer les notifications ». Autorisez l’affichage dans le navigateur. Depuis le compte enseignant, publiez un devoir de démonstration. Le navigateur peut afficher une alerte générique, y compris page fermée, si le service de notification du navigateur est disponible.
+
+Compose génère la clé Web Push lors de l’installation. Le serveur ne contacte le service du navigateur qu’après une activation et lorsqu’une nouveauté concerne le compte. Les alertes contiennent un titre et un message générique. Le quota de la médiathèque est réglable avec `CLASS_MEDIA_QUOTA_MIB`, dont la valeur par défaut est `5120`.
 
 ### Ouvrir le service depuis un autre appareil
 

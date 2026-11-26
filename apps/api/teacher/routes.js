@@ -10,6 +10,9 @@ import { registerTeacherBlog } from '../blog/routes.js';
 import { registerTeacherPhotoAuthorizations } from '../photo-authorizations/routes.js';
 import { registerSchoolBanner } from '../school-banner/routes.js';
 import { registerTeacherAttendance } from '../attendance/routes.js';
+import { registerTeacherReports } from '../school-reports/routes.js';
+import { registerHomeworkAttachments } from '../homework/attachments.js';
+import { registerStaffMedia } from '../files/class-media.js';
 import {
   activateTeacher, canTeachClass, signInTeacher, signOutTeacher, teacherActivationPattern,
   teacherLoginPattern, teacherSessionSeconds, withTeacherSession,
@@ -31,7 +34,7 @@ function credentialsOptions(properties) {
   };
 }
 
-export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey }) {
+export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey, classMediaQuota }) {
   const { tokenFor, authenticated } = await registerStaffWeb(app, {
     webOrigin, cookieName, withSession: (token, operation) => withTeacherSession(pool, token, operation),
   });
@@ -59,18 +62,21 @@ export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey }) {
     const { rows } = await db.query(`
       SELECT c.id, c.name
       FROM teacher_classes t JOIN classes c ON (c.school_id, c.id) = (t.school_id, t.class_id)
-      WHERE t.school_id = $1 AND t.teacher_id = $2 ORDER BY c.name, c.id
+      WHERE t.school_id = $1 AND t.teacher_id = $2 AND c.archived_year IS NULL ORDER BY c.name, c.id
     `, [actor.school_id, actor.teacher_id]);
     return { schoolName: actor.school_name ?? actor.school_code, classes: rows };
   }));
 
   registerStaffHomework(app, '/teacher', authenticated, canTeachClass);
   registerStaffAgenda(app, '/teacher', authenticated, canTeachClass);
-  registerTeacherMessages(app, authenticated);
+  registerTeacherMessages(app, authenticated, blogMediaKey);
+  registerHomeworkAttachments(app, '/teacher', authenticated, blogMediaKey);
+  registerStaffMedia(app, '/teacher', authenticated, blogMediaKey, classMediaQuota);
   registerTeacherLiaison(app, authenticated);
   registerTeacherBlog(app, { authenticated, mediaKey: blogMediaKey, tokenFor, unauthorized });
   registerTeacherPhotoAuthorizations(app, authenticated);
   registerSchoolBanner(app, '/teacher', authenticated);
   registerTeacherAttendance(app, authenticated);
+  registerTeacherReports(app, authenticated);
   registerTeacherAccountLink(app, authenticated);
 }

@@ -4,6 +4,7 @@ import { isSchoolDate } from './period.js';
 export const homeworkPageSize = 30;
 
 export function homeworkPage(entries) {
+  entries = entries.map(({ hasDocument, ...entry }) => ({ ...entry, ...(hasDocument ? { hasDocument: true } : {}) }));
   if (entries.length <= homeworkPageSize) return { entries, nextCursor: null };
   const page = entries.slice(0, homeworkPageSize);
   const last = page.at(-1);
@@ -13,10 +14,10 @@ export function homeworkPage(entries) {
 export async function listClassEntries(db, schoolId, classId, { from, to, domain, beforeDate, beforeId }) {
   const { rows } = await db.query(`
     SELECT listing.id, to_char(listing.entry_date, 'YYYY-MM-DD') AS date,
-           listing.title, listing.domain, listing.description
+           listing.title, listing.domain, listing.description, listing."hasDocument"
     FROM classes c
     LEFT JOIN LATERAL (
-      SELECT e.id, e.entry_date, e.title, e.domain, e.description
+      SELECT e.id, e.entry_date, e.title, e.domain, e.description, e.attachment_kind IS NOT NULL AS "hasDocument"
       FROM homework_entries e
       WHERE (e.school_id, e.class_id) = (c.school_id, c.id)
         AND e.entry_date BETWEEN $3 AND $4
@@ -50,7 +51,7 @@ export async function createEntry(pool, schoolCode, classId, { date, title, doma
     INSERT INTO homework_entries (school_id, class_id, id, entry_date, title, domain, description)
     SELECT c.school_id, c.id, $3, $4, $5, $6, $7
     FROM classes c JOIN schools s ON s.id = c.school_id
-    WHERE s.code = $1 AND c.id = $2
+    WHERE s.code = $1 AND c.id = $2 AND c.archived_year IS NULL
     RETURNING id
   `, [schoolCode, classId, id, date, title, domain, description]);
   return result.rows[0]?.id ?? null;
@@ -59,16 +60,18 @@ export async function createEntry(pool, schoolCode, classId, { date, title, doma
 export async function updateEntry(pool, schoolCode, classId, id, { date, title, domain, description }) {
   const result = await pool.query(`
     UPDATE homework_entries e SET entry_date = $4, title = $5, domain = $6, description = $7
-    FROM schools s
-    WHERE s.code = $1 AND e.school_id = s.id AND e.class_id = $2 AND e.id = $3
+    FROM classes c JOIN schools s ON s.id = c.school_id
+    WHERE s.code = $1 AND (e.school_id, e.class_id) = (c.school_id, c.id)
+      AND c.id = $2 AND e.id = $3 AND c.archived_year IS NULL
   `, [schoolCode, classId, id, date, title, domain, description]);
   return result.rowCount === 1;
 }
 
 export async function deleteEntry(pool, schoolCode, classId, id) {
   const result = await pool.query(`
-    DELETE FROM homework_entries e USING schools s
-    WHERE s.code = $1 AND e.school_id = s.id AND e.class_id = $2 AND e.id = $3
+    DELETE FROM homework_entries e USING classes c JOIN schools s ON s.id = c.school_id
+    WHERE s.code = $1 AND (e.school_id, e.class_id) = (c.school_id, c.id)
+      AND c.id = $2 AND e.id = $3 AND c.archived_year IS NULL
   `, [schoolCode, classId, id]);
   return result.rowCount === 1;
 }

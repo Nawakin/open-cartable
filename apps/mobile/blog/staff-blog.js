@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { BlogVideos } from '../files/library';
 import { Text, View } from 'react-native';
 import { useScrollToTop } from '../navigation';
 import { Button, Field, styles } from '../parent/ui';
@@ -42,7 +43,7 @@ export function StaffBlog({ classes, request, onExpired }) {
   const photos = article?.photos ?? [];
   const missingReview = photos.filter((photo) => !photo.publishable).length;
   const maskedPhotos = photos.filter((photo) => photo.reviewBasis !== 'legacy' && !photo.publishable).length;
-  const canPublish = Boolean(article?.body || photos.length) && !missingReview;
+  const canPublish = Boolean(article?.body || photos.length || article?.videoCount) && !missingReview;
   const dirty = draft.title !== (article?.title ?? '') || draft.body !== (article?.body ?? '');
 
   async function loadList(id, status, cursor) {
@@ -259,6 +260,8 @@ export function StaffBlog({ classes, request, onExpired }) {
         {article && <DraftGallery photos={photos} articlePath={articlePath(classId, article.id)}
           request={request} onChange={changePhoto} onOpen={setPhotoIndex} busy={busy}
           students={students} onLoadAuthorizations={loadAuthorizations} />}
+        {article && <BlogVideos article={article} subjectId={classId} role="teacher" request={request}
+          onExpired={onExpired} onChange={async () => setArticle(await request(articlePath(classId, article.id)))} />}
         <Field label="Texte de l’article (facultatif)" value={draft.body} onChangeText={(body) => setDraft({ ...draft, body })}
           maxLength={8000} multiline editable={!busy} style={[styles.input, blog.editor]} />
         <View style={styles.actions}>
@@ -279,8 +282,9 @@ export function StaffBlog({ classes, request, onExpired }) {
       {selected && view === 'preview' && article && <>
         <Text accessibilityRole="header" style={blog.heading}>Aperçu côté familles</Text>
         <ArticleContent article={article} gallery={gallery} />
+        {article.videoCount > 0 && <BlogVideos article={article} subjectId={classId} role="teacher" request={request} onExpired={onExpired} readOnly />}
         {missingReview > 0 && <Text style={styles.body}>Revenez au brouillon pour vérifier les photos avant de publier.</Text>}
-        {!article.body && !photos.length && <Text style={styles.body}>Ajoutez une photo ou un texte avant de publier.</Text>}
+        {!article.body && !photos.length && !article.videoCount && <Text style={styles.body}>Ajoutez une photo, une vidéo ou un texte avant de publier.</Text>}
         <View style={styles.actions}>
           <Button label="Publier cet article" icon="paper-plane-outline" onPress={() => publish(true)} busy={busy || !canPublish} />
           <Button label="Revenir au brouillon" icon="create-outline" onPress={() => show(article)} busy={busy} secondary />
@@ -294,6 +298,7 @@ export function StaffBlog({ classes, request, onExpired }) {
           ? 'Une photo est masquée dans le fil des familles.'
           : `${maskedPhotos} photos sont masquées dans le fil des familles.`}</Text>}
         <ArticleContent article={article} gallery={gallery} />
+        {article.videoCount > 0 && <BlogVideos article={article} subjectId={classId} role="teacher" request={request} onExpired={onExpired} readOnly />}
         {confirmation === 'withdraw' ? <View style={blog.empty}>
           <Text style={styles.body}>L’article sera retiré du fil des familles et reviendra en brouillon.</Text>
           <View style={styles.actions}>

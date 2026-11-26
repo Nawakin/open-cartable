@@ -20,9 +20,12 @@ import { useSchoolBanner } from './school-banner/session';
 import { ParentAttendance } from './attendance/monthly';
 import { AccountLink } from './account-link';
 import { Illustration, IllustratedMenu } from './illustrations';
+import { ParentReports } from './school-reports/reports';
+import { ParentLibrary } from './files/library';
+import { PushSettings } from './notifications/settings';
 
 const emptyReminders = { reminders: [], nextCursor: null };
-const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'attendance', 'messages', 'account'];
+const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'attendance', 'reports', 'library', 'messages', 'account'];
 const welcomeImage = require('./assets/accueil.jpg');
 
 function openTeacher() {
@@ -232,7 +235,7 @@ function ParentApp() {
   }
 
   const menu = signedIn && <SectionNav label="Menu parent" busy={busy}
-    active={['homework', 'agenda', 'liaison', 'blog', 'attendance'].includes(phase) ? 'children' : phase}
+    active={signedIn && phase !== 'messages' && phase !== 'account' ? 'children' : phase}
     items={[
       { id: 'children', art: 'home', label: 'Accueil', onPress: () => showParentSection('children') },
       { id: 'messages', label: 'Messagerie', unreadCount: unread.count,
@@ -329,6 +332,10 @@ function ParentApp() {
                       onPress: () => { setSchoolPanel({ child }); setPhase('liaison'); } },
                     { id: 'blog', label: 'Blog de classe', accessibilityLabel: `Blog de classe de ${child.displayName}`,
                       onPress: () => { setSchoolPanel({ child }); setPhase('blog'); } },
+                    { id: 'reports', art: 'homework', label: 'Livret scolaire', accessibilityLabel: `Livret scolaire de ${child.displayName}`,
+                      onPress: () => { setSchoolPanel({ child }); setPhase('reports'); } },
+                    { id: 'library', art: 'blog', label: 'Médiathèque', accessibilityLabel: `Médiathèque de ${child.displayName}`,
+                      onPress: () => { setSchoolPanel({ child }); setPhase('library'); } },
                   ]} />
                 </View>}
               </View>
@@ -357,6 +364,7 @@ function ParentApp() {
         </View>
         {Platform.OS === 'web' && <AccountLink role="parent" request={requestParent}
           onOpen={openTeacher} onExpired={() => void run(load)} />}
+        {Platform.OS === 'web' && <PushSettings request={requestParent} onExpired={() => void run(load)} />}
       </View>}
 
       {phase === 'homework' && schoolPanel && (
@@ -367,6 +375,10 @@ function ParentApp() {
           onMore={() => void run(() => loadSchoolPanel(schoolPanel, true))}
           onBack={() => void run(load)}
           onLogout={logout}
+          onDocument={(id, download) => void run(async () => {
+            const url = '/children/' + encodeURIComponent(schoolPanel.child.id) + '/homework/' + id + '/document';
+            download(await requestParent(url, { responseType: 'attachment' }), 'cahier-de-texte');
+          })}
           busy={busy}
           error={error}
         />
@@ -393,6 +405,11 @@ function ParentApp() {
         <ParentAttendance key={schoolPanel.child.id} child={schoolPanel.child} request={requestParent}
           onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
       )}
+
+      {phase === 'reports' && schoolPanel && <ParentReports key={schoolPanel.child.id} child={schoolPanel.child}
+        request={requestParent} onBack={() => showParentSection('children')} onExpired={() => void run(load)} />}
+      {phase === 'library' && schoolPanel && <ParentLibrary key={schoolPanel.child.id} child={schoolPanel.child}
+        request={requestParent} onBack={() => showParentSection('children')} onExpired={() => void run(load)} />}
 
       {phase === 'unavailable' && (
         <View style={styles.panel}>

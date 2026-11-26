@@ -7,6 +7,7 @@ import { migrate, migrations, openDatabase } from './db/database.js';
 import { readSecret } from './installation/secrets.js';
 import { startRetention } from './db/retention.js';
 import { createRecoveryMailer } from './direction/recovery-mail.js';
+import { startParentPush, webPushSettings } from './notifications/web-push.js';
 
 function readWebOrigin(value) {
   const url = URL.parse(value);
@@ -28,6 +29,7 @@ try {
   let parentAuth;
   let webRoot;
   let installation;
+  let directionInvitationKey;
   const token = readSecret(env, 'INSTALLATION_TOKEN');
   const webOrigin = env.WEB_ORIGIN === undefined ? undefined : readWebOrigin(env.WEB_ORIGIN);
   if (token !== undefined && (!webOrigin || !/^[0-9a-f]{64}$/.test(token))) {
@@ -42,6 +44,7 @@ try {
   if ([env.DATABASE_URL, env.PGPASSWORD_FILE, env.AUTH_SIGNING_KEY, env.AUTH_SIGNING_KEY_FILE,
     env.AUTH_INVITE_KEY, env.AUTH_INVITE_KEY_FILE, webOrigin].some((value) => value !== undefined)) {
     const { signingKey, invitationKey } = readAuthKeys(env);
+    directionInvitationKey = invitationKey;
     pool = openDatabase(env.DATABASE_URL);
     pool.on('error', () => console.error('Une connexion PostgreSQL inactive a été interrompue.'));
     if (env.OPEN_CARTABLE_AUTO_MIGRATE === '1') await migrate(pool);
@@ -60,16 +63,25 @@ try {
   const mailer = createRecoveryMailer({
     url: readSecret(env, 'DIRECTION_SMTP_URL'), from: env.DIRECTION_SMTP_FROM, webOrigin,
   });
-  const direction = webOrigin ? { pool, webOrigin, totpKey, mailer } : undefined;
+  const quotaMib = Number(env.CLASS_MEDIA_QUOTA_MIB ?? 5120);
+  if (!Number.isSafeInteger(quotaMib) || quotaMib < 24 || quotaMib > 1_048_576) {
+    throw new Error('CLASS_MEDIA_QUOTA_MIB doit être un nombre entier compris entre 24 et 1048576.');
+  }
+  const classMediaQuota = quotaMib * 1024 ** 2;
+  const direction = webOrigin ? { pool, webOrigin, totpKey, mailer, classMediaQuota, invitationKey: directionInvitationKey } : undefined;
   const blogMediaKey = mediaSecret === undefined ? undefined : Buffer.from(mediaSecret, 'hex');
-  const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey });
+  const webPush = webPushSettings(readSecret(env, 'WEB_PUSH_KEY'), webOrigin);
+  const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey, webPush });
   let stopRetention;
+  let stopPush;
   if (pool) app.addHook('onClose', async () => {
     await stopRetention?.();
+    await stopPush?.();
     await pool.end();
   });
   const address = await app.listen({ host: env.OPEN_CARTABLE_HOST ?? '127.0.0.1', port: 3000 });
   if (pool) stopRetention = startRetention(pool);
+  if (pool && webPush) stopPush = startParentPush(pool, webPush);
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, async () => {
       try {

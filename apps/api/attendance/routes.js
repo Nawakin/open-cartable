@@ -59,7 +59,7 @@ export function registerParentAttendance(app, authenticated) {
   app.get('/parent/children/:childId/attendance', { schema: { params: uuidParams('childId'), querystring: monthQuery } },
     authenticated(async (request, db, actor) => {
       const childId = request.params.childId;
-      if (!await linkedChildClass(db, actor, childId)) return null;
+      if (!await linkedChildClass(db, actor, childId, { historical: true })) return null;
       return childAttendance(db, actor.school_id, childId, validDate(request.query.month + '-01'));
     }));
 }

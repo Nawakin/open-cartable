@@ -22,6 +22,8 @@
 
 ## Repérer les nouvelles réponses
 
+Dans le formulaire de rédaction, utilisez « Joindre un document » pour ajouter un PDF, JPEG, PNG ou WebP de 5 Mo maximum. Les participants téléchargent la pièce depuis le message, dans la même conversation.
+
 Le menu « Messagerie » affiche le nombre de conversations non lues. Dans la liste, chaque conversation affiche un aperçu du dernier message et, si nécessaire, la mention « Non lue ». Le compteur se rafraîchit toutes les 30 secondes lorsque l’application est au premier plan. Le bouton « Actualiser » recharge la liste ou la conversation ouverte.
 
 Ouvrir une conversation confirme la lecture jusqu’au dernier message chargé. L’état de lecture est partagé entre les appareils connectés au même compte. Pour la direction, il est commun aux personnes qui utilisent le compte direction de l’école. Après la mise à jour, les conversations qui contiennent déjà des messages reçus apparaissent comme non lues lors du premier accès.

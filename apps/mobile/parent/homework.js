@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Button, Field, styles } from './ui';
+import { downloadDocument } from '../files/documents';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' });
 const views = [{ id: 'day', label: 'Jour' }, { id: 'week', label: 'Semaine' }, { id: 'month', label: 'Mois' }];
@@ -53,7 +54,7 @@ function formatDate(value) {
   return dateFormat.format(asDate(value));
 }
 
-export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, error }) {
+export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, error, onDocument }) {
   const [domainInput, setDomainInput] = useState(notebook.domain);
   const { child, anchor, view, domain, entries, nextCursor } = notebook;
   const { from, to } = periodRange(anchor, view);
@@ -106,6 +107,8 @@ export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, e
           <Text style={bookStyles.metadata}>{formatDate(entry.date)} · {entry.domain}</Text>
           <Text accessibilityRole="header" style={bookStyles.title}>{entry.title}</Text>
           <Text style={styles.body}>{entry.description}</Text>
+          {entry.hasDocument && Platform.OS === 'web' && <Button label="Télécharger le document" icon="download-outline"
+            secondary busy={busy} onPress={() => onDocument(entry.id, downloadDocument)} />}
         </View>
       ))}
       {nextCursor && <Button label="Afficher la suite" onPress={onMore} busy={busy} secondary />}

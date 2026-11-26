@@ -29,6 +29,7 @@ RUN --mount=type=secret,id=build_ca \
 COPY --chown=node:node apps/api/ apps/api/
 COPY --chown=node:node deploy/installation-link.mjs deploy/
 COPY --from=web --chown=node:node /app/apps/mobile/dist/ apps/mobile/dist/
+RUN apt-get update -qq && apt-get install -y -qq --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 USER node
 EXPOSE 3000
 CMD ["node", "apps/api/server.js"]

@@ -46,6 +46,8 @@ export function useAttendanceTask(onExpired) {
       if (failure.status === 401) onExpired();
       else if (failure.status === 409) setError('Les données ont changé. Actualisez avant de réessayer.');
       else if (failure.status === 404) setError('Cette classe, cet élève ou cette date n’est plus accessible.');
+      else if (failure.status === 413) setError('La taille maximale est de 5 Mo.');
+      else if (failure.status === 415) setError('Choisissez une image ou un PDF statique.');
       else if (failure.status === 0) setError('Connexion interrompue. Actualisez pour vérifier l’enregistrement.');
       else setError('L’opération a échoué. Réessayez dans un instant.');
     } finally {

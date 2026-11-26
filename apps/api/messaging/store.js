@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { pageByTimestamp } from '../db/keyset.js';
+import { openPrivateFile, sealPrivateFile } from '../files/private-files.js';
 
 const pageSize = 30;
 const retainedSince = "statement_timestamp() - interval '1 year'";
@@ -9,7 +10,7 @@ const teacherAvailable = `EXISTS (
   JOIN teacher_classes assignment ON (assignment.school_id, assignment.teacher_id) = (account.school_id, account.id)
   JOIN students current_student ON (current_student.school_id, current_student.class_id) = (assignment.school_id, assignment.class_id)
   WHERE (account.school_id, account.id, current_student.id) = (c.school_id, c.teacher_id, c.student_id)
-    AND account.password_hash IS NOT NULL
+    AND account.password_hash IS NOT NULL AND current_student.left_at IS NULL
 )`;
 
 const visibleThread = `
@@ -85,11 +86,11 @@ export async function readConversation(db, actor, id, { beforeAt, beforeId }) {
     WITH visible AS (
       SELECT c.school_id, ${threadColumns},
         CASE WHEN $2::uuid IS NULL THEN c.guardian_id END AS "guardianReference",
-        (c.channel = 'direction' OR ${teacherAvailable}) AS "canReply"
+        (student.left_at IS NULL AND (c.channel = 'direction' OR ${teacherAvailable})) AS "canReply"
       FROM message_conversations c ${threadStudent}
       WHERE ${visibleThread} AND c.id = $4
     ), page AS (
-      SELECT m.id, m.sender, m.body, m.sent_at AS "sentAt"
+      SELECT m.id, m.sender, m.body, m.sent_at AS "sentAt", m.attachment_kind IS NOT NULL AS "hasDocument"
       FROM visible v JOIN conversation_messages m ON (m.school_id, m.conversation_id) = (v.school_id, v.id)
       WHERE m.sent_at > ${retainedSince}
         AND ($5::timestamptz IS NULL OR (m.sent_at, m.id) < ($5, $6::uuid))
@@ -102,8 +103,8 @@ export async function readConversation(db, actor, id, { beforeAt, beforeId }) {
       COALESCE((SELECT json_agg(page ORDER BY "sentAt" DESC, id DESC) FROM page), '[]'::json) AS messages
   `, [...actorScope(actor), id, beforeAt, beforeId, pageSize + 1]);
   if (!result.conversation) return null;
-  const messages = result.messages.map((message) => ({
-    ...message, sentAt: new Date(message.sentAt).toISOString(),
+  const messages = result.messages.map(({ hasDocument, ...message }) => ({
+    ...message, sentAt: new Date(message.sentAt).toISOString(), ...(hasDocument ? { hasDocument: true } : {}),
   }));
   const { items, nextCursor } = pageByTimestamp(messages, pageSize, 'sentAt');
   return { conversation: result.conversation, messages: items, nextCursor };
@@ -118,7 +119,7 @@ export async function listParentRecipients(db, actor, childId) {
         AND a.password_hash IS NOT NULL
     ), '[]'::json) AS teachers
     FROM guardian_students l JOIN students s ON (s.school_id, s.id) = (l.school_id, l.student_id)
-    WHERE (l.school_id, l.guardian_id, l.student_id) = ($1, $2, $3)
+    WHERE (l.school_id, l.guardian_id, l.student_id) = ($1, $2, $3) AND s.left_at IS NULL
   `, [actor.school_id, actor.guardian_id, childId]);
   return result ?? null;
 }
@@ -138,7 +139,7 @@ async function lockFamilyLink(db, schoolId, guardianId, childId) {
   const student = await db.query(`
     SELECT s.class_id
     FROM guardian_students l JOIN students s ON (s.school_id, s.id) = (l.school_id, l.student_id)
-    WHERE (l.school_id, l.guardian_id, l.student_id) = ($1, $2, $3) FOR SHARE OF l, s
+    WHERE (l.school_id, l.guardian_id, l.student_id) = ($1, $2, $3) AND s.left_at IS NULL FOR SHARE OF l, s
   `, [schoolId, guardianId, childId]);
   return student.rows[0]?.class_id;
 }
@@ -163,16 +164,17 @@ function senderFor(actor) {
   return actor.teacher_id ? 'teacher' : 'direction';
 }
 
-async function insertMessage(db, schoolId, id, sender, body, sentAt) {
+async function insertMessage(db, schoolId, id, sender, body, sentAt, file, key) {
   const messageId = randomUUID();
+  const bytes = file ? sealPrivateFile(file.bytes, key, ['message', schoolId, id, messageId]) : null;
   await db.query(`
-    INSERT INTO conversation_messages (school_id, conversation_id, id, sender, body, sent_at)
-    VALUES ($1, $2, $3, $4, $5, $6)
-  `, [schoolId, id, messageId, sender, body, sentAt]);
+    INSERT INTO conversation_messages (school_id, conversation_id, id, sender, body, sent_at, attachment_kind, attachment_data)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `, [schoolId, id, messageId, sender, body, sentAt, file?.kind ?? null, bytes]);
   return messageId;
 }
 
-export async function createConversation(db, actor, { childId, subject, body, teacherId = null, guardianReference }) {
+export async function createConversation(db, actor, { childId, subject, body, teacherId = null, guardianReference, file }, key) {
   const schoolId = actor.school_id;
   const guardianId = actor.guardian_id ?? guardianReference;
   const contactId = actor.teacher_id ?? teacherId;
@@ -184,11 +186,11 @@ export async function createConversation(db, actor, { childId, subject, body, te
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, date_trunc('milliseconds', clock_timestamp()))
     RETURNING last_message_at
   `, [schoolId, id, guardianId, childId, subject, contactId ? 'teacher' : 'direction', contactId, participants.teacherLabel]);
-  await insertMessage(db, schoolId, id, senderFor(actor), body, sentAt);
+  await insertMessage(db, schoolId, id, senderFor(actor), body, sentAt, file, key);
   return { id };
 }
 
-export async function addMessage(db, actor, id, body) {
+export async function addMessage(db, actor, id, body, file, key) {
   const parameters = [...actorScope(actor), id];
   const { rows: [target] } = await db.query(`
     SELECT c.guardian_id, c.student_id, c.channel, c.teacher_id
@@ -204,5 +206,14 @@ export async function addMessage(db, actor, id, body) {
     RETURNING c.last_message_at
   `, parameters);
   if (!thread) return null;
-  return { id: await insertMessage(db, actor.school_id, id, senderFor(actor), body, thread.last_message_at) };
+  return { id: await insertMessage(db, actor.school_id, id, senderFor(actor), body, thread.last_message_at, file, key) };
+}
+
+export async function conversationDocument(db, actor, id, messageId, key) {
+  const { rows: [file] } = await db.query(`
+    SELECT m.attachment_kind AS kind, m.attachment_data AS data
+    FROM message_conversations c JOIN conversation_messages m ON (m.school_id,m.conversation_id) = (c.school_id,c.id)
+    WHERE ${visibleThread} AND c.id = $4 AND m.id = $5 AND m.sent_at > ${retainedSince} AND m.attachment_kind IS NOT NULL
+  `, [...actorScope(actor), id, messageId]);
+  return file ? { kind: file.kind, body: openPrivateFile(file.data, key, ['message', actor.school_id, id, messageId]) } : null;
 }

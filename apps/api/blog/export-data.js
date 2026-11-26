@@ -1,4 +1,5 @@
 import { exportGallery, hasPublicPhoto } from './photos.js';
+import { videoCount, hasPublicVideo } from '../files/class-media.js';
 
 const articleLimit = 300;
 const mediaLimit = 48 * 1024 * 1024;
@@ -26,10 +27,11 @@ export async function readBlogExport(db, [schoolId, classId], period) {
       WHERE (school_id, class_id) = ($1, $2)
         AND published_at >= ($3::date::timestamp AT TIME ZONE 'Europe/Paris')
         AND published_at < ($4::date::timestamp AT TIME ZONE 'Europe/Paris')
-        AND (a.body <> '' OR ${hasPublicPhoto('a', true)})
+        AND (a.body <> '' OR ${hasPublicPhoto('a', true)} OR ${hasPublicVideo('a')})
       ORDER BY published_at, id LIMIT $5
     )
-    SELECT id, title, body, version, published_at AS "publishedAt", total, ${exportGallery()} AS photos
+    SELECT id, title, body, version, published_at AS "publishedAt", total, ${exportGallery()} AS photos,
+      ${videoCount('a')}
     FROM selected a ORDER BY published_at, id
   `, [schoolId, classId, period.from, period.to, articleLimit]);
   const articleCount = rows[0]?.total ?? 0;

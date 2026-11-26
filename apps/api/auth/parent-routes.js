@@ -11,6 +11,11 @@ import { registerParentBlog } from '../blog/routes.js';
 import { registerFamilyPhotoAuthorizations } from '../photo-authorizations/routes.js';
 import { registerSchoolBanner } from '../school-banner/routes.js';
 import { registerParentAttendance } from '../attendance/routes.js';
+import { registerParentJustifications } from '../attendance/justifications.js';
+import { registerParentReports } from '../school-reports/routes.js';
+import { registerParentHomeworkAttachments } from '../homework/attachments.js';
+import { registerParentMedia } from '../files/class-media.js';
+import { registerParentPush } from '../notifications/web-push.js';
 import { registerParentAccountLink } from './account-links.js';
 import { cookieOptions, parentCookieName as browserCookie, webSessionToken } from './staff-web.js';
 
@@ -29,7 +34,7 @@ function unauthorized(reply) {
   return reply.code(401).send({ error: 'Identifiants non valides.' });
 }
 
-export async function parentRoutes(app, { store, signingKey, webOrigin, blogMediaKey }) {
+export async function parentRoutes(app, { store, signingKey, webOrigin, blogMediaKey, webPush }) {
   await app.register(rateLimit, { global: false, cache: 10_000 });
   if (webOrigin) await app.register(cookie);
   app.addHook('onRequest', async (_request, reply) => {
@@ -68,10 +73,10 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     return async (request, reply) => {
       const claims = await identify(request);
       if (!claims) return unauthorized(reply);
-      const result = await store.withParentSession(claims, (db, actor) => operation(request, db, actor, reply));
+      const result = await store.withParentSession(claims, (db, actor) => operation(request, db, actor, reply, claims));
       if (!result.authorized) return unauthorized(reply);
       if (result.value === null) return reply.code(404).send({ error: 'Ressource introuvable.' });
-      return reply.code(success).send(result.value);
+      return reply.code(reply.statusCode === 200 ? success : reply.statusCode).send(result.value);
     };
   }
 
@@ -83,12 +88,16 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
       }
     },
   };
-  registerParentMessages(app, { authenticated, writes });
+  registerParentMessages(app, { authenticated, writes, key: blogMediaKey });
+  registerParentHomeworkAttachments(app, authenticated, blogMediaKey);
+  registerParentMedia(app, authenticated, blogMediaKey);
   registerParentLiaison(app, { authenticated, writes });
   registerParentBlog(app, { authenticated, mediaKey: blogMediaKey });
   registerFamilyPhotoAuthorizations(app, authenticated);
   registerSchoolBanner(app, '/parent', authenticated);
   registerParentAttendance(app, authenticated);
+  registerParentJustifications(app, authenticated, writes, blogMediaKey);
+  registerParentReports(app, authenticated);
 
   const invitationOptions = {
     bodyLimit: 1024,
@@ -128,6 +137,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     }
 
     registerParentAccountLink(app, (operation, success) => authenticated(operation, success, browserIdentity), requireWebOrigin);
+    if (webPush) registerParentPush(app, (operation, success) => authenticated(operation, success, browserIdentity), requireWebOrigin, webPush);
 
     app.post('/parent/web/auth/login', { ...invitationOptions, onRequest: requireWebOrigin }, async (request, reply) => {
       const { schoolCode, code } = request.body;

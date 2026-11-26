@@ -40,7 +40,8 @@ function PupilEditor({ student, source, plan, levels, save, busy }) {
 
   return <>
     <Select label="Niveau actuel de l’élève" value={level} onChange={setLevel} disabled={busy}
-      choices={levelChoices(levels, source.level ? 'Niveau de la classe · ' + source.level : 'Niveau à préciser')} />
+      choices={levelChoices(levels, student.grade ? 'Niveau enregistré · ' + student.grade
+        : source.level ? 'Niveau de la classe · ' + source.level : 'Niveau à préciser')} />
     {changedLevel ? <View style={styles.actions}>
       <Button label="Enregistrer le niveau" icon="checkmark-outline" busy={busy} onPress={changeLevel} />
     </View> : <>

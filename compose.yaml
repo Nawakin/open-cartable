@@ -58,6 +58,8 @@ services:
       INSTALLATION_TOKEN_FILE: /run/app-secrets/installation-token
       BLOG_MEDIA_KEY_FILE: /run/app-secrets/blog-media-key
       DIRECTION_TOTP_KEY_FILE: /run/app-secrets/direction-totp-key
+      WEB_PUSH_KEY_FILE: /run/app-secrets/web-push-key
+      CLASS_MEDIA_QUOTA_MIB: "${CLASS_MEDIA_QUOTA_MIB:-5120}"
       DIRECTION_SMTP_URL: "${DIRECTION_SMTP_URL:-}"
       DIRECTION_SMTP_FROM: "${DIRECTION_SMTP_FROM:-}"
       OPEN_CARTABLE_AUTO_MIGRATE: "1"

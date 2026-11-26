@@ -3,6 +3,9 @@ import { purgeExpiredMessages } from '../messaging/retention.js';
 import { purgeExpiredBlogPhotos } from '../blog/photos.js';
 import { purgeExpiredAttendance } from '../attendance/store.js';
 import { purgeExpiredDirectionSecurity } from '../direction/security.js';
+import { purgeSchoolReports } from '../school-reports/routes.js';
+import { purgeClassMedia } from '../files/class-media.js';
+import { purgeParentPush } from '../notifications/web-push.js';
 
 const purges = [
   { run: purgeExpiredMessages, label: 'messagerie' },
@@ -10,6 +13,9 @@ const purges = [
   { run: purgeExpiredBlogPhotos, label: 'photos du blog' },
   { run: purgeExpiredAttendance, label: 'appels' },
   { run: purgeExpiredDirectionSecurity, label: 'liens de récupération de la direction' },
+  { run: purgeSchoolReports, label: 'livrets scolaires' },
+  { run: purgeClassMedia, label: 'médias de classe' },
+  { run: purgeParentPush, label: 'notifications web' },
 ];
 
 export function startRetention(pool) {

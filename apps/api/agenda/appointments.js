@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { agendaPageSize, pageEvents } from './events.js';
 
 const teacherAudience = `($3::uuid IS NULL OR (
-  e.appointment_teacher_id = $3 AND student.class_id = e.class_id AND guardian.active
+  e.appointment_teacher_id = $3 AND student.class_id = e.class_id AND student.left_at IS NULL AND guardian.active
 ))`;
 
 const appointmentContext = `
@@ -14,7 +14,7 @@ export async function listAppointmentStudents(db, schoolId, classId) {
   const { rows } = await db.query(`
     SELECT s.id, s.display_name AS "displayName"
     FROM students s
-    WHERE s.school_id = $1 AND s.class_id = $2 AND EXISTS (
+    WHERE s.school_id = $1 AND s.class_id = $2 AND s.left_at IS NULL AND EXISTS (
       SELECT 1 FROM guardian_students link
       JOIN guardians guardian ON (guardian.school_id, guardian.id) = (link.school_id, link.guardian_id)
       WHERE (link.school_id, link.student_id) = (s.school_id, s.id) AND guardian.active
@@ -50,7 +50,7 @@ export async function createAppointment(db, actor, classId, { studentId, guardia
     JOIN students student ON (student.school_id, student.id) = (link.school_id, link.student_id)
     JOIN guardians guardian ON (guardian.school_id, guardian.id) = (link.school_id, link.guardian_id)
     WHERE link.school_id = $1 AND student.class_id = $2 AND link.student_id = $3
-      AND link.guardian_id = $4 AND guardian.active
+      AND link.guardian_id = $4 AND guardian.active AND student.left_at IS NULL
     FOR SHARE OF student, guardian, link
   `, [actor.school_id, classId, studentId, guardianReference]);
   if (!recipient.rowCount) return null;

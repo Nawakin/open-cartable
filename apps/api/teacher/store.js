@@ -12,7 +12,9 @@ function newActivationCode() {
 }
 
 async function ownsClasses(db, schoolId, classIds) {
-  const result = await db.query('SELECT id FROM classes WHERE school_id = $1 AND id = ANY($2::uuid[]) FOR SHARE', [schoolId, classIds]);
+  const result = await db.query(`
+    SELECT id FROM classes WHERE school_id = $1 AND id = ANY($2::uuid[]) AND archived_year IS NULL FOR SHARE
+  `, [schoolId, classIds]);
   return result.rowCount === classIds.length;
 }
 

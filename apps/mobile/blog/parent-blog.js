@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { BlogVideos } from '../files/library';
 import { AppState, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useScrollToTop } from '../navigation';
@@ -70,8 +71,11 @@ export function ParentBlog({ child, request, onBack, onExpired }) {
       {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
       {busy && <Text accessibilityLiveRegion="polite" style={styles.body}>Chargement…</Text>}
       {articleId ? (
-        article && <ArticleContent article={article} gallery={article.photoCount > 0 && <GalleryPreview article={article}
-          articlePath={articlePath(articleId)} role="parent" request={request} onOpen={setPhotoIndex} busy={busy} />} />
+        article && <>
+          <ArticleContent article={article} gallery={article.photoCount > 0 && <GalleryPreview article={article}
+            articlePath={articlePath(articleId)} role="parent" request={request} onOpen={setPhotoIndex} busy={busy} />} />
+          {article.videoCount > 0 && <BlogVideos article={article} subjectId={child.id} role="parent" request={request} onExpired={onExpired} readOnly />}
+        </>
       ) : (
         <>
           {page?.articles.length === 0 && <View style={blog.empty}>

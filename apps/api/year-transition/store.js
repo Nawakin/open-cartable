@@ -17,11 +17,12 @@ function problem(statusCode) {
 
 async function readSources(db, schoolId) {
   const { rows } = await db.query(`
-    SELECT c.id, c.name, COALESCE(json_agg(json_build_object('id', s.id, 'displayName', s.display_name)
+    SELECT c.id, c.name, CASE WHEN cardinality(c.levels) = 1 THEN c.levels[1] END AS "defaultLevel",
+      COALESCE(json_agg(json_build_object('id', s.id, 'displayName', s.display_name, 'grade', s.grade)
         ORDER BY s.display_name, s.id) FILTER (WHERE s.id IS NOT NULL), '[]'::json) AS students
-    FROM classes c LEFT JOIN students s ON (c.school_id, c.id) = (s.school_id, s.class_id)
-    WHERE c.school_id = $1
-    GROUP BY c.school_id, c.id, c.name ORDER BY c.name, c.id
+    FROM classes c LEFT JOIN students s ON (c.school_id, c.id) = (s.school_id, s.class_id) AND s.left_at IS NULL
+    WHERE c.school_id = $1 AND c.archived_year IS NULL
+    GROUP BY c.school_id, c.id ORDER BY c.name, c.id
   `, [schoolId]);
   return rows;
 }
@@ -40,10 +41,12 @@ function reconcile(draft, sources) {
   const belongs = ({ studentId, sourceClassId }) => roster.get(studentId) === sourceClassId;
   const sourceLevels = draft.sourceLevels.filter(({ classId }) => validClasses.has(classId));
   const overrides = draft.overrides.filter(belongs);
-  const byClass = new Map(sourceLevels.map(({ classId, level }) => [classId, level]));
+  const byClass = new Map(sources.map(({ id, defaultLevel }) => [id, defaultLevel]));
+  for (const { classId, level } of sourceLevels) byClass.set(classId, level);
   const byStudent = new Map(overrides.map(({ studentId, level }) => [studentId, level]));
+  const grades = new Map(sources.flatMap(({ students }) => students.map(({ id, grade }) => [id, grade])));
   const targetClasses = new Map(draft.classes.map((entry) => [entry.id, entry]));
-  const currentLevel = (studentId, classId) => byStudent.get(studentId) ?? byClass.get(classId) ?? null;
+  const currentLevel = (studentId, classId) => byStudent.get(studentId) ?? grades.get(studentId) ?? byClass.get(classId) ?? null;
   const assignments = draft.assignments.filter(({ studentId, sourceClassId, sourceLevel, target }) =>
     belongs({ studentId, sourceClassId }) && sourceLevel === currentLevel(studentId, sourceClassId)
     && (target === null || targetClasses.get(target.classId)?.levels.includes(target.level)));
@@ -63,7 +66,8 @@ function reconcile(draft, sources) {
       };
     }),
   }));
-  return { plan: { ...draft, sourceLevels, overrides, assignments }, sources: classes };
+  const teacherAssignments = (draft.teacherAssignments ?? []).filter(({ classId }) => targetClasses.has(classId));
+  return { plan: { ...draft, sourceLevels, overrides, assignments, teacherAssignments }, sources: classes };
 }
 
 async function readDraft(db, schoolId) {
@@ -76,13 +80,20 @@ async function readDraft(db, schoolId) {
 }
 
 export async function readYearTransition(db, schoolId) {
+  const { rows: [school] } = await db.query('SELECT school_year AS "activeStartYear" FROM schools WHERE id = $1', [schoolId]);
   const draft = await readDraft(db, schoolId);
   const state = draft ? reconcile(draft, await readSources(db, schoolId)) : { plan: null, sources: [] };
-  return { ...state, levels, suggestedStartYear: suggestedYear() };
+  const teachers = await listAvailableTeachers(db, schoolId);
+  return {
+    ...state, teachers, levels,
+    activeStartYear: school.activeStartYear, suggestedStartYear: school.activeStartYear ?? suggestedYear(),
+    summary: draft ? summarize(state, teachers) : null,
+  };
 }
 
 export async function saveYearTransition(db, schoolId, input) {
-  await db.query('SELECT id FROM schools WHERE id = $1 FOR UPDATE', [schoolId]);
+  const { rows: [school] } = await db.query('SELECT school_year FROM schools WHERE id = $1 FOR UPDATE', [schoolId]);
+  if (school.school_year && school.school_year !== input.startYear) problem(400);
   const current = await readDraft(db, schoolId);
   if ((current?.revision ?? null) !== input.revision) problem(409);
   const sources = await readSources(db, schoolId);
@@ -106,12 +117,87 @@ export async function saveYearTransition(db, schoolId, input) {
   const placements = [...input.overrides, ...input.assignments];
   if (placements.some(({ studentId, sourceClassId }) => roster.get(studentId) !== sourceClassId)) problem(409);
   const revision = randomUUID();
-  const { plan, sources: prepared } = reconcile({ ...input, classes, revision }, sources);
+  const teacherAssignments = input.teacherAssignments ?? current?.teacherAssignments ?? [];
+  const teachers = await listAvailableTeachers(db, schoolId);
+  const teacherIds = new Set(teachers.map(({ id }) => id));
+  requireUnique(teacherAssignments.map(({ teacherId, classId }) => ({ key: teacherId + '/' + classId })), 'key');
+  if (teacherAssignments.some(({ teacherId }) => !teacherIds.has(teacherId))) problem(409);
+  const { plan } = reconcile({ ...input, classes, revision, teacherAssignments }, sources);
   const { startYear, revision: next, ...configuration } = plan;
   await db.query(`
     INSERT INTO year_transition_drafts (school_id, start_year, revision, configuration) VALUES ($1, $2, $3, $4)
     ON CONFLICT (school_id) DO UPDATE SET start_year = excluded.start_year, revision = excluded.revision,
       configuration = excluded.configuration
   `, [schoolId, startYear, next, configuration]);
-  return { plan, sources: prepared, levels, suggestedStartYear: suggestedYear() };
+  return readYearTransition(db, schoolId);
+}
+
+async function listAvailableTeachers(db, schoolId) {
+  const { rows } = await db.query(`
+    SELECT t.id, t.login, t.password_hash IS NOT NULL AS active,
+      ARRAY(SELECT class_id FROM teacher_classes c WHERE (c.school_id, c.teacher_id) = (t.school_id, t.id)
+        ORDER BY class_id) AS "classIds"
+    FROM teacher_accounts t WHERE t.school_id = $1 ORDER BY t.login, t.id
+  `, [schoolId]);
+  return rows;
+}
+
+function summarize({ plan, sources }, teachers) {
+  const students = sources.flatMap(({ students }) => students);
+  const teacherIds = new Set(teachers.map(({ id }) => id));
+  const unavailable = plan.teacherAssignments.filter(({ teacherId }) => !teacherIds.has(teacherId)).length;
+  const pending = students.length - plan.assignments.length;
+  return {
+    pending, unavailable, total: students.length,
+    departed: plan.assignments.filter(({ target }) => !target).length,
+    moved: plan.assignments.filter(({ target }) => target).length,
+    ready: Boolean(plan.classes.length && !pending && !unavailable),
+  };
+}
+
+export async function applyYearTransition(db, schoolId, { revision, confirmation }) {
+  const { rows: [school] } = await db.query('SELECT school_year FROM schools WHERE id = $1 FOR UPDATE', [schoolId]);
+  const previous = await db.query(`
+    SELECT 1 FROM school_year_changes WHERE (school_id, revision, source_year) = ($1, $2, $3)
+  `, [schoolId, revision, confirmation - 1]);
+  if (previous.rowCount) return readYearTransition(db, schoolId);
+  const draft = await readDraft(db, schoolId);
+  if (!draft || draft.revision !== revision || (school.school_year && school.school_year !== draft.startYear)) problem(409);
+  if (confirmation !== draft.startYear + 1) problem(400);
+
+  // Le même ordre de verrouillage que les affectations et les publications enseignantes.
+  await db.query('SELECT id FROM teacher_accounts WHERE school_id = $1 ORDER BY id FOR UPDATE', [schoolId]);
+  await db.query('SELECT id FROM classes WHERE school_id = $1 AND archived_year IS NULL ORDER BY id FOR UPDATE', [schoolId]);
+  await db.query('SELECT id FROM students WHERE school_id = $1 AND left_at IS NULL ORDER BY id FOR UPDATE', [schoolId]);
+  const state = reconcile(draft, await readSources(db, schoolId));
+  const { plan } = state;
+  const summary = summarize(state, await listAvailableTeachers(db, schoolId));
+  if (!summary.ready) problem(409);
+
+  await db.query('UPDATE classes SET archived_year = $2 WHERE school_id = $1 AND archived_year IS NULL', [schoolId, plan.startYear]);
+  await db.query(`
+    INSERT INTO classes (school_id, id, name, levels)
+    SELECT $1, c.id, c.name, c.levels FROM jsonb_to_recordset($2::jsonb) AS c(id uuid, name text, levels text[])
+  `, [schoolId, JSON.stringify(plan.classes)]);
+  const placed = plan.assignments.map(({ studentId, target }) => ({
+    student_id: studentId, class_id: target?.classId ?? null, grade: target?.level ?? null,
+  }));
+  await db.query(`
+    UPDATE students s SET class_id = COALESCE(c.class_id, s.class_id), grade = COALESCE(c.grade, s.grade),
+      left_at = CASE WHEN c.class_id IS NULL THEN transaction_timestamp() ELSE NULL END
+    FROM jsonb_to_recordset($2::jsonb) AS c(student_id uuid, class_id uuid, grade text)
+    WHERE (s.school_id, s.id) = ($1, c.student_id)
+  `, [schoolId, JSON.stringify(placed)]);
+  await db.query('DELETE FROM teacher_classes WHERE school_id = $1', [schoolId]);
+  await db.query(`
+    INSERT INTO teacher_classes (school_id, teacher_id, class_id)
+    SELECT $1, t."teacherId", t."classId"
+    FROM jsonb_to_recordset($2::jsonb) AS t("teacherId" uuid, "classId" uuid)
+  `, [schoolId, JSON.stringify(plan.teacherAssignments)]);
+  await db.query('UPDATE schools SET school_year = $2 WHERE id = $1', [schoolId, confirmation]);
+  await db.query(`
+    INSERT INTO school_year_changes (school_id, source_year, revision, moved, departed) VALUES ($1, $2, $3, $4, $5)
+  `, [schoolId, plan.startYear, revision, summary.moved, summary.departed]);
+  await db.query('DELETE FROM year_transition_drafts WHERE school_id = $1', [schoolId]);
+  return readYearTransition(db, schoolId);
 }

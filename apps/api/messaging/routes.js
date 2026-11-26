@@ -1,14 +1,18 @@
 import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
 import { requireTimestampCursor, timestampCursor } from '../db/keyset.js';
+import { preparePrivateFile, privateFileBody, privateFileBodyLimit, privateFileHeaders } from '../files/private-files.js';
 import {
   addMessage, countUnreadConversations, createConversation, listConversations, listParentRecipients,
-  markConversationRead, readConversation,
+  markConversationRead, readConversation, conversationDocument,
 } from './store.js';
 
 const uuid = { type: 'string', pattern: uuidPattern.source };
 const message = { type: 'string', minLength: 1, maxLength: 4000 };
 const subject = { type: 'string', minLength: 1, maxLength: 120 };
+const document = { document: privateFileBody.properties.content };
+const messageLimit = privateFileBodyLimit + 16 * 1024;
+const prepare = (body) => body.document ? preparePrivateFile(body.document) : undefined;
 const querystring = {
   type: 'object', additionalProperties: false,
   properties: { cursor: timestampCursor },
@@ -26,7 +30,7 @@ function requireText(input) {
   return text;
 }
 
-function registerConversations(app, prefix, authenticated, writeOptions = {}) {
+function registerConversations(app, prefix, authenticated, key, writeOptions = {}) {
   const collection = prefix + '/messages/conversations';
   const item = collection + '/:conversationId';
   const params = uuidParams('conversationId');
@@ -39,10 +43,17 @@ function registerConversations(app, prefix, authenticated, writeOptions = {}) {
       readConversation(db, actor, request.params.conversationId, requireTimestampCursor(request.query.cursor))));
   app.post(item, {
     ...writeOptions,
-    bodyLimit: 64 * 1024,
-    schema: { params, body: bodySchema({ body: message }) },
-  }, authenticated((request, db, actor) =>
-    addMessage(db, actor, request.params.conversationId, requireText(request.body.body)), 201));
+    bodyLimit: messageLimit,
+    schema: { params, body: bodySchema({ body: message }, document) },
+  }, authenticated(async (request, db, actor) =>
+    addMessage(db, actor, request.params.conversationId, requireText(request.body.body), await prepare(request.body), key), 201));
+  app.get(item + '/:messageId/document', { schema: { params: uuidParams('conversationId', 'messageId') } },
+    authenticated(async (request, db, actor, reply) => {
+      const file = await conversationDocument(db, actor, request.params.conversationId, request.params.messageId, key);
+      if (!file) return null;
+      privateFileHeaders(reply, file.kind, 'piece-jointe');
+      return file.body;
+    }));
   app.put(item + '/read', {
     ...writeOptions,
     bodyLimit: 1024,
@@ -55,33 +66,33 @@ function registerConversations(app, prefix, authenticated, writeOptions = {}) {
   return collection;
 }
 
-export function registerDirectionMessages(app, authenticated) {
-  registerConversations(app, '/direction', authenticated);
+export function registerDirectionMessages(app, authenticated, key) {
+  registerConversations(app, '/direction', authenticated, key);
 }
 
 function conversationDraft(body) {
   return { childId: body.childId, subject: requireText(body.subject), body: requireText(body.body) };
 }
 
-export function registerTeacherMessages(app, authenticated) {
-  const collection = registerConversations(app, '/teacher', authenticated);
+export function registerTeacherMessages(app, authenticated, key) {
+  const collection = registerConversations(app, '/teacher', authenticated, key);
   app.post(collection, {
-    bodyLimit: 64 * 1024,
-    schema: { body: bodySchema({ childId: uuid, guardianReference: uuid, subject, body: message }) },
-  }, authenticated((request, db, actor) => createConversation(db, actor, {
-    ...conversationDraft(request.body), guardianReference: request.body.guardianReference,
-  }), 201));
+    bodyLimit: messageLimit,
+    schema: { body: bodySchema({ childId: uuid, guardianReference: uuid, subject, body: message }, document) },
+  }, authenticated(async (request, db, actor) => createConversation(db, actor, {
+    ...conversationDraft(request.body), guardianReference: request.body.guardianReference, file: await prepare(request.body),
+  }, key), 201));
 }
 
-export function registerParentMessages(app, { authenticated, writes }) {
-  const collection = registerConversations(app, '/parent', authenticated, writes);
+export function registerParentMessages(app, { authenticated, writes, key }) {
+  const collection = registerConversations(app, '/parent', authenticated, key, writes);
   app.get('/parent/messages/recipients/:childId', { schema: { params: uuidParams('childId') } },
     authenticated((request, db, actor) => listParentRecipients(db, actor, request.params.childId)));
   app.post(collection, {
     ...writes,
-    bodyLimit: 64 * 1024,
-    schema: { body: bodySchema({ childId: uuid, subject, body: message }, { teacherId: uuid }) },
-  }, authenticated((request, db, actor) => createConversation(db, actor, {
-    ...conversationDraft(request.body), teacherId: request.body.teacherId,
-  }), 201));
+    bodyLimit: messageLimit,
+    schema: { body: bodySchema({ childId: uuid, subject, body: message }, { teacherId: uuid, ...document }) },
+  }, authenticated(async (request, db, actor) => createConversation(db, actor, {
+    ...conversationDraft(request.body), teacherId: request.body.teacherId, file: await prepare(request.body),
+  }, key), 201));
 }

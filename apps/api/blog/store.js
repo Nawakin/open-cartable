@@ -2,11 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { pageByTimestamp } from '../db/keyset.js';
 import { maxPhotos } from './images.js';
 import { gallerySummary, hasPublicPhoto, listPhotos, startPublishedRetention } from './photos.js';
+import { hasPublicVideo, videoCount } from '../files/class-media.js';
 
 const pageSize = 20;
 const now = "date_trunc('milliseconds', statement_timestamp())";
 const articleFields = 'id, title, body, version, updated_at AS "updatedAt", published_at AS "publishedAt"';
 const excerpt = "CASE WHEN char_length(body) > 240 THEN left(body, 240) || '…' ELSE body END AS excerpt";
+const withVideoCount = ({ videoCount, ...article }) => ({ ...article, ...(videoCount ? { videoCount } : {}) });
 
 export async function listArticles(db, schoolId, classId, { beforeAt, beforeId }, status, publicFeed = false) {
   // Le filtre est construit à partir d’un ensemble fermé. Le flux parent appelle toujours 'published'.
@@ -17,38 +19,41 @@ export async function listArticles(db, schoolId, classId, { beforeAt, beforeId }
     ? 'published_at AS "publishedAt"'
     : 'updated_at AS "updatedAt", published_at AS "publishedAt"';
   const { rows } = await db.query(`
-    SELECT id, title, ${excerpt}, ${dates}, ${gallerySummary(publicFeed)}
+    SELECT id, title, ${excerpt}, ${dates}, ${gallerySummary(publicFeed)}, ${videoCount('a')}
     FROM class_blog_articles a
     WHERE school_id = $1 AND class_id = $2 AND ${audience}
-      ${publicFeed ? `AND (a.body <> '' OR ${hasPublicPhoto('a')})` : ''}
+      ${publicFeed ? `AND (a.body <> '' OR ${hasPublicPhoto('a')} OR ${hasPublicVideo('a')})` : ''}
       AND ($3::timestamptz IS NULL OR (${date}, id) < ($3, $4::uuid))
     ORDER BY ${date} DESC, id DESC LIMIT $5
   `, [schoolId, classId, beforeAt, beforeId, pageSize + 1]);
-  const { items, nextCursor } = pageByTimestamp(rows, pageSize, field);
+  const { items, nextCursor } = pageByTimestamp(rows.map(withVideoCount), pageSize, field);
   return { articles: items, nextCursor };
 }
 
 async function withPhotos(db, scope, article) {
   const photos = await listPhotos(db, scope);
-  return { ...article, photos, photoCount: photos.length };
+  const { rows: [videos] } = await db.query(`
+    SELECT ${videoCount('a')} FROM class_blog_articles a WHERE (a.school_id,a.class_id,a.id) = ($1,$2,$3)
+  `, scope);
+  return withVideoCount({ ...article, photos, photoCount: photos.length, ...videos });
 }
 
 export async function readPublishedArticle(db, schoolId, classId, id) {
   const { rows: [article] } = await db.query(`
-    SELECT id, title, body, published_at AS "publishedAt", ${gallerySummary(true, maxPhotos)}
+    SELECT id, title, body, published_at AS "publishedAt", ${gallerySummary(true, maxPhotos)}, ${videoCount('a')}
     FROM class_blog_articles a
     WHERE (school_id, class_id, id) = ($1, $2, $3) AND published_at IS NOT NULL
-      AND (a.body <> '' OR ${hasPublicPhoto('a')})
+      AND (a.body <> '' OR ${hasPublicPhoto('a')} OR ${hasPublicVideo('a')})
   `, [schoolId, classId, id]);
-  return article ?? null;
+  return article ? withVideoCount(article) : null;
 }
 
 export async function readStaffArticle(db, schoolId, classId, id) {
   const { rows: [article] } = await db.query(`
-    SELECT ${articleFields}, ${gallerySummary(false, maxPhotos)} FROM class_blog_articles a
+    SELECT ${articleFields}, ${gallerySummary(false, maxPhotos)}, ${videoCount('a')} FROM class_blog_articles a
     WHERE (school_id, class_id, id) = ($1, $2, $3)
   `, [schoolId, classId, id]);
-  return article ?? null;
+  return article ? withVideoCount(article) : null;
 }
 
 export async function createDraft(db, schoolId, classId, { title, body }) {
@@ -88,8 +93,8 @@ export async function setPublication(db, scope, version, published) {
   if (!article) return null;
   if (Boolean(article.publishedAt) === published) return withPhotos(db, scope, article);
   if (published) {
-    const photos = await listPhotos(db, scope);
-    if ((!article.body && !photos.length) || photos.some((photo) => !photo.publishable)) {
+    const { photos, videoCount } = await withPhotos(db, scope, article);
+    if ((!article.body && !photos.length && !videoCount) || photos.some((photo) => !photo.publishable)) {
       throw Object.assign(new Error('Il manque le contenu ou la vérification des photos.'), { statusCode: 422 });
     }
   }
@@ -98,7 +103,13 @@ export async function setPublication(db, scope, version, published) {
     SET published_at = CASE WHEN $4::boolean THEN ${now} ELSE NULL END, updated_at = ${now}, version = version + 1
     WHERE (school_id, class_id, id) = ($1, $2, $3) RETURNING ${articleFields}
   `, [...scope, published]);
-  if (published) await startPublishedRetention(db, scope, updated.publishedAt);
+  if (published) {
+    await startPublishedRetention(db, scope, updated.publishedAt);
+    await db.query(`
+      UPDATE class_media SET first_published_at = $3, expires_at = $3::timestamptz + interval '1 year'
+      WHERE (school_id,article_id) = ($1,$2) AND first_published_at IS NULL AND expires_at > transaction_timestamp()
+    `, [scope[0], scope[2], updated.publishedAt]);
+  }
   return withPhotos(db, scope, updated);
 }
 

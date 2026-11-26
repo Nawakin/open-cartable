@@ -21,6 +21,10 @@ import { consumeRecoveryLink, DirectionRecovery } from '../direction-security/re
 import { DirectionSecurity } from '../direction-security/settings';
 import { AccountLink } from '../account-link';
 import { Illustration, IllustratedMenu } from '../illustrations';
+import { SchoolDirectory } from './school-directory';
+import { StaffReports } from '../school-reports/reports';
+import { downloadDocument, encodedFile, FileButton } from '../files/documents';
+import { StaffLibrary } from '../files/library';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -40,6 +44,9 @@ const teacherSections = [
 ];
 const schoolPages = [
   { id: 'directory', label: 'Enseignants', detail: 'Gérer les comptes et les affectations.' },
+  { id: 'enrolment', art: 'home', label: 'Classes et familles', detail: 'Gérer les élèves, les tuteurs et leurs invitations.' },
+  { id: 'reports', art: 'homework', label: 'Livrets scolaires', detail: 'Consulter les bilans et télécharger les PDF.' },
+  { id: 'library', art: 'blog', label: 'Médiathèque', detail: 'Consulter les documents, images et enregistrements de classe.' },
   { id: 'photo-authorizations', label: 'Autorisations photo', detail: 'Consulter et renseigner les décisions des familles.' },
   { id: 'banner', label: 'Bandeau d’en-tête', detail: 'Choisir le texte et les couleurs du bandeau.' },
   { id: 'attendance', label: 'Suivi des absences', detail: 'Consulter les absences par classe et leurs justifications.' },
@@ -50,6 +57,8 @@ const classLifePages = [
   { id: 'attendance', label: 'Faire l’appel', detail: 'Enregistrer les présences, retards et absences.' },
   { id: 'liaison', label: 'Cahier de liaison', detail: 'Publier un mot et lire les réponses des familles.' },
   { id: 'blog', label: 'Blog de classe', detail: 'Partager les articles et les galeries de la classe.' },
+  { id: 'reports', art: 'homework', label: 'Livret scolaire', detail: 'Rédiger et publier les bilans par trimestre.' },
+  { id: 'library', art: 'blog', label: 'Médiathèque', detail: 'Partager des documents, des images et des enregistrements.' },
 ];
 
 function message(error, activating) {
@@ -59,6 +68,8 @@ function message(error, activating) {
     case 401: return activating ? 'Le code d’activation ou les identifiants sont invalides.' : 'Les identifiants sont incorrects.';
     case 404: return 'La ressource n’est plus accessible.';
     case 409: return 'Cet identifiant est déjà utilisé dans votre école.';
+    case 413: return 'Le fichier dépasse la taille autorisée.';
+    case 415: return 'Choisissez un fichier PDF, JPEG, PNG ou WebP valide.';
     case 429: return 'Trop de tentatives. Réessayez dans une minute.';
     default: return 'L’opération n’a pas abouti. Réessayez dans un instant.';
   }
@@ -384,12 +395,15 @@ export function Staff({ role, onParent }) {
               </View>}
             </>}
             {schoolGroup && subpage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
+            {schoolGroup && subpage === 'enrolment' && <SchoolDirectory request={request} run={run} busy={busy} onChanged={restore} />}
+            {subpage === 'reports' && <StaffReports classes={desk.classes} request={request} onExpired={expireSession} teacher={isTeacher} />}
+            {subpage === 'library' && <StaffLibrary classes={desk.classes} request={request} onExpired={expireSession} role={role} />}
             {schoolGroup && subpage === 'photo-authorizations' && <DirectionPhotoAuthorizations classes={desk.classes}
               request={request} run={run} busy={busy} />}
             {schoolGroup && subpage === 'banner' && <BannerSettings request={request} run={run} busy={busy} onSaved={replaceBanner} />}
             {schoolGroup && subpage === 'attendance' && <DirectionAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
             {schoolGroup && subpage === 'year-transition' && <YearTransition classes={desk.classes}
-              request={request} onExpired={expireSession} />}
+              request={request} onExpired={expireSession} onApplied={() => void run(restore)} />}
             {schoolGroup && subpage === 'security' && <DirectionSecurity request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'account-link' && <AccountLink role="teacher" request={request}
@@ -438,6 +452,20 @@ export function Staff({ role, onParent }) {
                       <Text accessibilityRole="header" style={staffStyles.heading}>{entry.title}</Text>
                       <Text style={styles.body}>{entry.description}</Text>
                       <View style={styles.actions}>
+                        <FileButton label={entry.hasDocument ? 'Remplacer le document' : 'Joindre un document'} busy={busy}
+                          onFile={(file) => void run(async () => {
+                            await request(classPath(classId) + '/' + entry.id + '/document',
+                              { method: 'PUT', body: { content: await encodedFile(file) } });
+                            await list(classId, month);
+                          })} />
+                        {entry.hasDocument && <Button label="Télécharger le document" secondary busy={busy} onPress={() => void run(async () => {
+                          const file = await request(classPath(classId) + '/' + entry.id + '/document', { responseType: 'attachment' });
+                          downloadDocument(file, 'document-cahier-de-texte');
+                        })} />}
+                        {entry.hasDocument && <Button label="Retirer le document" secondary busy={busy} onPress={() => void run(async () => {
+                          await request(classPath(classId) + '/' + entry.id + '/document', { method: 'DELETE' });
+                          await list(classId, month);
+                        })} />}
                         {removing === entry.id ? (
                           <>
                             <Button label="Confirmer le retrait" busy={busy} onPress={() => remove(entry.id)} />

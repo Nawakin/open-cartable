@@ -44,16 +44,26 @@ async function addPhotos(doc, photos, read, width, height) {
   doc.y = y + height + captionHeight + 19;
 }
 
-export async function makeBlogPdf(selection, period, readImage) {
+export async function writeSchoolPdf(title, subject, draw) {
   const doc = new PDFDocument({
     autoFirstPage: false, size: 'A4', margin,
-    info: { Title: 'Blog de classe · ' + selection.className, Subject: String(period.year) },
+    info: { Title: title, Subject: String(subject) },
   });
   const output = buffer(doc);
   output.catch(() => {});
   try {
     doc.registerFont('Regular', regular);
     doc.registerFont('Bold', bold);
+    await draw(doc);
+    doc.end();
+    return await output;
+  } finally {
+    if (!doc.readableEnded) doc.destroy();
+  }
+}
+
+export function makeBlogPdf(selection, period, readImage) {
+  return writeSchoolPdf('Blog de classe · ' + selection.className, period.year, async (doc) => {
     addCover(doc, selection.className, period);
     for (const article of selection.articles) {
       doc.addPage();
@@ -68,14 +78,15 @@ export async function makeBlogPdf(selection, period, readImage) {
         doc.font('Regular').fontSize(11).fillColor(ink).text(article.body, { width, lineGap: 4 });
         doc.moveDown(0.7);
       }
+      if (article.videoCount > 0) {
+        const label = article.videoCount === 1 ? 'Vidéo disponible dans l’ENT' : article.videoCount + ' vidéos disponibles dans l’ENT';
+        doc.font('Regular').fontSize(10).fillColor('#466657').text(label, { width });
+        doc.moveDown(0.7);
+      }
       for (let index = 1; index < article.photos.length; index += 2) {
         await addPhotos(doc, article.photos.slice(index, index + 2), (photo) => readImage(article.id, photo.id, 'thumb'),
           (width - 12) / 2, 165);
       }
     }
-    doc.end();
-    return await output;
-  } finally {
-    if (!doc.readableEnded) doc.destroy();
-  }
+  });
 }

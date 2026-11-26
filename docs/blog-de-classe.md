@@ -17,6 +17,8 @@ Le filtre « Brouillons » permet de retrouver les articles en préparation. Si 
 
 ### Masquer une zone sur une photo
 
+Dans l’outil de masquage, « Repérer les visages » propose des rectangles à vérifier. Le repérage se déroule dans le navigateur de l’enseignant et traite uniquement la photo ouverte. Contrôlez chaque proposition, ajoutez les zones oubliées et appliquez les masques. L’autorisation de publication reste une vérification manuelle.
+
 1. Dans le brouillon de la web-app, ouvrez les « Options » de la photo, puis « Masquer une zone ».
 2. Tracez un rectangle à la souris ou au doigt sur chaque élément à cacher. Couvrez toute la zone qui permet d’identifier l’élève. Au clavier, placez le focus sur la photo, déplacez le curseur avec les flèches et utilisez Entrée pour poser chaque coin. « Annuler le dernier tracé » retire le dernier rectangle de l’aperçu.
 3. Choisissez « Appliquer les masques ». La photo et sa vignette sont remplacées par les versions avec les rectangles opaques. Les anciens liens de la photo expirent immédiatement et l’opération est définitive dans le brouillon.
@@ -41,6 +43,10 @@ Ouvrez l’article publié et choisissez « Retirer de la publication », puis c
 Dans l’accueil parent, ouvrez « Vie de classe », puis « Blog de classe » sous le nom de l’enfant. Le fil affiche les articles publiés de sa classe actuelle, du plus récent au plus ancien. La première photo apparaît en grand. La vignette `+X` indique le nombre d’autres photos et ouvre le carrousel à la deuxième image. Utilisez les flèches, un glissement horizontal ou les touches droite et gauche. Si le fil était déjà ouvert lors d’une publication ou d’un retrait, utilisez « Actualiser ».
 
 Dans l’espace direction, ouvrez « École → Clôture d’année → PDF du blog » pour télécharger les articles publiés d’une classe et leurs galeries autorisées. [Export annuel du blog](cloture-annee.md#exporter-le-blog-en-pdf)
+
+## Ajouter une vidéo
+
+Enregistrez le brouillon puis choisissez « Ajouter une vidéo ». Sélectionnez un fichier MP4 ou WebM de 24 Mo maximum et vérifiez qu’aucun élève n’est identifiable à l’image ou au son. L’ENT limite chaque vidéo à deux minutes et deux vidéos par article. Lancez la prévisualisation avant de publier. Le PDF conserve le texte et les galeries photo.
 
 ## Stockage et conservation
 

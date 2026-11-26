@@ -52,7 +52,7 @@ export async function registerStaffWeb(app, { webOrigin, cookieName, withSession
       const result = await withSession(token, (db, actor) => operation(request, db, actor, reply), options);
       if (!result.authorized) return unauthorized(reply);
       if (result.value === null) return reply.code(404).send({ error: 'Ressource introuvable.' });
-      return reply.code(success).send(result.value);
+      return reply.code(reply.statusCode === 200 ? success : reply.statusCode).send(result.value);
     };
   }
 

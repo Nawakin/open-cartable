@@ -16,9 +16,11 @@ Depuis l’accueil parent, choisissez « Absences » sous le nom de l’enfant. 
 
 1. Ouvrez « École », puis « Suivi des absences ». Sélectionnez une classe et un mois.
 2. La liste donne le nombre d’absences, de retards et de sorties par élève. Un encart signale les élèves qui ont au moins trois absences non justifiées dans la classe et le mois affichés.
-3. Ouvrez la ligne d’un élève pour voir les dates. Pour un justificatif déjà vérifié par l’école, utilisez « Marquer comme justifiée ». La mention et le compteur se mettent à jour. Utilisez « Retirer la justification » pour corriger une erreur.
+3. Ouvrez la ligne d’un élève pour voir les dates. Si la famille a transmis une pièce, ouvrez le justificatif puis acceptez-le ou refusez-le. Pour une justification déjà vérifiée par ailleurs, utilisez « Marquer comme justifiée ».
 
-L’envoi de justificatifs photo et PDF et les notifications push figurent dans la feuille de route. [Plan de développement](developpement.md#état-de-la-feuille-de-route)
+## Envoyer un justificatif depuis le compte parent
+
+Dans « Absences », ouvrez le mois de l’absence et choisissez « Envoyer un justificatif ». Sélectionnez un JPEG, PNG, WebP ou PDF de 5 Mo maximum. Le statut est visible dans l’historique. La direction seule peut télécharger le document depuis l’ENT.
 
 ## Accès et conservation
 

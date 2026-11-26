@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { transaction } from '../db/database.js';
 import { lockPhotoAuthorizations } from '../photo-authorizations/store.js';
 import { decryptImage, encryptImage, maskImage, maxPhotos, prepareImage } from './images.js';
+import { hasPublicVideo } from '../files/class-media.js';
 
 const schoolQuota = 5 * 1024 ** 3;
 const order = 'position, id';
@@ -184,7 +185,8 @@ export async function purgeExpiredBlogPhotos(pool) {
         DELETE FROM class_blog_photos WHERE expires_at <= transaction_timestamp() RETURNING school_id, article_id
       )
       UPDATE class_blog_articles a SET version = version + 1,
-        published_at = CASE WHEN a.body = '' AND NOT ${hasPublicPhoto('a')} THEN NULL ELSE a.published_at END
+        published_at = CASE WHEN a.body = '' AND NOT ${hasPublicPhoto('a')} AND NOT ${hasPublicVideo('a')}
+          THEN NULL ELSE a.published_at END
       WHERE (a.school_id, a.id) IN (SELECT school_id, article_id FROM removed)
     `);
   });

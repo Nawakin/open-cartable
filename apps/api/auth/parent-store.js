@@ -18,8 +18,8 @@ const eligibleChildren = `
   SELECT student.school_id, student.class_id, student.id, student.display_name, p.guardian_id, c.name AS class_name
   FROM active_parent p
   JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
-  JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
-  JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
+  JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id) AND student.left_at IS NULL
+  JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id) AND c.archived_year IS NULL
 `;
 const permittedChildQuery = `WITH active_parent AS (${activeParentQuery}),
   permitted_child AS (${eligibleChildren} WHERE l.student_id = $3)`;
@@ -182,7 +182,7 @@ export function createParentStore(pool, invitationKey) {
         SELECT student.id, student.display_name, c.name AS class_name
         FROM active_parent p
         LEFT JOIN guardian_students l ON (l.school_id, l.guardian_id) = (p.school_id, p.guardian_id)
-        LEFT JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id)
+        LEFT JOIN students student ON (student.school_id, student.id) = (l.school_id, l.student_id) AND student.left_at IS NULL
         LEFT JOIN classes c ON (c.school_id, c.id) = (student.school_id, student.class_id)
         ORDER BY student.display_name, student.id
       `, [sessionId, guardianId]);
@@ -216,7 +216,7 @@ export function createParentStore(pool, invitationKey) {
     async homework({ sessionId, guardianId }, childId, { from, to, domain, beforeDate, beforeId }) {
       const result = await pool.query(`
         ${permittedChildQuery}, page AS (
-          SELECT e.id, e.entry_date, e.title, e.domain, e.description
+          SELECT e.id, e.entry_date, e.title, e.domain, e.description, e.attachment_kind IS NOT NULL AS "hasDocument"
           FROM permitted_child c
           JOIN homework_entries e ON (e.school_id, e.class_id) = (c.school_id, c.class_id)
           WHERE e.entry_date BETWEEN $4 AND $5
@@ -228,7 +228,7 @@ export function createParentStore(pool, invitationKey) {
         SELECT ${childFields},
                COALESCE((SELECT json_agg(json_build_object(
                  'id', id, 'date', to_char(entry_date, 'YYYY-MM-DD'),
-                 'title', title, 'domain', domain, 'description', description
+                 'title', title, 'domain', domain, 'description', description, 'hasDocument', "hasDocument"
                ) ORDER BY entry_date DESC, id DESC) FROM page), '[]'::json) AS entries
       `, [sessionId, guardianId, childId, from, to, domain, beforeDate, beforeId, homeworkPageSize + 1]);
       const { authenticated, child, entries } = result.rows[0];

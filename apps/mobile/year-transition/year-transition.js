@@ -4,16 +4,18 @@ import { Button, Field, styles } from '../parent/ui';
 import { ClassesForNextYear } from './classes';
 import { Passages } from './passages';
 import { BlogExport } from './blog-export';
+import { Archive } from './archive';
+import { ClosingYear } from './closing';
 import { layout } from './ui';
 
 const path = '/year-transition';
-const emptyDraft = { revision: null, classes: [], sourceLevels: [], overrides: [], assignments: [] };
+const emptyDraft = { revision: null, classes: [], sourceLevels: [], overrides: [], assignments: [], teacherAssignments: [] };
 const uiYear = (year) => year + '–' + (year + 1);
 
-export function YearTransition({ classes, request, onExpired }) {
+export function YearTransition({ classes, request, onExpired, onApplied }) {
   const [data, setData] = useState(null);
   const [tab, setTab] = useState('classes');
-  const [exporting, setExporting] = useState(false);
+  const [section, setSection] = useState('preparation');
   const [year, setYear] = useState('');
   const [editingYear, setEditingYear] = useState(false);
   const [notice, setNotice] = useState('');
@@ -22,6 +24,7 @@ export function YearTransition({ classes, request, onExpired }) {
   const pending = useRef(false);
   const plan = data?.plan;
   const validYear = /^\d{4}$/.test(year) && Number(year) >= 1900 && Number(year) <= 9998;
+  const preparing = section === 'preparation';
 
   async function run(operation) {
     if (pending.current) return false;
@@ -62,22 +65,32 @@ export function YearTransition({ classes, request, onExpired }) {
     if (await save({ startYear: Number(year) })) setEditingYear(false);
   }
 
+  async function apply(confirmation) {
+    if (!await run(() => request(path + '/apply', { method: 'POST', body: { revision: plan.revision, confirmation } }))) return;
+    setNotice('Nouvelle année ouverte.');
+    setTab('classes');
+    onApplied();
+  }
+
   return <View style={layout.group}>
     <Text accessibilityRole="header" style={styles.title}>Clôture d’année</Text>
     {busy && !data && <Text style={styles.body}>Chargement de la préparation…</Text>}
-    {!exporting && error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
-    {!exporting && error && <View style={styles.actions}><Button label="Actualiser" icon="refresh-outline" busy={busy} secondary onPress={load} /></View>}
-    {!exporting && notice && <Text accessibilityLiveRegion="polite" style={styles.label}>{notice}</Text>}
+    {preparing && error && <Text accessibilityRole="alert" style={styles.error}>{error}</Text>}
+    {preparing && error && <View style={styles.actions}><Button label="Actualiser" icon="refresh-outline" busy={busy} secondary onPress={load} /></View>}
+    {preparing && notice && <Text accessibilityLiveRegion="polite" style={styles.label}>{notice}</Text>}
     {data && <>
       <View style={styles.actions}>
-        <Button label="Préparation" icon="calendar-outline" selected={!exporting} secondary={exporting}
-          busy={busy} onPress={() => setExporting(false)} />
-        <Button label="PDF du blog" icon="document-outline" selected={exporting} secondary={!exporting}
-          busy={busy} onPress={() => setExporting(true)} />
+        <Button label="Préparation" icon="calendar-outline" selected={preparing} secondary={!preparing}
+          busy={busy} onPress={() => setSection('preparation')} />
+        <Button label="PDF du blog" icon="document-outline" selected={section === 'pdf'} secondary={section !== 'pdf'}
+          busy={busy} onPress={() => setSection('pdf')} />
+        <Button label="Archives" icon="archive-outline" selected={section === 'archive'} secondary={section !== 'archive'}
+          busy={busy} onPress={() => setSection('archive')} />
       </View>
-      {exporting ? <BlogExport classes={classes} startYear={plan?.startYear ?? data.suggestedStartYear}
-        request={request} onExpired={onExpired} /> : (!plan || editingYear) ? <View style={layout.card}>
-        <Field label="Année de début à clôturer" value={year} maxLength={4} keyboardType="number-pad" editable={!busy}
+      {section === 'archive' ? <Archive request={request} onExpired={onExpired} />
+        : section === 'pdf' ? <BlogExport classes={classes} startYear={plan?.startYear ?? data.suggestedStartYear}
+          request={request} onExpired={onExpired} /> : (!plan || editingYear) ? <View style={layout.card}>
+        <Field label="Année de début à clôturer" value={year} maxLength={4} keyboardType="number-pad" editable={!busy && !data.activeStartYear}
           onChangeText={setYear} />
         {validYear && <Text style={styles.body}>Année à clôturer {uiYear(Number(year))} · Rentrée {uiYear(Number(year) + 1)}</Text>}
         <View style={styles.actions}>
@@ -93,18 +106,21 @@ export function YearTransition({ classes, request, onExpired }) {
             <Text style={styles.label}>Préparation {uiYear(plan.startYear + 1)}</Text>
             <Text style={styles.body}>Année à clôturer {uiYear(plan.startYear)} · Brouillon</Text>
           </View>
-          <Button label="Modifier" accessibilityLabel="Modifier les années" icon="create-outline"
-            secondary busy={busy} onPress={() => setEditingYear(true)} />
+          {!data.activeStartYear && <Button label="Modifier" accessibilityLabel="Modifier les années" icon="create-outline"
+            secondary busy={busy} onPress={() => setEditingYear(true)} />}
         </View>
         <View style={styles.actions}>
           <Button label="Classes" selected={tab === 'classes'} secondary={tab !== 'classes'}
             busy={busy} onPress={() => setTab('classes')} />
           <Button label="Passages" selected={tab === 'students'} secondary={tab !== 'students'}
             busy={busy} onPress={() => setTab('students')} />
+          <Button label="Ouverture" selected={tab === 'closing'} secondary={tab !== 'closing'}
+            busy={busy} onPress={() => setTab('closing')} />
         </View>
         {tab === 'classes' ? <ClassesForNextYear plan={plan} levels={data.levels} sources={data.sources}
           save={save} busy={busy} onReview={() => setTab('students')} />
-          : <Passages sources={data.sources} plan={plan} levels={data.levels} save={save} busy={busy} />}
+          : tab === 'students' ? <Passages sources={data.sources} plan={plan} levels={data.levels} save={save} busy={busy} />
+            : <ClosingYear plan={plan} teachers={data.teachers} summary={data.summary} save={save} apply={apply} busy={busy} />}
       </>}
     </>}
   </View>;

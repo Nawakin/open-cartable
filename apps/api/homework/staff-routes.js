@@ -1,4 +1,5 @@
 import { uuidParams } from '../auth/staff-web.js';
+import { lockActiveClass } from '../auth/class-access.js';
 import { createEntry, deleteEntry, listClassEntries, readEntry, updateEntry } from './entries.js';
 import { homeworkQuerySchema, readPeriod } from './period.js';
 
@@ -16,6 +17,7 @@ export function registerStaffHomework(app, prefix, authenticated, canAccessClass
   function classRoute(operation, status) {
     return authenticated(async (request, db, actor) => {
       if (canAccessClass && !await canAccessClass(db, actor, request.params.classId)) return null;
+      if (!await lockActiveClass(db, actor.school_id, request.params.classId)) return null;
       return operation(request, db, actor);
     }, status);
   }

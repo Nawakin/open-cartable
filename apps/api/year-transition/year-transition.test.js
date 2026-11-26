@@ -7,6 +7,7 @@ import { hashPassword } from '../auth/password.js';
 import { migrate, openDatabase, transaction } from '../db/database.js';
 import { demo, seedDemo } from '../db/demo.js';
 import { setDirectionPassword } from '../direction/store.js';
+import { createTeacher } from '../teacher/store.js';
 
 const databaseUrl = process.env.TEST_DATABASE_URL;
 const origin = 'https://ent.ecole.example';
@@ -120,4 +121,42 @@ test('la direction prépare les passages dans un brouillon isolé et révise les
     data = (await fetch()).json();
     assert.deepEqual(data.plan.overrides, []);
     assert.equal(pupil(studentA.id).level, 'CM2');
+
+    const apply = (confirmation = 2027, headers = local) => call('POST', endpoint + '/apply', headers, {
+      revision: data.plan.revision, confirmation,
+    });
+    assert.equal((await apply()).statusCode, 409);
+    assert.equal((await apply(2028)).statusCode, 400);
+    assert.equal((await apply(2027, foreign)).statusCode, 409);
+    const teacher = await transaction(pool, (db) => createTeacher(db, school.id, 'preparation-rentree', [classA.id]));
+    const homework = '/direction/classes/' + classA.id + '/homework';
+    await pool.query(`
+      INSERT INTO homework_entries (school_id, class_id, id, entry_date, title, domain, description)
+      VALUES ($1, $2, gen_random_uuid(), '2026-11-01', 'Exercice fictif', 'Lecture', 'Un texte archivé.')
+    `, [school.id, classA.id]);
+    await pool.query(`
+      INSERT INTO liaison_notes (school_id, class_id, id, note_day, body)
+      VALUES ($1, $2, gen_random_uuid(), CURRENT_DATE, 'Un mot archivé.')
+    `, [school.id, classA.id]);
+    await save({ assignments: [
+      { ...identity(studentA.id, classB.id), sourceLevel: 'CM2', target: null },
+      { ...identity(studentB.id, classB.id), sourceLevel: 'CM2', target: { classId: otherTarget.id, level: 'CE2' } },
+      { ...identity(studentC.id), sourceLevel: 'CE1', target: { classId: otherTarget.id, level: 'CE2' } },
+    ], teacherAssignments: [{ teacherId: teacher.id, classId: otherTarget.id }] });
+    assert.equal(data.summary.ready, true);
+    const openings = await Promise.all([apply(), apply()]);
+    assert.deepEqual(openings.map(({ statusCode }) => statusCode), [200, 200]);
+    assert.deepEqual(openings.map((result) => result.json().activeStartYear), [2027, 2027]);
+    assert.equal((await pool.query('SELECT 1 FROM school_year_changes WHERE school_id = $1', [school.id])).rowCount, 1);
+    assert.deepEqual((await call('GET', '/direction/classes', local)).json().classes.map(({ id }) => id), [otherTarget.id]);
+    assert.deepEqual((await pool.query('SELECT class_id FROM teacher_classes WHERE teacher_id = $1', [teacher.id])).rows,
+      [{ class_id: otherTarget.id }]);
+    const { rows: [departed] } = await pool.query('SELECT class_id, left_at FROM students WHERE id = $1', [studentA.id]);
+    assert.equal(departed.class_id, classB.id);
+    assert.ok(departed.left_at);
+    assert.equal((await call('GET', homework + '?from=2026-11-01&to=2026-11-30', local)).statusCode, 404);
+    const archives = '/direction/school-archives/' + classA.id;
+    assert.equal((await call('GET', archives + '?kind=homework', local)).json().entries[0].title, 'Exercice fictif');
+    assert.equal((await call('GET', archives + '?kind=liaison', local)).json().entries[0].body, 'Un mot archivé.');
+    assert.equal((await call('GET', archives + '?kind=homework', foreign)).statusCode, 404);
   });

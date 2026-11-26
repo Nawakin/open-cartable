@@ -1,6 +1,7 @@
 import React, { useId, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, styles } from '../parent/ui';
+import { detectFaceBoxes } from './face-detector.web';
 
 const grid = 10_000;
 const maxMasks = 20;
@@ -26,6 +27,18 @@ function percent(value) {
   return value / grid * 100 + '%';
 }
 
+function faceMask({ x, y, width, height }, size) {
+  const horizontal = width * 0.25;
+  const vertical = height * 0.35;
+  return rectangle({
+    x: clamp((x - horizontal) / size.width * grid),
+    y: clamp((y - vertical) / size.height * grid),
+  }, {
+    x: clamp((x + width + horizontal) / size.width * grid),
+    y: clamp((y + height + vertical) / size.height * grid),
+  });
+}
+
 function Mask({ area }) {
   return <div aria-hidden="true" style={{
     position: 'absolute', pointerEvents: 'none', backgroundColor: '#000', boxShadow: 'inset 0 0 0 1px #fff',
@@ -37,13 +50,39 @@ function Mask({ area }) {
 export function PhotoMasks({ path, label, busy, onApply, onClose }) {
   const hint = useId();
   const drag = useRef(null);
+  const image = useRef(null);
   const [size, setSize] = useState(null);
   const [failed, setFailed] = useState(false);
   const [masks, setMasks] = useState([]);
   const [draft, setDraft] = useState(null);
   const [keyboard, setKeyboard] = useState(null);
   const [corner, setCorner] = useState(null);
-  const editable = size && !busy && masks.length < maxMasks;
+  const [detecting, setDetecting] = useState(false);
+  const [detection, setDetection] = useState('');
+  const editable = size && !busy && !detecting && masks.length < maxMasks;
+
+  async function detect() {
+    setDetecting(true);
+    setDetection('Recherche des visages…');
+    cancelDraw();
+    setKeyboard(null);
+    setCorner(null);
+    try {
+      const faces = await detectFaceBoxes(image.current);
+      const suggestions = faces.map((boundingBox) => faceMask(boundingBox, size))
+        .filter((area) => area.left < area.right && area.top < area.bottom);
+      if (suggestions.length) {
+        setMasks(suggestions.slice(0, maxMasks));
+        setDetection('Vérifiez les zones proposées et ajoutez les visages manquants.');
+      } else {
+        setDetection('Aucun visage repéré. Vérifiez la photo et tracez les zones manuellement.');
+      }
+    } catch {
+      setDetection('Votre navigateur ne permet pas ce repérage. Tracez les zones manuellement.');
+    } finally {
+      setDetecting(false);
+    }
+  }
 
   function place(area) {
     if (area.left === area.right || area.top === area.bottom) return;
@@ -110,6 +149,10 @@ export function PhotoMasks({ path, label, busy, onApply, onClose }) {
   return <>
     <Text accessibilityRole="header" style={styles.label}>Masquer une zone</Text>
     <Text style={styles.body}>Tracez un rectangle sur chaque zone à masquer.</Text>
+    {!masks.length && <View style={styles.actions}>
+      <Button label="Repérer les visages" icon="scan-outline" secondary busy={!editable} onPress={() => void detect()} />
+    </View>}
+    {detection && <Text accessibilityLiveRegion="polite" style={styles.body}>{detection}</Text>}
     <div id={hint} style={screenReader}>
       Au clavier, déplacez le curseur avec les flèches. Appuyez sur Entrée pour poser chaque coin. Échap annule le tracé en cours.
     </div>
@@ -121,7 +164,7 @@ export function PhotoMasks({ path, label, busy, onApply, onClose }) {
       style={{ position: 'relative', width, maxWidth: '100%', alignSelf: 'center',
         backgroundColor: '#dce7d9', touchAction: 'none', userSelect: 'none', cursor: editable ? 'crosshair' : 'auto',
         display: failed ? 'none' : 'block' }}>
-      <img src={'/api/v1/teacher' + path} alt={label} draggable={false}
+      <img ref={image} src={'/api/v1/teacher' + path} alt={label} draggable={false}
         onLoad={({ currentTarget }) => setSize({ width: currentTarget.naturalWidth, height: currentTarget.naturalHeight })}
         onError={() => setFailed(true)}
         style={{ width: '100%', height: 'auto', display: 'block', pointerEvents: 'none' }} />

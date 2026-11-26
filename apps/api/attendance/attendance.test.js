@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import pg from 'pg';
+import { PDFDocument } from 'pdf-lib';
 import { buildApp } from '../app.js';
 import { createParentStore } from '../auth/parent-store.js';
 import { hashPassword } from '../auth/password.js';
@@ -19,7 +20,8 @@ test('l’appel est versionné et les absences restent dans le périmètre de ch
   const admin = openDatabase(databaseUrl);
   const pool = new pg.Pool({ connectionString: databaseUrl, options: '-c search_path=' + schema });
   const store = createParentStore(pool, randomBytes(32));
-  const app = buildApp({ parentAuth: { store, signingKey: randomBytes(32), webOrigin: origin }, direction: { pool, webOrigin: origin } });
+  const app = buildApp({ parentAuth: { store, signingKey: randomBytes(32), webOrigin: origin },
+    direction: { pool, webOrigin: origin }, blogMediaKey: randomBytes(32) });
   context.after(async () => {
     await app.close();
     await pool.end();
@@ -135,6 +137,21 @@ test('l’appel est versionné et les absences restent dans le périmètre de ch
   assert.equal(month.alertThreshold, 3);
   assert.equal(month.students[0].absences, 3);
   assert.equal(month.students[0].unjustified, 3);
+  const pdf = await PDFDocument.create();
+  pdf.addPage().drawText('Justificatif fictif');
+  const content = Buffer.from(await pdf.save()).toString('base64');
+  const form = '/parent/children/' + childA.id + '/attendance/' + classA.id + '/' + dates.previous + '/justification';
+  const review = dashboard + '/' + dates.previous + '/students/' + childA.id + '/justification';
+  assert.equal((await call('PUT', form, mobile, { content })).statusCode, 404);
+  assert.equal((await call('PUT', form, parent, { content })).statusCode, 200);
+  assert.equal((await call('GET', review, foreign)).statusCode, 404);
+  const document = await call('GET', review, direction);
+  assert.equal(document.statusCode, 200);
+  assert.equal(document.headers['content-type'], 'application/pdf');
+  const { rows: [uploaded] } = await pool.query('SELECT revision FROM attendance_rolls WHERE day = $1', [dates.previous]);
+  assert.equal((await call('PUT', review, direction, { revision: uploaded.revision, accepted: true })).statusCode, 200);
+  assert.ok((await call('GET', history(childA, previousMonth), parent)).json().entries.some(({ justificationStatus, justified }) =>
+    justificationStatus === 'accepted' && justified));
   assert.equal((await call('GET', history(childA, dates.expired.slice(0, 7)), parent)).json().entries.length, 0);
   assert.equal((await call('GET', roll + dates.expired, teacherA)).statusCode, 404);
   await purgeExpiredAttendance(pool);

@@ -41,15 +41,16 @@ export function request(fetcher, origin, path, options) {
 }
 
 export async function requestJson(fetcher, url, {
-  method = 'GET', body, token, credentials, cache, binary = false, responseType = 'json',
+  method = 'GET', body, token, credentials, cache, binary = false, responseType = 'json', timeoutMs,
 } = {}) {
-  const accept = { bytes: 'image/jpeg', pdf: 'application/pdf' };
+  const accept = { bytes: 'image/jpeg', pdf: 'application/pdf', attachment: '*/*' };
   const headers = { Accept: accept[responseType] ?? 'application/json' };
   if (body !== undefined) headers['Content-Type'] = binary ? 'application/octet-stream' : 'application/json';
   if (token) headers.Authorization = 'Bearer ' + token;
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), binary || responseType === 'pdf' ? 60_000 : 12_000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs ??
+    (binary || responseType === 'pdf' || responseType === 'attachment' ? 60_000 : 12_000));
   try {
     const response = await fetcher(url, {
       method,
@@ -63,7 +64,7 @@ export async function requestJson(fetcher, url, {
     if (!response.ok) throw new RequestError(response.status);
     if (response.status === 204) return undefined;
     if (responseType === 'bytes') return await response.arrayBuffer();
-    if (responseType === 'pdf') return await response.blob();
+    if (responseType === 'pdf' || responseType === 'attachment') return await response.blob();
     return await response.json();
   } catch (error) {
     if (error instanceof RequestError) throw error;

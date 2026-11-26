@@ -1,6 +1,6 @@
 # Clôture de l’année scolaire
 
-Le brouillon de rentrée et l’export PDF du blog sont disponibles dans « École → Clôture d’année », côté direction. L’archivage dans l’ENT et la bascule figurent dans les étapes suivantes de la v0.3.
+La direction prépare et ouvre la rentrée depuis « École → Clôture d’année ». La bascule crée les classes, applique les passages et conserve les anciennes classes dans « Archives ».
 
 ## Préparer la rentrée
 
@@ -21,19 +21,21 @@ Le serveur vérifie les autorisations photo au moment du téléchargement et à 
 
 ## Ouvrir la nouvelle année
 
-Lors de la future bascule, la direction préparera les affectations des enseignants, vérifiera le récapitulatif et confirmera l’ouverture de l’année après l’archivage.
+1. Dans « Ouverture », affectez les enseignants aux classes préparées.
+2. Vérifiez les effectifs, les départs et les affectations dans le récapitulatif. Si vous souhaitez conserver une copie locale du blog, téléchargez son PDF avant la bascule.
+3. Saisissez l’année de rentrée demandée et confirmez. L’ouverture applique toutes les décisions en une transaction.
+4. Ouvrez « Archives », choisissez l’année et la classe, puis consultez le cahier de texte, le cahier de liaison, l’agenda de classe, le blog ou la médiathèque. Le PDF du blog reste accessible selon les mêmes règles d’autorisation et de conservation. Les vidéos se lisent dans l’ENT.
 
 | Élément | Effet de la bascule |
 | --- | --- |
 | Élèves et familles | Conservation de la fiche élève et du lien avec ses tuteurs lors d’un passage ou d’un maintien. En cas de départ, l’élève sort des listes de présence et des espaces de classe actifs. Les accès aux autres enfants de la famille se poursuivent. |
 | Classes et personnel | Activation des nouvelles classes et des affectations confirmées. Les accès à la nouvelle année suivent ces affectations. |
 | Contenu de classe | Nouveaux espaces pour le blog, le cahier de texte, le cahier de liaison et l’agenda de classe. Les éléments de l’année passée passent en archive avec leurs droits et échéances de conservation. |
-| Suivi scolaire | L’historique des absences et des livrets suit l’élève selon les droits applicables et les durées de conservation prévues. Les statistiques de rentrée démarrent sur la nouvelle période. |
+| Suivi scolaire | L’historique des absences et les livrets publiés suivent l’élève scolarisé selon les droits et les durées de conservation. |
 | Messagerie privée | Les conversations restent liées à leurs participants et suivent leur durée de conservation habituelle. |
 
-## Étapes de réalisation et validation
+## Vérifier sur une école fictive
 
-1. **Années et affectations.** Rattacher les classes existantes à une année, conserver les identifiants des élèves et prévoir leur niveau individuel dans une classe multiniveau. Tester deux années ayant chacune une classe du même nom et vérifier que les contenus restent associés à la bonne année.
-2. **Assistant de passage.** Tester un passage simple, un niveau partagé entre deux classes, un maintien et un départ dans une famille qui a un autre enfant scolarisé. Vérifier qu’une modification en parallèle est signalée avec les élèves concernés.
-3. **PDF de classe.** Tester la mise en page sur un article avec plusieurs photos. Vérifier que l’export contient uniquement les articles et médias admissibles, y compris après un retrait d’autorisation. Vérifier les refus d’accès d’une autre école.
-4. **Bascule et reprise.** Appliquer les affectations et l’activation de l’année dans une seule transaction. Vérifier qu’un double clic ou une relance ne crée aucun doublon et qu’un échec conserve l’année active. Journaliser l’opération et tester la restauration à partir d’une sauvegarde chiffrée.
+1. Préparez une nouvelle classe portant le même nom qu’une classe actuelle. Enregistrez un passage, un maintien et un départ.
+2. Publiez un article fictif avec plusieurs photos autorisées, puis vérifiez le PDF.
+3. Ouvrez la rentrée et contrôlez les listes avec les comptes direction, enseignant et parent. Vérifiez que les publications de l’ancienne classe apparaissent dans les archives de la direction et que les autres enfants de la même famille restent visibles.
