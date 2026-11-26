@@ -56,13 +56,13 @@ Si l’assistant vous demande le code d’installation après un rechargement, r
 
 ### Activer ou réinitialiser le compte direction
 
-Après la mise à jour d’une installation existante, relancez le lanceur pour appliquer la migration. Exécutez ensuite la commande ci-dessous avec votre code école. Utilisez la même commande si vous perdez le mot de passe direction.
+Si vous perdez le mot de passe direction, ouvrez un terminal sur l’ordinateur qui héberge Docker et placez-vous dans le dossier Open Cartable. Avec les services démarrés, lancez le menu de maintenance.
 
 ```sh
-docker compose exec -T api npm run --silent direction:admin -- CODE_ECOLE
+./maintenance.sh
 ```
 
-La commande affiche un nouveau mot de passe dans le terminal et ferme les sessions direction de cette école. Conservez le mot de passe dans un gestionnaire et gardez le terminal privé. Les invitations et sessions parent suivent leur propre procédure de réémission.
+Tapez « 1 », choisissez l’école si plusieurs sont configurées, puis saisissez deux fois le nouveau mot de passe de 15 à 128 caractères. Les deux saisies sont masquées. Le menu enregistre le mot de passe et ferme les anciennes sessions direction. Sous Windows, exécutez le script dans un terminal WSL avec accès au même projet Docker Compose.
 
 ### Personnaliser le bandeau de l’école
 
