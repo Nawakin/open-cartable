@@ -19,35 +19,37 @@ import { YearTransition } from '../year-transition/year-transition';
 import { AuthenticatorField, validCode } from '../direction-security/fields';
 import { consumeRecoveryLink, DirectionRecovery } from '../direction-security/recovery';
 import { DirectionSecurity } from '../direction-security/settings';
+import { AccountLink } from '../account-link';
+import { Illustration, IllustratedMenu } from '../illustrations';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
 const blankEntry = () => ({ date: dayInSchoolCalendar(), title: '', domain: '', description: '' });
 const commonSections = [
-  { id: 'homework', icon: 'book-outline', label: 'Cahier de texte' },
-  { id: 'agenda', icon: 'calendar-outline', label: 'Agenda' },
-  { id: 'messages', icon: 'chatbubbles-outline', label: 'Messagerie' },
+  { id: 'homework', label: 'Cahier de texte' },
+  { id: 'agenda', label: 'Agenda' },
+  { id: 'messages', label: 'Messagerie' },
 ];
 const directionSections = [
   ...commonSections,
-  { id: 'school', icon: 'business-outline', label: 'École' },
+  { id: 'school', label: 'École' },
 ];
 const teacherSections = [
   ...commonSections,
-  { id: 'class-life', icon: 'school-outline', label: 'Vie de classe' },
+  { id: 'class-life', label: 'Vie de classe' },
 ];
 const schoolPages = [
-  { id: 'directory', icon: 'people-outline', label: 'Enseignants' },
-  { id: 'photo-authorizations', icon: 'shield-checkmark-outline', label: 'Autorisations photo' },
-  { id: 'banner', icon: 'color-palette-outline', label: 'Bandeau d’en-tête' },
-  { id: 'attendance', icon: 'clipboard-outline', label: 'Suivi des absences' },
-  { id: 'year-transition', icon: 'calendar-outline', label: 'Clôture d’année' },
-  { id: 'security', icon: 'lock-closed-outline', label: 'Sécurité du compte' },
+  { id: 'directory', label: 'Enseignants', detail: 'Gérer les comptes et les affectations.' },
+  { id: 'photo-authorizations', label: 'Autorisations photo', detail: 'Consulter et renseigner les décisions des familles.' },
+  { id: 'banner', label: 'Bandeau d’en-tête', detail: 'Choisir le texte et les couleurs du bandeau.' },
+  { id: 'attendance', label: 'Suivi des absences', detail: 'Consulter les absences par classe et leurs justifications.' },
+  { id: 'year-transition', label: 'Clôture d’année', detail: 'Préparer la rentrée et exporter le blog en PDF.' },
+  { id: 'security', label: 'Sécurité du compte', detail: 'Configurer la récupération et la double authentification.' },
 ];
 const classLifePages = [
-  { id: 'attendance', icon: 'clipboard-outline', label: 'Faire l’appel' },
-  { id: 'liaison', icon: 'reader-outline', label: 'Cahier de liaison' },
-  { id: 'blog', icon: 'newspaper-outline', label: 'Blog de classe' },
+  { id: 'attendance', label: 'Faire l’appel', detail: 'Enregistrer les présences, retards et absences.' },
+  { id: 'liaison', label: 'Cahier de liaison', detail: 'Publier un mot et lire les réponses des familles.' },
+  { id: 'blog', label: 'Blog de classe', detail: 'Partager les articles et les galeries de la classe.' },
 ];
 
 function message(error, activating) {
@@ -62,7 +64,7 @@ function message(error, activating) {
   }
 }
 
-export function Staff({ role, onParent, onOtherStaff }) {
+export function Staff({ role, onParent }) {
   const isTeacher = role === 'teacher';
   const title = isTeacher ? 'Espace enseignant' : 'Espace direction';
   const request = useCallback((path, options) => staffRequest(role, path, options), [role]);
@@ -330,16 +332,9 @@ export function Staff({ role, onParent, onOtherStaff }) {
   const schoolGroup = !isTeacher && section === 'school';
   const classLifeGroup = isTeacher && section === 'class-life';
   const subpages = schoolGroup ? schoolPages : (classLifeGroup ? classLifePages : null);
-  const spaceLinks = <View style={styles.actions}>
-    <Button label="Espace parent" icon="home-outline" onPress={onParent} busy={busy} secondary />
-    <Button label={isTeacher ? 'Espace direction' : 'Espace enseignant'} icon={isTeacher ? 'business-outline' : 'school-outline'}
-      onPress={onOtherStaff} busy={busy} secondary />
-  </View>;
-
   const panel = (
     <View style={styles.panel}>
-      {phase === 'desk'
-        ? <Text accessibilityRole="header" style={staffStyles.heading}>{desk.schoolName}</Text>
+      {phase === 'desk' ? !subpages && <Text accessibilityRole="header" style={staffStyles.heading}>{desk.schoolName}</Text>
         : <Text accessibilityRole="header" style={styles.title}>{title}</Text>}
       {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
       {notice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text> : null}
@@ -366,6 +361,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
           {!isTeacher && <Button label="Mot de passe oublié ?" busy={busy} secondary onPress={() => {
             setPassword(''); setAuthCode(''); setNeedsCode(false); setRecovery({ phase: 'request' });
           }} />}
+          <Button label="Connexion parent" icon="arrow-back-outline" onPress={onParent} busy={busy} secondary />
         </>
       )}
       {phase === 'desk' && (
@@ -375,11 +371,17 @@ export function Staff({ role, onParent, onOtherStaff }) {
               <Button label="Retour" accessibilityLabel={schoolGroup ? 'Retour à École' : 'Retour à Vie de classe'} icon="arrow-back-outline"
                 secondary busy={busy} onPress={() => setSubpage(null)} />
             </View> : <>
-              <Text accessibilityRole="header" style={styles.title}>{schoolGroup ? 'Gérer l’école' : 'Vie de classe'}</Text>
-              <View style={styles.actions}>
-                {subpages.map(({ id, icon, label }) => <Button key={id} label={label} icon={icon} secondary busy={busy}
-                  onPress={() => setSubpage(id)} />)}
+              <View style={staffStyles.overview}>
+                <Illustration name={schoolGroup ? 'school' : 'class-life'} size={64} />
+                <View style={staffStyles.overviewCopy}>
+                  <Text style={styles.label}>{desk.schoolName}</Text>
+                  <Text accessibilityRole="header" style={styles.title}>{schoolGroup ? 'Gérer l’école' : 'Vie de classe'}</Text>
+                </View>
               </View>
+              <IllustratedMenu items={subpages.map((item) => ({ ...item, onPress: () => setSubpage(item.id) }))} busy={busy} />
+              {classLifeGroup && <View style={styles.actions}>
+                <Button label="Mes accès" icon="link-outline" secondary busy={busy} onPress={() => setSubpage('account-link')} />
+              </View>}
             </>}
             {schoolGroup && subpage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
             {schoolGroup && subpage === 'photo-authorizations' && <DirectionPhotoAuthorizations classes={desk.classes}
@@ -390,6 +392,8 @@ export function Staff({ role, onParent, onOtherStaff }) {
               request={request} onExpired={expireSession} />}
             {schoolGroup && subpage === 'security' && <DirectionSecurity request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
+            {classLifeGroup && subpage === 'account-link' && <AccountLink role="teacher" request={request}
+              onExpired={expireSession} onOpen={onParent} />}
             {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
               onReply={(target) => { setMessageDraft(target); setSubpage(null); setSection('messages'); }} />}
             {classLifeGroup && subpage === 'blog' && <StaffBlog classes={desk.classes} request={request} onExpired={expireSession} />}
@@ -458,7 +462,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
     </View>
   );
 
-  if (recovery) return <AppFrame scrollKey={recovery.phase} busy={busy} wide>
+  if (recovery) return <AppFrame scrollKey={recovery.phase} busy={busy}>
     <DirectionRecovery key={recovery.token ?? recovery.phase} flow={recovery} school={school} request={request} onBack={(reset) => {
       setRecovery(null);
       if (reset) resetDesk();
@@ -468,15 +472,17 @@ export function Staff({ role, onParent, onOtherStaff }) {
 
   return (
     <AppFrame menu={menu} scrollKey={phase === 'desk' ? (subpage ?? section) : phase} busy={busy} banner={banner}
-      onLogout={phase === 'desk' ? logout : undefined} wide>
+      roleLabel={phase === 'desk' ? title : undefined} onLogout={phase === 'desk' ? logout : undefined}
+      wide={phase === 'desk' && Boolean(subpages) && !subpage}>
       {panel}
-      {spaceLinks}
     </AppFrame>
   );
 }
 
 const staffStyles = StyleSheet.create({
   heading: { color: '#132d25', fontSize: 19, fontWeight: '700' },
+  overview: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingBottom: 4 },
+  overviewCopy: { flex: 1, minWidth: 0, gap: 3 },
   description: { minHeight: 110, textAlignVertical: 'top' },
   entry: { padding: 16, borderRadius: 12, backgroundColor: '#eef1e9', gap: 8 },
 });

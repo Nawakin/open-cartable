@@ -120,6 +120,8 @@ export function FirstRun({ token, onComplete }) {
           <Text selectable style={setupStyles.value}>{result.code}</Text>
         </View>
         <Button label="Aller à la connexion" onPress={() => onComplete(result)} />
+        <Button label="Ouvrir l’espace direction" icon="lock-closed-outline" secondary
+          onPress={() => window.location.assign('/?espace=direction')} />
       </View>
     );
   }

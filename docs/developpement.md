@@ -16,6 +16,8 @@ Le blog permet de masquer des zones à la main dans la web-app. Le serveur rempl
 
 La rubrique « École » de la direction regroupe les comptes enseignants, les autorisations photo et le bandeau. Le texte, sa couleur et le fond du bandeau sont modifiables avec aperçu, contrôle de contraste et retour aux valeurs par défaut. « Vie de classe » regroupe le blog et le cahier de liaison dans l’espace enseignant. [Tutoriel d’installation](installation.md#personnaliser-le-bandeau-de-lécole)
 
+Les menus principaux et les raccourcis par enfant utilisent des cartes illustrées. L’association vérifiée des comptes parent et enseignant donne accès aux raccourcis entre ces espaces depuis leurs réglages respectifs. [Association des comptes](installation.md#utiliser-ses-comptes-parent-et-enseignant)
+
 Il reste à simplifier les écrans les plus chargés. Regrouper les actions liées, rendre l’action suivante évidente et afficher les réglages secondaires au moment où ils deviennent utiles. Vérifier sur téléphone et ordinateur que les utilisateurs trouvent où consulter, publier ou gérer une autorisation sans tutoriel.
 
 ## Architecture cible

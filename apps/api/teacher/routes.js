@@ -1,7 +1,8 @@
 import { registerStaffAgenda } from '../agenda/staff-routes.js';
 import { schoolCodePattern } from '../auth/credentials.js';
 import { passwordLimits } from '../auth/password.js';
-import { authRateLimit, cookieOptions, registerStaffWeb, unauthorized } from '../auth/staff-web.js';
+import { authRateLimit, cookieOptions, registerStaffWeb, teacherCookieName as cookieName, unauthorized } from '../auth/staff-web.js';
+import { registerTeacherAccountLink } from '../auth/account-links.js';
 import { registerStaffHomework } from '../homework/staff-routes.js';
 import { registerTeacherMessages } from '../messaging/routes.js';
 import { registerTeacherLiaison } from '../liaison/routes.js';
@@ -14,7 +15,6 @@ import {
   teacherLoginPattern, teacherSessionSeconds, withTeacherSession,
 } from './store.js';
 
-const cookieName = '__Host-open-cartable-teacher';
 const credentials = {
   schoolCode: { type: 'string', pattern: schoolCodePattern.source },
   login: { type: 'string', pattern: teacherLoginPattern.source },
@@ -72,4 +72,5 @@ export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey }) {
   registerTeacherPhotoAuthorizations(app, authenticated);
   registerSchoolBanner(app, '/teacher', authenticated);
   registerTeacherAttendance(app, authenticated);
+  registerTeacherAccountLink(app, authenticated);
 }

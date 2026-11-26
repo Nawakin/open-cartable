@@ -70,6 +70,7 @@ export async function resetTeacher(db, schoolId, teacherId) {
     RETURNING login, activation_expires_at AS "expiresAt"
   `, [schoolId, teacherId, refreshDigest(code)]);
   if (!reset.rowCount) return null;
+  await db.query('DELETE FROM parent_teacher_links WHERE school_id = $1 AND teacher_id = $2', [schoolId, teacherId]);
   await db.query('DELETE FROM teacher_sessions WHERE school_id = $1 AND teacher_id = $2', [schoolId, teacherId]);
   return { id: teacherId, code, ...reset.rows[0] };
 }

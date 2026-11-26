@@ -11,9 +11,8 @@ import { registerParentBlog } from '../blog/routes.js';
 import { registerFamilyPhotoAuthorizations } from '../photo-authorizations/routes.js';
 import { registerSchoolBanner } from '../school-banner/routes.js';
 import { registerParentAttendance } from '../attendance/routes.js';
-
-const browserCookie = '__Host-open-cartable';
-const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
+import { registerParentAccountLink } from './account-links.js';
+import { cookieOptions, parentCookieName as browserCookie, webSessionToken } from './staff-web.js';
 
 function jsonBody(fields) {
   return {
@@ -56,8 +55,8 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
   }
 
   function browserIdentity(request) {
-    const token = request.cookies?.[browserCookie];
-    return typeof token === 'string' && refreshTokenPattern.test(token) ? store.browserIdentity(token) : null;
+    const token = webSessionToken(request, browserCookie);
+    return token ? store.browserIdentity(token) : null;
   }
 
   function parentIdentity(request) {
@@ -65,11 +64,11 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
       ? browserIdentity(request) : bearerIdentity(request);
   }
 
-  function authenticated(operation, success = 200) {
+  function authenticated(operation, success = 200, identify = parentIdentity) {
     return async (request, reply) => {
-      const claims = await parentIdentity(request);
+      const claims = await identify(request);
       if (!claims) return unauthorized(reply);
-      const result = await store.withParentSession(claims, (db, actor) => operation(request, db, actor));
+      const result = await store.withParentSession(claims, (db, actor) => operation(request, db, actor, reply));
       if (!result.authorized) return unauthorized(reply);
       if (result.value === null) return reply.code(404).send({ error: 'Ressource introuvable.' });
       return reply.code(success).send(result.value);
@@ -127,6 +126,8 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
         return reply.code(403).send({ error: 'Origine de la requête non autorisée.' });
       }
     }
+
+    registerParentAccountLink(app, (operation, success) => authenticated(operation, success, browserIdentity), requireWebOrigin);
 
     app.post('/parent/web/auth/login', { ...invitationOptions, onRequest: requireWebOrigin }, async (request, reply) => {
       const { schoolCode, code } = request.body;

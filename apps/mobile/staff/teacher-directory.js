@@ -91,6 +91,7 @@ export function TeacherDirectory({ classes, request, run, busy }) {
           <Text style={styles.label}>Code d’activation de {issued.login}</Text>
           <Text selectable style={directoryStyles.code}>{issued.code}</Text>
           <Text style={styles.body}>Transmettez ce code en privé avec le code école et l’identifiant. Il expire dans sept jours.</Text>
+          <Text selectable style={styles.label}>{new URL('/?espace=enseignant', window.location.origin).href}</Text>
           <Button label="Masquer le code" onPress={() => setIssued(null)} busy={busy} secondary />
         </View>
       )}

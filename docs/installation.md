@@ -50,7 +50,7 @@ Si l’assistant vous demande le code d’installation après un rechargement, r
 
 ### Publier une entrée
 
-1. Ouvrez « Espace direction » depuis la page de connexion ou le menu parent « Compte » de la web-app. Saisissez le code école et le mot de passe choisi dans l’assistant.
+1. À la fin de l’installation, choisissez « Ouvrir l’espace direction ». Pour y revenir, ajoutez `/?espace=direction` à l’adresse de la web-app. Saisissez le code école et le mot de passe choisi dans l’assistant.
 2. Sélectionnez une classe. Renseignez la date, le titre, le domaine et la description, puis cliquez sur « Publier ».
 3. Revenez à « Espace parent » et ouvrez le cahier de texte de l’enfant. Sélectionnez la période de l’entrée. Dans l’espace direction, « Modifier » et « Retirer » permettent de corriger ou supprimer une publication. [Guide du cahier de texte](cahier-texte.md)
 
@@ -101,10 +101,18 @@ Les écrans de connexion et d’installation affichent le bandeau Open Cartable.
 ### Créer un accès enseignant
 
 1. Dans « Espace direction », ouvrez « École », puis « Enseignants ». Choisissez un identifiant, affectez une ou plusieurs classes puis cliquez sur « Créer le compte enseignant ».
-2. Transmettez en privé le code école, l’identifiant et le code d’activation affiché. Le code est valable sept jours et s’utilise une seule fois.
+2. Transmettez en privé le lien vers l’espace enseignant, le code école, l’identifiant et le code d’activation affichés. Le lien se termine par `/?espace=enseignant`. Le code est valable sept jours et s’utilise une seule fois.
 3. Dans « Espace enseignant », cliquez sur « Activer mon compte ». Saisissez le code école, l’identifiant et le code d’activation, puis choisissez un mot de passe de 15 à 128 caractères. Après activation, connectez-vous avec le code école, l’identifiant et ce mot de passe.
 
 L’enseignant retrouve le même formulaire de publication que la direction, avec ses seules classes affectées. La direction peut modifier les affectations, réinitialiser l’activation ou retirer le compte. Réinitialiser ou retirer un compte ferme ses sessions. Les publications restent dans le cahier de la classe. [Guide du cahier de texte](cahier-texte.md)
+
+### Utiliser ses comptes parent et enseignant
+
+1. Activez le compte enseignant créé par la direction. Connectez-vous dans un autre onglet de la même web-app avec l’invitation parent remise pour vos propres enfants.
+2. Dans l’espace enseignant, ouvrez « Vie de classe → Mes accès ». Vérifiez les prénoms ou noms d’affichage des enfants et saisissez votre mot de passe enseignant pour associer les deux comptes de la même école.
+3. Retrouvez « Espace enseignant » dans « Compte » côté parent et « Espace parent » dans « Mes accès » côté enseignant. Si la session de destination a expiré, identifiez-vous à nouveau dans l’espace choisi.
+
+L’association ajoute ces raccourcis. Les enfants suivent leur compte tuteur et les affectations suivent le compte enseignant. Vous pouvez dissocier les comptes depuis l’un ou l’autre espace. Une réinitialisation du compte enseignant dissocie aussi les comptes.
 
 ### Publier dans l’agenda
 

@@ -3,7 +3,14 @@ import rateLimit from '@fastify/rate-limit';
 import { refreshTokenPattern, uuidPattern } from './credentials.js';
 
 export const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
+export const parentCookieName = '__Host-open-cartable';
+export const teacherCookieName = '__Host-open-cartable-teacher';
 export const authRateLimit = { rateLimit: { max: 5, timeWindow: '1 minute' } };
+
+export function webSessionToken(request, cookieName) {
+  const token = request.cookies?.[cookieName];
+  return typeof token === 'string' && refreshTokenPattern.test(token) ? token : null;
+}
 
 export function unauthorized(reply) {
   return reply.code(401).send({ error: 'Identifiants non valides.' });
@@ -35,15 +42,14 @@ export async function registerStaffWeb(app, { webOrigin, cookieName, withSession
   });
 
   function tokenFor(request) {
-    const token = request.cookies[cookieName];
-    return typeof token === 'string' && refreshTokenPattern.test(token) ? token : null;
+    return webSessionToken(request, cookieName);
   }
 
   function authenticated(operation, success = 200, options) {
     return async (request, reply) => {
       const token = tokenFor(request);
       if (!token) return unauthorized(reply);
-      const result = await withSession(token, (db, actor) => operation(request, db, actor), options);
+      const result = await withSession(token, (db, actor) => operation(request, db, actor, reply), options);
       if (!result.authorized) return unauthorized(reply);
       if (result.value === null) return reply.code(404).send({ error: 'Ressource introuvable.' });
       return reply.code(success).send(result.value);

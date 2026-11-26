@@ -36,7 +36,8 @@ export function Field({ label, ...props }) {
 }
 
 export const styles = StyleSheet.create({
-  panel: { borderColor: '#dddaca', borderWidth: 1, borderRadius: 18, padding: 24, backgroundColor: '#fffdf6', gap: 16 },
+  panel: { borderColor: '#e4dac7', borderWidth: 1, borderRadius: 17, padding: 19, backgroundColor: '#fffefa',
+    gap: 15, boxShadow: '0px 4px 12px #624a2314' },
   title: { color: '#132d25', fontSize: 29, fontWeight: '800', letterSpacing: -0.7 },
   body: { color: '#3a4d43', fontSize: 16, lineHeight: 23 },
   field: { gap: 6 },
