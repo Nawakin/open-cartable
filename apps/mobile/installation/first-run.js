@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Button, Field, styles } from '../parent/ui';
 import { RequestError } from '../parent/http';
+import { EmailField, validEmail } from '../direction-security/fields';
 
 const endpoint = '/api/v1/installation';
 const empty = { schoolName: '', schoolCode: '', className: '', studentName: '' };
@@ -48,6 +49,7 @@ export function FirstRun({ token, onComplete }) {
   const [form, setForm] = useState(empty);
   const [manualToken, setManualToken] = useState('');
   const [directionPassword, setDirectionPassword] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
   const [confirmation, setConfirmation] = useState('');
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState(null);
@@ -74,13 +76,17 @@ export function FirstRun({ token, onComplete }) {
       setProblem('Choisissez un mot de passe direction de 15 à 128 caractères et confirmez-le.');
       return;
     }
+    if (!validEmail(recoveryEmail)) {
+      setProblem('Renseignez l’adresse e-mail de récupération du compte direction.');
+      return;
+    }
     submitting.current = true;
     setPending(true);
     try {
       const response = await request({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...values, token: setupToken, directionPassword }),
+        body: JSON.stringify({ ...values, token: setupToken, directionPassword, directionRecoveryEmail: recoveryEmail.trim() }),
       });
       if (response.status === 409) {
         setAlreadyInstalled(true);
@@ -131,7 +137,10 @@ export function FirstRun({ token, onComplete }) {
     <View style={styles.panel}>
       <Text accessibilityRole="header" style={styles.title}>Configurer Open Cartable</Text>
       <Text style={styles.body}>Créez votre école, une première classe et les accès direction et parent.</Text>
-      <Button label="Remplir un exemple fictif" busy={pending} secondary onPress={() => setForm(example)} />
+      <Button label="Remplir un exemple fictif" busy={pending} secondary onPress={() => {
+        setForm(example);
+        setRecoveryEmail('direction@ecole.example');
+      }} />
       {!token && (
         <Field label="Code d’installation" value={manualToken} onChangeText={setManualToken}
           secureTextEntry autoCapitalize="none" maxLength={64} editable={!pending} />
@@ -146,6 +155,7 @@ export function FirstRun({ token, onComplete }) {
         secureTextEntry autoCapitalize="none" autoComplete="new-password" maxLength={256} editable={!pending} />
       <Field label="Confirmer le mot de passe direction" value={confirmation} onChangeText={setConfirmation}
         secureTextEntry autoCapitalize="none" autoComplete="new-password" maxLength={256} editable={!pending} />
+      <EmailField value={recoveryEmail} onChangeText={setRecoveryEmail} editable={!pending} />
       {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
       <Button label={pending ? 'Configuration…' : 'Créer l’école'} busy={pending} onPress={submit} />
     </View>

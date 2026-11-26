@@ -8,12 +8,13 @@ if ! ( : </dev/tty ) 2>/dev/null; then
   exit 1
 fi
 exec 3<>/dev/tty
-printf '%s\n' 'Maintenance Open Cartable' '1. Changer le mot de passe de direction' '0. Quitter' >&3
+printf '%s\n' 'Maintenance Open Cartable' '1. Changer le mot de passe de direction' \
+  '2. Réinitialiser la double authentification de direction' '0. Quitter' >&3
 printf 'Votre choix > ' >&3
 IFS= read -r choice <&3 || exit 1
 case "$choice" in
   0) exit 0 ;;
-  1) ;;
+  1|2) ;;
   *) printf '%s\n' 'Choix non valide.' >&2; exit 1 ;;
 esac
 
@@ -28,6 +29,19 @@ try {
   if (command === 'list') {
     const { rows } = await db.query('SELECT code FROM schools ORDER BY code');
     for (const school of rows) console.log(school.code);
+  } else if (command === 'totp') {
+    await transaction(db, async (client) => {
+      const { rows: [school] } = await client.query('SELECT id FROM schools WHERE code = $1', [code]);
+      if (!school) throw new Error('École introuvable.');
+      await client.query(`
+        UPDATE direction_accounts SET totp_secret = NULL, totp_step = NULL, totp_pending = NULL,
+          totp_pending_session = NULL, totp_pending_until = NULL, totp_failed_attempts = 0, totp_failed_until = NULL
+        WHERE school_id = $1
+      `, [school.id]);
+      await client.query('DELETE FROM direction_sessions WHERE school_id = $1', [school.id]);
+      await client.query("DELETE FROM direction_recovery_tokens WHERE school_id = $1 AND purpose = 'reset'", [school.id]);
+    });
+    console.log('Double authentification réinitialisée. Les anciennes sessions direction sont fermées.');
   } else {
     let input = '';
     for await (const chunk of process.stdin.setEncoding('utf8')) {
@@ -80,6 +94,14 @@ case "$schools" in
   *) school=$schools ;;
 esac
 printf 'École sélectionnée · %s\n' "$school" >&3
+
+if [ "$choice" = 2 ]; then
+  printf 'Pour retirer l’authentificateur de cette école, tapez OUI > ' >&3
+  IFS= read -r confirmation <&3 || exit 1
+  [ "$confirmation" = OUI ] || exit 0
+  run_admin totp "$school"
+  exit 0
+fi
 
 tty_state=$(stty -g <&3)
 trap 'stty "$tty_state" <&3' 0

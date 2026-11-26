@@ -16,6 +16,9 @@ import { BannerSettings } from '../school-banner/settings';
 import { TeacherAttendance } from '../attendance/teacher';
 import { DirectionAttendance } from '../attendance/monthly';
 import { YearTransition } from '../year-transition/year-transition';
+import { AuthenticatorField, validCode } from '../direction-security/fields';
+import { consumeRecoveryLink, DirectionRecovery } from '../direction-security/recovery';
+import { DirectionSecurity } from '../direction-security/settings';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -39,6 +42,7 @@ const schoolPages = [
   { id: 'banner', icon: 'color-palette-outline', label: 'Bandeau d’en-tête' },
   { id: 'attendance', icon: 'clipboard-outline', label: 'Suivi des absences' },
   { id: 'year-transition', icon: 'calendar-outline', label: 'Clôture d’année' },
+  { id: 'security', icon: 'lock-closed-outline', label: 'Sécurité du compte' },
 ];
 const classLifePages = [
   { id: 'attendance', icon: 'clipboard-outline', label: 'Faire l’appel' },
@@ -74,6 +78,9 @@ export function Staff({ role, onParent, onOtherStaff }) {
   const [activating, setActivating] = useState(false);
   const [confirmation, setConfirmation] = useState('');
   const [password, setPassword] = useState('');
+  const [needsCode, setNeedsCode] = useState(false);
+  const [authCode, setAuthCode] = useState('');
+  const [recovery, setRecovery] = useState(null);
   const [classId, setClassId] = useState(null);
   const [month, setMonth] = useState(dayInSchoolCalendar);
   const [page, setPage] = useState(emptyPage);
@@ -94,6 +101,8 @@ export function Staff({ role, onParent, onOtherStaff }) {
     setSubpage(null);
     resetClass();
     setPassword('');
+    setNeedsCode(false);
+    setAuthCode('');
     setPhase('login');
   }
 
@@ -153,6 +162,17 @@ export function Staff({ role, onParent, onOtherStaff }) {
   }, []);
 
   useEffect(() => {
+    if (isTeacher || typeof window === 'undefined') return undefined;
+    function openRecovery() {
+      const flow = consumeRecoveryLink();
+      if (flow) setRecovery(flow);
+    }
+    openRecovery();
+    window.addEventListener('hashchange', openRecovery);
+    return () => window.removeEventListener('hashchange', openRecovery);
+  }, [isTeacher]);
+
+  useEffect(() => {
     if (!isTeacher || phase !== 'desk') return undefined;
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
@@ -197,9 +217,29 @@ export function Staff({ role, onParent, onOtherStaff }) {
         setNotice('Compte activé. Connectez-vous avec votre mot de passe.');
         return;
       }
-      const body = isTeacher ? { schoolCode, login, password } : { schoolCode, password };
-      await request('/auth/login', { method: 'POST', body });
+      if (needsCode && !validCode(authCode)) {
+        setProblem('Saisissez les six chiffres affichés par votre authentificateur.');
+        return;
+      }
+      const body = isTeacher ? { schoolCode, login, password }
+        : { schoolCode, password, ...(needsCode ? { code: authCode } : {}) };
+      try {
+        await request('/auth/login', { method: 'POST', body });
+      } catch (error) {
+        if (!isTeacher && error.status === 428) {
+          setNeedsCode(true);
+          return;
+        }
+        if (needsCode && error.status === 401) {
+          setAuthCode('');
+          setProblem('Vérifiez vos identifiants et saisissez un nouveau code de l’authentificateur.');
+          return;
+        }
+        throw error;
+      }
       setPassword('');
+      setAuthCode('');
+      setNeedsCode(false);
       await restore();
     });
   }
@@ -318,10 +358,14 @@ export function Staff({ role, onParent, onOtherStaff }) {
             maxLength={256} editable={!busy} onSubmitEditing={login} />
           {activating && <Field label="Confirmer le mot de passe" value={confirmation} onChangeText={setConfirmation}
             secureTextEntry autoCapitalize="none" autoComplete="new-password" maxLength={256} editable={!busy} onSubmitEditing={login} />}
+          {needsCode && <AuthenticatorField value={authCode} onChangeText={setAuthCode} editable={!busy} autoFocus onSubmitEditing={login} />}
           <Button label={activating ? 'Activer le compte' : (isTeacher ? 'Se connecter comme enseignant' : 'Se connecter à la direction')}
             onPress={login} busy={busy} />
           {isTeacher && <Button label={activating ? 'Revenir à la connexion' : 'Activer mon compte'} busy={busy} secondary
             onPress={() => { setActivating(!activating); setPassword(''); setConfirmation(''); setActivationCode(''); setProblem(''); setNotice(''); }} />}
+          {!isTeacher && <Button label="Mot de passe oublié ?" busy={busy} secondary onPress={() => {
+            setPassword(''); setAuthCode(''); setNeedsCode(false); setRecovery({ phase: 'request' });
+          }} />}
         </>
       )}
       {phase === 'desk' && (
@@ -344,6 +388,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
             {schoolGroup && subpage === 'attendance' && <DirectionAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
             {schoolGroup && subpage === 'year-transition' && <YearTransition classes={desk.classes}
               request={request} onExpired={expireSession} />}
+            {schoolGroup && subpage === 'security' && <DirectionSecurity request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
               onReply={(target) => { setMessageDraft(target); setSubpage(null); setSection('messages'); }} />}
@@ -412,6 +457,14 @@ export function Staff({ role, onParent, onOtherStaff }) {
       )}
     </View>
   );
+
+  if (recovery) return <AppFrame scrollKey={recovery.phase} busy={busy} wide>
+    <DirectionRecovery key={recovery.token ?? recovery.phase} flow={recovery} school={school} request={request} onBack={(reset) => {
+      setRecovery(null);
+      if (reset) resetDesk();
+      else void run(restore);
+    }} />
+  </AppFrame>;
 
   return (
     <AppFrame menu={menu} scrollKey={phase === 'desk' ? (subpage ?? section) : phase} busy={busy} banner={banner}

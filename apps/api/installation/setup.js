@@ -4,6 +4,7 @@ import { insertParentInvitation } from '../auth/parent-store.js';
 import { transaction } from '../db/database.js';
 import { hashPassword, passwordLimits, validPassword } from '../auth/password.js';
 import { setDirectionPassword } from '../direction/store.js';
+import { emailField, recoveryEmail } from '../direction/recovery-mail.js';
 
 export async function isInstalled(db) {
   const result = await db.query(`SELECT EXISTS (SELECT 1 FROM schools)
@@ -11,7 +12,7 @@ export async function isInstalled(db) {
   return result.rows[0].installed;
 }
 
-async function createSchool(pool, invitationKey, { schoolName, schoolCode, className, studentName, directionPassword }) {
+async function createSchool(pool, invitationKey, { schoolName, schoolCode, className, studentName, directionPassword, email }) {
   if (await isInstalled(pool)) return null;
   const directionCredential = await hashPassword(directionPassword);
   return transaction(pool, async (client) => {
@@ -21,6 +22,7 @@ async function createSchool(pool, invitationKey, { schoolName, schoolCode, class
     const [schoolId, classId, studentId, guardianId] = Array.from({ length: 4 }, () => randomUUID());
     await client.query('INSERT INTO schools (id, code, name) VALUES ($1, $2, $3)', [schoolId, schoolCode, schoolName]);
     await setDirectionPassword(client, schoolId, directionCredential);
+    if (email) await client.query('UPDATE direction_accounts SET recovery_email = $2 WHERE school_id = $1', [schoolId, email]);
     await client.query('INSERT INTO classes (school_id, id, name) VALUES ($1, $2, $3)', [schoolId, classId, className]);
     await client.query('INSERT INTO students (school_id, id, class_id, display_name) VALUES ($1, $2, $3, $4)',
       [schoolId, studentId, classId, studentName]);
@@ -48,7 +50,7 @@ export async function installationRoutes(app, { pool, token, invitationKey, webO
       body: {
         type: 'object',
         additionalProperties: false,
-        required: ['token', 'schoolCode', 'schoolName', 'className', 'studentName', 'directionPassword'],
+        required: ['token', 'schoolCode', 'schoolName', 'className', 'studentName', 'directionPassword', 'directionRecoveryEmail'],
         properties: {
           token: { type: 'string', minLength: 64, maxLength: 64, pattern: '^[0-9a-f]{64}$' },
           schoolCode: { type: 'string', pattern: schoolCodePattern.source },
@@ -56,11 +58,12 @@ export async function installationRoutes(app, { pool, token, invitationKey, webO
           className: name,
           studentName: name,
           directionPassword: { type: 'string', ...passwordLimits },
+          directionRecoveryEmail: emailField,
         },
       },
     },
   }, async (request, reply) => {
-    const { token: supplied, schoolCode, directionPassword } = request.body;
+    const { token: supplied, schoolCode, directionPassword, directionRecoveryEmail } = request.body;
     if (!timingSafeEqual(Buffer.from(supplied), Buffer.from(token))) {
       return reply.code(403).send({ error: 'Code d’installation invalide.' });
     }
@@ -70,7 +73,9 @@ export async function installationRoutes(app, { pool, token, invitationKey, webO
       return reply.code(400).send({ error: 'Complétez les noms de l’école, de la classe et de l’élève.' });
     }
     if (!validPassword(directionPassword)) return reply.code(400).send({ error: 'Le mot de passe direction est invalide.' });
-    const result = await createSchool(pool, invitationKey, { schoolName, schoolCode, className, studentName, directionPassword });
+    const email = recoveryEmail(directionRecoveryEmail);
+    if (!email) return reply.code(400).send({ error: 'L’adresse de récupération est invalide.' });
+    const result = await createSchool(pool, invitationKey, { schoolName, schoolCode, className, studentName, directionPassword, email });
     if (!result) return reply.code(409).send({ error: 'L’installation est déjà configurée.' });
     return reply.code(201).send(result);
   });

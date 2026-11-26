@@ -39,11 +39,11 @@ export async function registerStaffWeb(app, { webOrigin, cookieName, withSession
     return typeof token === 'string' && refreshTokenPattern.test(token) ? token : null;
   }
 
-  function authenticated(operation, success = 200) {
+  function authenticated(operation, success = 200, options) {
     return async (request, reply) => {
       const token = tokenFor(request);
       if (!token) return unauthorized(reply);
-      const result = await withSession(token, (db, actor) => operation(request, db, actor));
+      const result = await withSession(token, (db, actor) => operation(request, db, actor), options);
       if (!result.authorized) return unauthorized(reply);
       if (result.value === null) return reply.code(404).send({ error: 'Ressource introuvable.' });
       return reply.code(success).send(result.value);

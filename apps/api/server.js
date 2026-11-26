@@ -6,6 +6,7 @@ import { createParentStore } from './auth/parent-store.js';
 import { migrate, migrations, openDatabase } from './db/database.js';
 import { readSecret } from './installation/secrets.js';
 import { startRetention } from './db/retention.js';
+import { createRecoveryMailer } from './direction/recovery-mail.js';
 
 function readWebOrigin(value) {
   const url = URL.parse(value);
@@ -51,7 +52,15 @@ try {
     parentAuth = { signingKey, store: createParentStore(pool, invitationKey), webOrigin };
     if (token) installation = { pool, token, invitationKey, webOrigin };
   }
-  const direction = webOrigin ? { pool, webOrigin } : undefined;
+  const securitySecret = readSecret(env, 'DIRECTION_TOTP_KEY');
+  if (securitySecret !== undefined && !/^[0-9a-f]{64}$/.test(securitySecret)) {
+    throw new Error('La clé de double authentification doit contenir 64 caractères hexadécimaux.');
+  }
+  const totpKey = securitySecret === undefined ? undefined : Buffer.from(securitySecret, 'hex');
+  const mailer = createRecoveryMailer({
+    url: readSecret(env, 'DIRECTION_SMTP_URL'), from: env.DIRECTION_SMTP_FROM, webOrigin,
+  });
+  const direction = webOrigin ? { pool, webOrigin, totpKey, mailer } : undefined;
   const blogMediaKey = mediaSecret === undefined ? undefined : Buffer.from(mediaSecret, 'hex');
   const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey });
   let stopRetention;

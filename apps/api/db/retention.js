@@ -2,12 +2,14 @@ import { purgeExpiredLiaison } from '../liaison/store.js';
 import { purgeExpiredMessages } from '../messaging/retention.js';
 import { purgeExpiredBlogPhotos } from '../blog/photos.js';
 import { purgeExpiredAttendance } from '../attendance/store.js';
+import { purgeExpiredDirectionSecurity } from '../direction/security.js';
 
 const purges = [
   { run: purgeExpiredMessages, label: 'messagerie' },
   { run: purgeExpiredLiaison, label: 'cahier de liaison' },
   { run: purgeExpiredBlogPhotos, label: 'photos du blog' },
   { run: purgeExpiredAttendance, label: 'appels' },
+  { run: purgeExpiredDirectionSecurity, label: 'liens de récupération de la direction' },
 ];
 
 export function startRetention(pool) {

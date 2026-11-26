@@ -39,6 +39,7 @@ test('le premier lancement crée une seule école et permet la connexion du tute
   const form = {
     token, schoolCode: 'ECOLE-TEST', schoolName: 'École fictive', className: 'Classe fictive', studentName: 'Élève fictif',
     directionPassword: randomBytes(24).toString('base64url'),
+    directionRecoveryEmail: 'direction@ecole.example',
   };
   const submit = (payload = form, origin = webOrigin) => app.inject({
     method: 'POST', url: '/api/v1/installation', headers: { origin }, payload,

@@ -64,6 +64,31 @@ Si vous perdez le mot de passe direction, ouvrez un terminal sur l’ordinateur 
 
 Tapez « 1 », choisissez l’école si plusieurs sont configurées, puis saisissez deux fois le nouveau mot de passe de 15 à 128 caractères. Les deux saisies sont masquées. Le menu enregistre le mot de passe et ferme les anciennes sessions direction. Sous Windows, exécutez le script dans un terminal WSL avec accès au même projet Docker Compose.
 
+Si vous perdez aussi l’accès à votre authentificateur, choisissez « 2 » et confirmez l’école. Reconnectez-vous, puis configurez un nouvel authentificateur.
+
+### Configurer la récupération par e-mail
+
+1. Renseignez l’adresse de récupération lors de la création de l’école. Dans une installation existante, ouvrez « École → Sécurité du compte » dans l’espace direction pour l’ajouter ou la modifier.
+2. Configurez le relais SMTP de l’école dans un fichier `.env` privé à côté de `compose.yaml`. Renseignez `DIRECTION_SMTP_URL` avec l’adresse du relais et `DIRECTION_SMTP_FROM` avec une adresse d’envoi acceptée par celui-ci. Une URL `smtps://` utilise TLS dès la connexion, généralement sur le port 465. Une URL `smtp://` exige STARTTLS, généralement sur le port 587. Encodez les caractères spéciaux des identifiants dans l’URL.
+3. Pour que les liens soient accessibles depuis l’appareil qui lit l’e-mail, utilisez l’origine HTTPS de l’école dans `OPEN_CARTABLE_ORIGIN`. Relancez le lanceur après modification. [Accès depuis un autre appareil](#ouvrir-le-service-depuis-un-autre-appareil)
+4. Dans « École → Sécurité du compte », choisissez « Envoyer le lien de vérification ». Ouvrez l’e-mail et confirmez l’adresse. Revenez aux réglages et actualisez leur statut.
+
+Exemple de fichier `.env` à adapter au relais de l’école.
+
+```dotenv
+DIRECTION_SMTP_URL=smtps://identifiant:mot-de-passe-encode@relais.example:465
+DIRECTION_SMTP_FROM=ent@ecole.example
+OPEN_CARTABLE_ORIGIN=https://ent.ecole.example
+```
+
+Pour récupérer un mot de passe, choisissez « Mot de passe oublié ? » sur la page de connexion direction et saisissez le code de l’école et l’adresse vérifiée. Le lien reçu est valable 30 minutes. Si la double authentification est activée, la réinitialisation demande aussi le code de l’authentificateur.
+
+### Activer la double authentification
+
+Dans « École → Sécurité du compte », choisissez « Configurer un authentificateur » et saisissez votre mot de passe. Scannez le QR code ou copiez la clé dans une application libre comme Aegis ou FreeOTP, ou dans toute application compatible TOTP. Saisissez les six chiffres de l’application pour activer la protection. Une connexion suivante demande un nouveau code après le mot de passe.
+
+Docker Compose prépare la clé de chiffrement de la double authentification dans le volume `app-secrets`. Conservez ce volume avec vos sauvegardes. Une installation manuelle peut fournir cette clé avec `DIRECTION_TOTP_KEY_FILE` et l’URL SMTP avec `DIRECTION_SMTP_URL_FILE`, à partir de fichiers privés.
+
 ### Personnaliser le bandeau de l’école
 
 1. Dans l’espace direction, ouvrez « École », puis « Bandeau d’en-tête ».
