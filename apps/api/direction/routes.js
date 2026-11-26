@@ -7,6 +7,7 @@ import { registerDirectionMessages } from '../messaging/routes.js';
 import { registerDirectionPhotoAuthorizations } from '../photo-authorizations/routes.js';
 import { registerSchoolBanner } from '../school-banner/routes.js';
 import { registerDirectionAttendance } from '../attendance/routes.js';
+import { registerYearTransition } from '../year-transition/routes.js';
 import { createTeacher, deleteTeacher, listTeachers, resetTeacher, teacherLoginPattern, updateTeacherClasses } from '../teacher/store.js';
 import { directionSessionSeconds, signInDirection, signOutDirection, withDirectionSession } from './store.js';
 
@@ -55,6 +56,7 @@ export async function directionRoutes(app, { pool, webOrigin }) {
   registerDirectionPhotoAuthorizations(app, authenticated);
   registerSchoolBanner(app, '/direction', authenticated);
   registerDirectionAttendance(app, authenticated);
+  registerYearTransition(app, authenticated);
 
   app.get('/direction/teachers', authenticated(async (_request, db, actor) => ({
     teachers: await listTeachers(db, actor.school_id),

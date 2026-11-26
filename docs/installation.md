@@ -111,6 +111,12 @@ Pour vérifier le registre avec les données fictives de l’assistant, ouvrez �
 2. Dans l’espace parent, ouvrez « Absences » sous son nom et vérifiez que l’absence est affichée.
 3. Dans l’espace direction, ouvrez « École », puis « Suivi des absences ». Ouvrez la ligne de l’élève et marquez son absence comme justifiée. Actualisez l’historique parent pour voir la nouvelle mention. [Guide de l’appel et des absences](absences.md)
 
+### Préparer une rentrée fictive
+
+1. Dans l’espace direction, ouvrez « École », puis « Clôture d’année » et choisissez « Préparer la rentrée ».
+2. Ajoutez une classe de rentrée de niveau « CE2 ». Dans « Passages », enregistrez « CE1 » comme niveau de la classe fictive actuelle.
+3. Ouvrez la ligne de l’élève fictif et validez la proposition. Revenez dans « Classes » pour vérifier le compteur de décisions validées. [Guide de la clôture d’année](cloture-annee.md)
+
 ### Générer une invitation supplémentaire
 
 ```sh

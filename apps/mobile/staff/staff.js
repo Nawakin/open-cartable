@@ -15,6 +15,7 @@ import { useSchoolBanner } from '../school-banner/session';
 import { BannerSettings } from '../school-banner/settings';
 import { TeacherAttendance } from '../attendance/teacher';
 import { DirectionAttendance } from '../attendance/monthly';
+import { YearTransition } from '../year-transition/year-transition';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -37,6 +38,7 @@ const schoolPages = [
   { id: 'photo-authorizations', icon: 'shield-checkmark-outline', label: 'Autorisations photo' },
   { id: 'banner', icon: 'color-palette-outline', label: 'Bandeau d’en-tête' },
   { id: 'attendance', icon: 'clipboard-outline', label: 'Suivi des absences' },
+  { id: 'year-transition', icon: 'calendar-outline', label: 'Clôture d’année' },
 ];
 const classLifePages = [
   { id: 'attendance', icon: 'clipboard-outline', label: 'Faire l’appel' },
@@ -340,6 +342,7 @@ export function Staff({ role, onParent, onOtherStaff }) {
               request={request} run={run} busy={busy} />}
             {schoolGroup && subpage === 'banner' && <BannerSettings request={request} run={run} busy={busy} onSaved={replaceBanner} />}
             {schoolGroup && subpage === 'attendance' && <DirectionAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
+            {schoolGroup && subpage === 'year-transition' && <YearTransition request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
               onReply={(target) => { setMessageDraft(target); setSubpage(null); setSection('messages'); }} />}

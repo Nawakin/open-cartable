@@ -1,23 +1,25 @@
 # Clôture de l’année scolaire
 
-Fonctionnalité prévue pour la v0.3 dans « École → Clôture d’année », côté direction.
+Le brouillon de rentrée est disponible dans « École → Clôture d’année », côté direction. L’export PDF, l’archivage et la bascule figurent dans les étapes suivantes de la v0.3.
 
 ## Préparer la rentrée
 
-1. **Choisir les deux années.** L’assistant part de l’année active. La direction prépare les classes et leurs niveaux pour la rentrée, ainsi que les affectations des enseignants. Une classe de la nouvelle année peut reprendre le nom d’une ancienne classe.
-2. **Proposer les passages.** Pour chaque élève, l’assistant suggère le niveau suivant à partir des niveaux configurés par l’école. Il utilise le niveau de l’élève dans les classes multiniveaux et propose une classe quand une seule destination correspond. Si le niveau reste à préciser, si plusieurs classes conviennent ou si l’élève arrive en fin de cycle, la direction choisit la suite dans la liste « À vérifier ».
-3. **Vérifier les effectifs.** La direction voit les effectifs avant et après, par classe et par niveau. Pour chaque élève, elle peut accepter la destination, choisir une autre classe, enregistrer un maintien ou signaler un départ. Elle peut valider en bloc des propositions relues. Les cas encore à vérifier restent visibles jusqu’à leur résolution.
-4. **Archiver et confirmer.** Le récapitulatif affiche les classes de départ et d’arrivée, les passages, les maintiens et les départs. La direction peut reprendre sa préparation plus tard et exporter les blogs avant la bascule. Une confirmation explicite applique l’ensemble des changements vérifiés.
+1. **Choisir l’année à clôturer.** Vérifiez ou corrigez l’année de début proposée, puis cliquez sur « Préparer la rentrée ». L’assistant calcule l’année suivante.
+2. **Préparer les classes de rentrée.** Dans « Classes », utilisez « Ajouter une classe », indiquez son nom et choisissez un ou plusieurs niveaux. Une classe de la nouvelle année peut reprendre le nom d’une classe actuelle.
+3. **Consulter les propositions.** Dans « Passages », choisissez une classe actuelle et renseignez son niveau. Pour une classe multiniveau, vous pouvez préciser le niveau de chaque élève en ouvrant sa ligne. L’assistant propose la classe du niveau suivant quand il existe une seule destination. Les élèves dont le niveau reste à préciser, ceux qui ont plusieurs destinations possibles et ceux qui arrivent en fin de cycle restent « À vérifier ».
+4. **Valider les décisions.** Ouvrez une ligne pour accepter la proposition, attribuer une autre classe ou indiquer un départ. Choisissez le niveau actuel dans la classe de rentrée pour enregistrer un maintien. Vous pouvez aussi vérifier la liste et valider ensemble les propositions d’une classe. « Classes » affiche le nombre de propositions et de décisions validées pour chaque destination.
 
-La préparation est un brouillon. Si les effectifs ou les destinations changent entre la préparation et la confirmation, l’assistant indique les lignes à revoir et recalcule les totaux.
+Les décisions s’enregistrent dans le brouillon. Les élèves restent dans leurs classes actuelles pendant cette préparation. Un changement de classe actuelle, de niveau ou de destination fait revenir les décisions concernées dans « À vérifier ». Ouvrez de nouveau « Clôture d’année » pour reprendre la préparation.
 
 ## Exporter le blog en PDF
 
-La direction choisit une année et une classe. L’aperçu liste les articles publiés et les photos qui peuvent figurer dans l’export. Le PDF, généré sur le serveur de l’école, reprend le nom de la classe et l’année en couverture, puis les articles dans l’ordre chronologique avec leur date, leur texte, leur photo de couverture et leur galerie.
+Dans le parcours prévu, la direction choisit une année et une classe. L’aperçu liste les articles publiés et les photos qui peuvent figurer dans l’export. Le PDF, généré sur le serveur de l’école, reprend le nom de la classe et l’année en couverture, puis les articles dans l’ordre chronologique avec leur date, leur texte, leur photo de couverture et leur galerie.
 
 Le serveur applique les règles de visibilité et d’autorisation photo en vigueur à la génération et au téléchargement. Un changement de visibilité invalide le fichier préparé et déclenche son recalcul à la demande. Le PDF contient les images publiées encore autorisées, avec les masques déjà appliqués. Les aperçus et téléchargements exigent une session direction de la même école. Les copies téléchargées suivent la politique de conservation de l’école.
 
 ## Ouvrir la nouvelle année
+
+Lors de la future bascule, la direction préparera les affectations des enseignants, vérifiera le récapitulatif et confirmera l’ouverture de l’année après l’archivage.
 
 | Élément | Effet de la bascule |
 | --- | --- |
