@@ -2,13 +2,14 @@ import { forTeacherClass, linkedChildClass } from '../auth/class-access.js';
 import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
 import { requireTimestampCursor, timestampCursor } from '../db/keyset.js';
-import { maxImageBytes } from './images.js';
-import { addPhoto, movePhotoToCover, readPhoto, removePhoto, reviewPhoto } from './photos.js';
+import { maskGrid, maxImageBytes, maxMasks } from './images.js';
+import { addPhoto, maskPhoto, movePhotoToCover, readPhoto, removePhoto, reviewPhoto } from './photos.js';
 import {
   changeDraftPhotos, createDraft, deleteDraft, listArticles, readPublishedArticle, readStaffArticle, setPublication, updateDraft,
 } from './store.js';
 
 const version = { type: 'integer', minimum: 1, maximum: 2147483647 };
+const coordinate = { type: 'integer', minimum: 0, maximum: maskGrid };
 const content = {
   title: { type: 'string', minLength: 1, maxLength: 120 },
   body: { type: 'string', maxLength: 8000 },
@@ -141,6 +142,20 @@ export function registerTeacherBlog(app, { authenticated, mediaKey, tokenFor, un
     reviewed: fields.reviewed, description: requireText(fields.description, false, false),
     studentIds: fields.reviewed ? fields.studentIds : [],
   })));
+  app.put(photo + '/masks', {
+    bodyLimit: 4096,
+    config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    schema: { params: photoParams, body: schemaFor({
+      version, masks: { type: 'array', minItems: 1, maxItems: maxMasks, items: schemaFor({
+        left: coordinate, top: coordinate, right: coordinate, bottom: coordinate,
+      }) },
+    }) },
+  }, mutatePhoto((db, scope, id, { masks }) => {
+    if (masks.some(({ left, top, right, bottom }) => left >= right || top >= bottom)) {
+      throw Object.assign(new Error('Zone de masque non valide.'), { statusCode: 400 });
+    }
+    return maskPhoto(db, scope, id, masks, requireMediaKey(mediaKey));
+  }));
   app.put(photo + '/cover', { bodyLimit: 1024, schema: { params: photoParams, body: schemaFor({ version }) } }, mutatePhoto(movePhotoToCover));
   app.delete(photo, { bodyLimit: 1024, schema: { params: photoParams, body: schemaFor({ version }) } }, mutatePhoto(removePhoto));
 }

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { transaction } from '../db/database.js';
 import { lockPhotoAuthorizations } from '../photo-authorizations/store.js';
-import { decryptImage, encryptImage, maxPhotos, prepareImage } from './images.js';
+import { decryptImage, encryptImage, maskImage, maxPhotos, prepareImage } from './images.js';
 
 const schoolQuota = 5 * 1024 ** 3;
 const order = 'position, id';
@@ -49,6 +49,18 @@ export async function listPhotos(db, [schoolId, , articleId]) {
   return rows;
 }
 
+async function reservePhotoSpace(db, schoolId, addedBytes) {
+  if (addedBytes <= 0) return;
+  await db.query("SELECT pg_advisory_xact_lock(hashtext('class-blog-photos'), hashtext($1))", [schoolId]);
+  const { rows: [{ used }] } = await db.query(`
+    SELECT COALESCE(sum(octet_length(full_data) + octet_length(thumbnail_data)), 0) AS used
+    FROM class_blog_photos WHERE school_id = $1
+  `, [schoolId]);
+  if (Number(used) + addedBytes > schoolQuota) {
+    throw Object.assign(new Error('Quota photo atteint.'), { statusCode: 413 });
+  }
+}
+
 export async function addPhoto(db, [schoolId, , articleId], input, key) {
   const { rows: [space] } = await db.query(`
     SELECT count(*)::integer AS count, COALESCE(max(position), 0) + 1 AS position
@@ -61,19 +73,36 @@ export async function addPhoto(db, [schoolId, , articleId], input, key) {
   const photoScope = [schoolId, articleId, id];
   const encryptedFull = encryptImage(full, key, photoScope, 'full');
   const encryptedThumbnail = encryptImage(thumbnail, key, photoScope, 'thumb');
-  await db.query("SELECT pg_advisory_xact_lock(hashtext('class-blog-photos'), hashtext($1))", [schoolId]);
-  const { rows: [{ used }] } = await db.query(`
-    SELECT COALESCE(sum(octet_length(full_data) + octet_length(thumbnail_data)), 0) AS used
-    FROM class_blog_photos WHERE school_id = $1
-  `, [schoolId]);
-  if (Number(used) + encryptedFull.length + encryptedThumbnail.length > schoolQuota) {
-    throw Object.assign(new Error('Quota photo atteint.'), { statusCode: 413 });
-  }
+  await reservePhotoSpace(db, schoolId, encryptedFull.length + encryptedThumbnail.length);
   await db.query(`
     INSERT INTO class_blog_photos (school_id, article_id, id, position, thumbnail_data, full_data)
     VALUES ($1, $2, $3, $4, $5, $6)
   `, [...photoScope, space.position, encryptedThumbnail, encryptedFull]);
   return true;
+}
+
+export async function maskPhoto(db, [schoolId, , articleId], id, masks, key) {
+  const scope = [schoolId, articleId, id];
+  const { rows: [current] } = await db.query(`
+    SELECT full_data, octet_length(full_data) + octet_length(thumbnail_data) AS bytes
+    FROM class_blog_photos WHERE ${scopeFilter} AND id = $3 AND ${active}
+  `, scope);
+  if (!current) return false;
+  const { full, thumbnail } = await maskImage(decryptImage(current.full_data, key, scope, 'full'), masks);
+  const replacement = [schoolId, articleId, randomUUID()];
+  const encryptedFull = encryptImage(full, key, replacement, 'full');
+  const encryptedThumbnail = encryptImage(thumbnail, key, replacement, 'thumb');
+  await reservePhotoSpace(db, schoolId, encryptedFull.length + encryptedThumbnail.length - current.bytes);
+  await clearPhotoSubjects(db, scope);
+  await db.query(`
+    UPDATE class_blog_photos SET id = $4, full_data = $5, thumbnail_data = $6, reviewed = false, review_basis = NULL
+    WHERE ${scopeFilter} AND id = $3
+  `, [...scope, replacement[2], encryptedFull, encryptedThumbnail]);
+  return true;
+}
+
+function clearPhotoSubjects(db, scope) {
+  return db.query(`DELETE FROM class_blog_photo_subjects WHERE ${scopeFilter} AND photo_id = $3`, scope);
 }
 
 export async function reviewPhoto(db, [schoolId, classId, articleId], id, { description, reviewed, studentIds }) {
@@ -86,7 +115,7 @@ export async function reviewPhoto(db, [schoolId, classId, articleId], id, { desc
     WHERE ${scopeFilter} AND id = $3 AND ${active}
   `, [...scope, description, reviewed, reviewBasis]);
   if (!result.rowCount) return false;
-  await db.query(`DELETE FROM class_blog_photo_subjects WHERE ${scopeFilter} AND photo_id = $3`, scope);
+  await clearPhotoSubjects(db, scope);
   if (authorizations.length) {
     await db.query(`
       INSERT INTO class_blog_photo_subjects (school_id, article_id, photo_id, student_id, authorization_revision)

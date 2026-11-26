@@ -12,8 +12,17 @@ Le filtre « Brouillons » permet de retrouver les articles en préparation. Si 
 ## Ajouter plusieurs photos
 
 1. Après avoir saisi le titre, cliquez sur « Ajouter des photos » et sélectionnez vos images. Un article accepte jusqu’à 12 fichiers JPEG, PNG ou WebP statiques de 10 Mo et 26 mégapixels chacun.
-2. Ouvrez les vignettes pour inspecter les images en grand. Choisissez « Vérifier la photo ». Indiquez si des élèves sont reconnaissables et, dans ce cas, sélectionnez-les tous. Le registre doit contenir une autorisation valable pour chacun. Ajoutez une description si elle facilite la compréhension de l’image. Si une autorisation manque, utilisez une version anonymisée préparée avant l’envoi.
-3. Utilisez « Mettre en couverture » sur une photo pour la placer en premier. Prévisualisez l’article, puis publiez-le après avoir validé toutes les photos.
+2. Ouvrez les vignettes pour inspecter les images en grand. Choisissez « Vérifier la photo ». Indiquez si des élèves sont reconnaissables et, dans ce cas, sélectionnez-les tous. Le registre doit contenir une autorisation valable pour chacun. Ajoutez une description si elle facilite la compréhension de l’image. Si une autorisation manque, vous pouvez masquer les zones concernées dans le brouillon.
+3. Dans « Options », utilisez « Mettre en couverture » pour placer une photo en premier. Prévisualisez l’article, puis publiez-le après avoir validé toutes les photos.
+
+### Masquer une zone sur une photo
+
+1. Dans le brouillon de la web-app, ouvrez les « Options » de la photo, puis « Masquer une zone ».
+2. Tracez un rectangle à la souris ou au doigt sur chaque élément à cacher. Couvrez toute la zone qui permet d’identifier l’élève. Au clavier, placez le focus sur la photo, déplacez le curseur avec les flèches et utilisez Entrée pour poser chaque coin. « Annuler le dernier tracé » retire le dernier rectangle de l’aperçu.
+3. Choisissez « Appliquer les masques ». La photo et sa vignette sont remplacées par les versions avec les rectangles opaques. Les anciens liens de la photo expirent immédiatement et l’opération est définitive dans le brouillon.
+4. Ouvrez « Vérifier la photo ». Relisez aussi la description et renseignez les élèves encore reconnaissables. Validez la photo, puis vérifiez le résultat dans l’aperçu avant publication.
+
+Pour une photo déjà publiée, retirez d’abord l’article de la publication. Les anciennes copies téléchargées ou sauvegardées restent soumises aux procédures de conservation de l’école.
 
 ## Renseigner les autorisations
 

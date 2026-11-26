@@ -171,7 +171,7 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
       article = uploaded.json();
     }
     assert.equal(article.photoCount, 3);
-    const [firstPhoto, , cover] = article.photos;
+    const [firstPhoto, otherPhoto, cover] = article.photos;
     const photoURL = familyURL + '/photos/' + firstPhoto.id;
     const staffPhoto = photoCollection + '/' + firstPhoto.id;
     assert.equal((await call('GET', photoURL, family)).statusCode, 404);
@@ -248,8 +248,58 @@ test('le blog protège les brouillons et contrôle les transitions concurrentes 
     assert.equal((await call('GET', photoURL, family)).statusCode, 200);
     const { rows: [{ expires_at: expiry }] } = await pool.query('SELECT expires_at FROM class_blog_photos WHERE id = $1', [firstPhoto.id]);
     assert.deepEqual(expiry, stored.expires_at);
-    await pool.query("UPDATE class_blog_photos SET expires_at = statement_timestamp() - interval '1 minute' WHERE article_id = $1", [article.id]);
+
+    article = republished.json();
+    const box = { left: 2250, top: 1750, right: 7750, bottom: 8250 };
+    const mask = (masks, headers = a.headers) =>
+      call('PUT', staffPhoto + '/masks', headers, { version: article.version, masks });
+    assert.equal((await mask([box])).statusCode, 409);
+    article = (await setPublished(false)).json();
+    assert.equal((await mask([box], { origin })).statusCode, 401);
+    assert.equal((await mask([box], b.headers)).statusCode, 404);
+    assert.equal((await mask([box], foreign.headers)).statusCode, 404);
+    assert.equal((await mask([box], { ...a.headers, origin: 'https://ailleurs.example' })).statusCode, 403);
+    assert.equal((await mask([{ ...box, left: 10_001 }])).statusCode, 400);
+    assert.equal((await mask([{ ...box, right: box.left }])).statusCode, 400);
+    assert.equal((await mask(Array(21).fill(box))).statusCode, 400);
+    const maskAttempts = await Promise.all([mask([box]), mask([box])]);
+    assert.deepEqual(maskAttempts.map(({ statusCode }) => statusCode).sort(), [200, 409]);
+    article = maskAttempts.find(({ statusCode }) => statusCode === 200).json();
+    const edited = article.photos[1];
+    assert.equal(article.photoCount, 3);
+    assert.notEqual(edited.id, firstPhoto.id);
+    assert.deepEqual(article.photos.map(({ id }) => id), [cover.id, edited.id, otherPhoto.id]);
+    assert.equal(edited.description, 'Matériel fictif');
+    assert.equal(edited.reviewed, false);
+    assert.equal(edited.reviewBasis, null);
+    assert.equal(edited.publishable, false);
+    assert.deepEqual(edited.studentIds, []);
+    assert.equal((await pool.query('SELECT 1 FROM class_blog_photos WHERE id = $1', [firstPhoto.id])).rowCount, 0);
+    assert.equal((await pool.query('SELECT 1 FROM class_blog_photo_subjects WHERE photo_id = $1', [firstPhoto.id])).rowCount, 0);
+    assert.deepEqual((await pool.query('SELECT expires_at FROM class_blog_photos WHERE id = $1', [edited.id])).rows[0].expires_at, expiry);
+    assert.equal((await call('GET', staffPhoto, a.headers)).statusCode, 404);
+    assert.equal((await call('GET', staffPhoto + '?size=thumb', a.headers)).statusCode, 404);
+    assert.equal((await setPublished(true)).statusCode, 422);
+    article = (await review(edited.id, [])).json();
+    assert.equal((await setPublished(true)).statusCode, 200);
+    const publicReplacement = familyURL + '/photos/' + edited.id;
     assert.equal((await call('GET', photoURL, family)).statusCode, 404);
+    for (const [size, expectedHeight] of [['full', 800], ['thumb', 560]]) {
+      const masked = await call('GET', publicReplacement + '?size=' + size, family);
+      assert.equal(masked.statusCode, 200);
+      assert.equal((await sharp(masked.rawPayload).metadata()).exif, undefined);
+      const { data, info: { width, height, channels } } = await sharp(masked.rawPayload).raw().toBuffer({ resolveWithObject: true });
+      assert.equal(height, expectedHeight);
+      const pixel = (x, y) => {
+        const offset = (Math.floor(height * y) * width + Math.floor(width * x)) * channels;
+        return [...data.subarray(offset, offset + channels)];
+      };
+      assert.deepEqual(pixel(0.5, 0.5), [0, 0, 0]);
+      assert.deepEqual(pixel(0.23, 0.18), [0, 0, 0]);
+      assert.ok(pixel(0.1, 0.1)[1] > 65);
+    }
+    await pool.query("UPDATE class_blog_photos SET expires_at = statement_timestamp() - interval '1 minute' WHERE article_id = $1", [article.id]);
+    assert.equal((await call('GET', publicReplacement, family)).statusCode, 404);
     assert.equal((await call('GET', familyURL, family)).statusCode, 404);
     await purgeExpiredBlogPhotos(pool);
     const after = (await call('GET', articleURL, a.headers)).json();

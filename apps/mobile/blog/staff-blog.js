@@ -152,7 +152,7 @@ export function StaffBlog({ classes, request, onExpired }) {
       const endpoint = articlePath(classId, article.id) + '/photos/' + encodeURIComponent(id) + action;
       const updated = await request(endpoint, { ...options, body: { ...options.body, version: article.version } });
       setArticle(updated);
-      setNotice('Galerie mise à jour.');
+      setNotice(action === '/masks' ? 'Photo masquée. Vérifiez-la avant de publier.' : 'Galerie mise à jour.');
       onSuccess();
     });
   }

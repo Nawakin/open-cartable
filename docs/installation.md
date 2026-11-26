@@ -101,6 +101,8 @@ Connectez-vous à l’espace enseignant dans la web-app, ouvrez « Vie de classe
 
 Dans l’espace enseignant, ouvrez « Vie de classe », puis « Blog de classe », et créez un article fictif. Ajoutez deux photos d’objets et validez-les dans le brouillon. Choisissez « Prévisualiser », puis « Publier cet article ». Dans l’espace parent, ouvrez « Blog de classe » sous le nom de l’enfant et sélectionnez `+1` pour ouvrir le carrousel. [Guide du blog de classe](blog-de-classe.md)
 
+Pour essayer le masquage, ouvrez les « Options » d’une photo du brouillon, puis « Masquer une zone ». Tracez un rectangle autour d’un objet, appliquez le masque et vérifiez de nouveau la photo. Ouvrez l’article côté parent après publication pour contrôler le résultat. [Tutoriel du masquage](blog-de-classe.md#masquer-une-zone-sur-une-photo)
+
 Pour vérifier le registre avec les données fictives de l’assistant, ouvrez « École », puis « Autorisations photo » dans l’espace direction. Renseignez un statut pour l’élève fictif. Dans l’espace parent, retrouvez le statut dans « Compte », puis « Autorisations photo ».
 
 ### Générer une invitation supplémentaire
