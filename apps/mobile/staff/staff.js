@@ -13,6 +13,8 @@ import { StaffBlog } from '../blog/staff-blog';
 import { DirectionPhotoAuthorizations } from '../photo-authorizations/direction';
 import { useSchoolBanner } from '../school-banner/session';
 import { BannerSettings } from '../school-banner/settings';
+import { TeacherAttendance } from '../attendance/teacher';
+import { DirectionAttendance } from '../attendance/monthly';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
@@ -34,8 +36,10 @@ const schoolPages = [
   { id: 'directory', icon: 'people-outline', label: 'Enseignants' },
   { id: 'photo-authorizations', icon: 'shield-checkmark-outline', label: 'Autorisations photo' },
   { id: 'banner', icon: 'color-palette-outline', label: 'Bandeau d’en-tête' },
+  { id: 'attendance', icon: 'clipboard-outline', label: 'Suivi des absences' },
 ];
 const classLifePages = [
+  { id: 'attendance', icon: 'clipboard-outline', label: 'Faire l’appel' },
   { id: 'liaison', icon: 'reader-outline', label: 'Cahier de liaison' },
   { id: 'blog', icon: 'newspaper-outline', label: 'Blog de classe' },
 ];
@@ -335,6 +339,8 @@ export function Staff({ role, onParent, onOtherStaff }) {
             {schoolGroup && subpage === 'photo-authorizations' && <DirectionPhotoAuthorizations classes={desk.classes}
               request={request} run={run} busy={busy} />}
             {schoolGroup && subpage === 'banner' && <BannerSettings request={request} run={run} busy={busy} onSaved={replaceBanner} />}
+            {schoolGroup && subpage === 'attendance' && <DirectionAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
+            {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
               onReply={(target) => { setMessageDraft(target); setSubpage(null); setSection('messages'); }} />}
             {classLifeGroup && subpage === 'blog' && <StaffBlog classes={desk.classes} request={request} onExpired={expireSession} />}

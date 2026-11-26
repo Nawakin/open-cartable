@@ -38,7 +38,7 @@ Ouvrez l’article publié et choisissez « Retirer de la publication », puis c
 
 ## Lire les articles
 
-Dans l’accueil parent, choisissez « Blog de classe » sous le nom de l’enfant. Le fil affiche les articles publiés de sa classe actuelle, du plus récent au plus ancien. La première photo apparaît en grand. La vignette `+X` indique le nombre d’autres photos et ouvre le carrousel à la deuxième image. Utilisez les flèches, un glissement horizontal ou les touches droite et gauche. Si le fil était déjà ouvert lors d’une publication ou d’un retrait, utilisez « Actualiser ».
+Dans l’accueil parent, ouvrez « Vie de classe », puis « Blog de classe » sous le nom de l’enfant. Le fil affiche les articles publiés de sa classe actuelle, du plus récent au plus ancien. La première photo apparaît en grand. La vignette `+X` indique le nombre d’autres photos et ouvre le carrousel à la deuxième image. Utilisez les flèches, un glissement horizontal ou les touches droite et gauche. Si le fil était déjà ouvert lors d’une publication ou d’un retrait, utilisez « Actualiser ».
 
 ## Stockage et conservation
 

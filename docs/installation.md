@@ -95,15 +95,21 @@ Dans le menu parent, ouvrez « Messagerie », puis « Nouveau message ». Sélec
 
 ### Essayer le cahier de liaison
 
-Connectez-vous à l’espace enseignant dans la web-app, ouvrez « Vie de classe », puis « Cahier de liaison », et publiez un mot fictif pour votre classe. Dans l’accueil parent, ouvrez le cahier de liaison de l’enfant et choisissez « Répondre ». De retour dans l’espace enseignant, utilisez « Voir les réponses », puis « Répondre en privé » pour ouvrir la messagerie avec le destinataire déjà renseigné. [Guide du cahier de liaison](cahier-liaison.md)
+Connectez-vous à l’espace enseignant dans la web-app, ouvrez « Vie de classe », puis « Cahier de liaison », et publiez un mot fictif pour votre classe. Dans l’accueil parent, ouvrez « Vie de classe » sous le nom de l’enfant, puis « Cahier de liaison », et choisissez « Répondre ». De retour dans l’espace enseignant, utilisez « Voir les réponses », puis « Répondre en privé » pour ouvrir la messagerie avec le destinataire déjà renseigné. [Guide du cahier de liaison](cahier-liaison.md)
 
 ### Essayer le blog de classe
 
-Dans l’espace enseignant, ouvrez « Vie de classe », puis « Blog de classe », et créez un article fictif. Ajoutez deux photos d’objets et validez-les dans le brouillon. Choisissez « Prévisualiser », puis « Publier cet article ». Dans l’espace parent, ouvrez « Blog de classe » sous le nom de l’enfant et sélectionnez `+1` pour ouvrir le carrousel. [Guide du blog de classe](blog-de-classe.md)
+Dans l’espace enseignant, ouvrez « Vie de classe », puis « Blog de classe », et créez un article fictif. Ajoutez deux photos d’objets et validez-les dans le brouillon. Choisissez « Prévisualiser », puis « Publier cet article ». Dans l’espace parent, ouvrez « Vie de classe », puis « Blog de classe » sous le nom de l’enfant et sélectionnez `+1` pour ouvrir le carrousel. [Guide du blog de classe](blog-de-classe.md)
 
 Pour essayer le masquage, ouvrez les « Options » d’une photo du brouillon, puis « Masquer une zone ». Tracez un rectangle autour d’un objet, appliquez le masque et vérifiez de nouveau la photo. Ouvrez l’article côté parent après publication pour contrôler le résultat. [Tutoriel du masquage](blog-de-classe.md#masquer-une-zone-sur-une-photo)
 
 Pour vérifier le registre avec les données fictives de l’assistant, ouvrez « École », puis « Autorisations photo » dans l’espace direction. Renseignez un statut pour l’élève fictif. Dans l’espace parent, retrouvez le statut dans « Compte », puis « Autorisations photo ».
+
+### Essayer l’appel et le suivi des absences
+
+1. Dans l’espace enseignant, ouvrez « Vie de classe », puis « Faire l’appel ». Ouvrez la ligne de l’élève fictif, choisissez « Absent » et enregistrez l’appel.
+2. Dans l’espace parent, ouvrez « Absences » sous son nom et vérifiez que l’absence est affichée.
+3. Dans l’espace direction, ouvrez « École », puis « Suivi des absences ». Ouvrez la ligne de l’élève et marquez son absence comme justifiée. Actualisez l’historique parent pour voir la nouvelle mention. [Guide de l’appel et des absences](absences.md)
 
 ### Générer une invitation supplémentaire
 

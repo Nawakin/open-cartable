@@ -10,7 +10,7 @@ Chaque classe dispose d’un mot par jour. La date suit le fuseau Europe/Paris. 
 
 ## Lire un mot et répondre
 
-1. Dans l’accueil parent sur le web ou sur mobile, ouvrez « Cahier de liaison » sous l’enfant concerné.
+1. Dans l’accueil parent sur le web ou sur mobile, ouvrez « Vie de classe », puis « Cahier de liaison » sous l’enfant concerné.
 2. Choisissez « Répondre » sous un mot. Saisissez un texte de 500 caractères maximum et choisissez « Enregistrer la réponse ».
 3. Utilisez « Modifier ma réponse » pour la corriger. Chaque tuteur peut enregistrer sa propre réponse pour cet enfant et ce mot.
 

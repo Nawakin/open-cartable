@@ -10,6 +10,7 @@ import { registerParentLiaison } from '../liaison/routes.js';
 import { registerParentBlog } from '../blog/routes.js';
 import { registerFamilyPhotoAuthorizations } from '../photo-authorizations/routes.js';
 import { registerSchoolBanner } from '../school-banner/routes.js';
+import { registerParentAttendance } from '../attendance/routes.js';
 
 const browserCookie = '__Host-open-cartable';
 const cookieOptions = { path: '/', httpOnly: true, secure: true, sameSite: 'strict' };
@@ -88,6 +89,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
   registerParentBlog(app, { authenticated, mediaKey: blogMediaKey });
   registerFamilyPhotoAuthorizations(app, authenticated);
   registerSchoolBanner(app, '/parent', authenticated);
+  registerParentAttendance(app, authenticated);
 
   const invitationOptions = {
     bodyLimit: 1024,
