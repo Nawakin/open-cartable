@@ -11,6 +11,7 @@ export const migrations = [
   '019-direction-security.sql', '020-account-links.sql', '021-school-years.sql',
   '022-school-directory.sql', '023-absence-justifications.sql', '024-school-reports.sql', '025-attachments.sql',
   '026-class-media.sql', '027-web-push.sql', '028-notification-preferences.sql', '029-native-push.sql',
+  '030-notification-categories.sql', '031-remembered-access.sql',
 ];
 
 export function openDatabase(connectionString) {

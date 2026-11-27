@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { Button, Field, styles } from '../parent/ui';
 import { layout, Select } from '../year-transition/ui';
+import { downloadDocument } from '../files/documents';
 
 const grades = ['TPS', 'PS', 'MS', 'GS', 'CP', 'CE1', 'CE2', 'CM1', 'CM2'];
 const sections = { classes: 'Classes', students: 'Élèves', guardians: 'Tuteurs', invitations: 'Invitations' };
@@ -23,15 +24,10 @@ function csvFile(result) {
   }
   const lines = [['École', 'Tuteur', 'Invitation', 'Expiration'], ...result.invitations.map(({ name, code, expiresAt }) =>
     [result.schoolCode, name, code, expiresAt])];
-  const url = URL.createObjectURL(new Blob(['\ufeff', lines.map((line) => line.map(cell).join(';')).join('\r\n')],
-    { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'invitations-open-cartable.csv';
-  document.body.append(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const content = '\ufeff' + lines.map((line) => line.map(cell).join(';')).join('\r\n');
+  const type = 'text/csv';
+  const file = Platform.OS === 'web' ? new Blob([content], { type }) : { type, bytes: new TextEncoder().encode(content) };
+  return downloadDocument(file, 'invitations-open-cartable', 'csv');
 }
 
 export function SchoolDirectory({ request, run, busy, onChanged }) {
@@ -114,7 +110,8 @@ export function SchoolDirectory({ request, run, busy, onChanged }) {
         <Text style={styles.label}>Code école · {invitations.schoolCode}</Text>
         {invitations.invitations.map(({ id, name, code }) => <Text key={id} selectable style={styles.body}>{name || 'Tuteur'} · {code}</Text>)}
         <View style={styles.actions}>
-          <Button label="Télécharger les codes en CSV" icon="download-outline" secondary onPress={() => csvFile(invitations)} />
+          <Button label="Télécharger les codes en CSV" icon="download-outline" secondary busy={busy}
+            onPress={() => void run(() => csvFile(invitations))} />
           <Button label="Masquer les codes" secondary onPress={() => setInvitations(null)} />
         </View>
       </View>}

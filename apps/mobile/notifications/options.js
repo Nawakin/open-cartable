@@ -3,15 +3,17 @@ import { StyleSheet, Switch, Text, View } from 'react-native';
 import { Button, styles } from '../parent/ui';
 
 const categories = [
-  ['homework', 'Cahier de texte'], ['messages', 'Messagerie'], ['liaison', 'Cahier de liaison'],
-  ['blog', 'Blog de classe'], ['agenda', 'Agenda et rappels'], ['attendance', 'Rappels d’absence'],
+  ['messages', 'Messages'], ['homework', 'Cahier de texte'], ['assignments', 'Devoirs à rendre'],
+  ['reports', 'Livrets scolaires'], ['agenda', 'Nouveaux événements'], ['agenda-reminder', 'Rappels d’agenda'],
+  ['attendance', 'Rappels d’absence'], ['liaison', 'Cahier de liaison'], ['blog', 'Blog de classe'], ['library', 'Médiathèque'],
 ];
 export const notificationIds = categories.map(([id]) => id);
 
 export function NotificationOptions({ settings, busy, problem, change, save }) {
-  if (!settings) return null;
+  if (!settings) return problem
+    ? <Text accessibilityRole="alert" style={styles.body}>{problem}</Text>
+    : <Text style={styles.body}>Chargement des réglages…</Text>;
   return <View style={styles.field}>
-    <Text accessibilityRole="header" style={styles.label}>Notifications</Text>
     <Text style={styles.body}>Recevez une alerte sur cet appareil quand votre école publie une nouveauté ou vous écrit.</Text>
     {problem && <Text accessibilityRole="alert" style={styles.error}>{problem}</Text>}
     <View style={styles.actions}>

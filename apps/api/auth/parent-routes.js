@@ -60,19 +60,22 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     return verifyAccessToken(signingKey, match?.[1]);
   }
 
-  function browserIdentity(request) {
+  async function browserIdentity(request, reply) {
     const token = webSessionToken(request, browserCookie);
-    return token ? store.browserIdentity(token) : null;
+    if (!token) return null;
+    const identity = await store.browserIdentity(token, Boolean(reply));
+    if (identity?.renewed) reply.setCookie(browserCookie, token, { ...cookieOptions, maxAge: parentSessionSeconds });
+    return identity;
   }
 
-  function parentIdentity(request) {
+  function parentIdentity(request, reply) {
     return request.headers.authorization === undefined && webOrigin
-      ? browserIdentity(request) : bearerIdentity(request);
+      ? browserIdentity(request, reply) : bearerIdentity(request);
   }
 
   function authenticated(operation, success = 200, identify = parentIdentity) {
     return async (request, reply) => {
-      const claims = await identify(request);
+      const claims = await identify(request, reply);
       if (!claims) return unauthorized(reply);
       const result = await store.withParentSession(claims, (db, actor) => operation(request, db, actor, reply, claims));
       if (!result.authorized) return unauthorized(reply);
@@ -177,7 +180,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
       },
     },
   }, async (request, reply) => {
-    const claims = await parentIdentity(request);
+    const claims = await parentIdentity(request, reply);
     if (!claims) return unauthorized(reply);
     const children = await store.children(claims);
     if (!children) return unauthorized(reply);
@@ -185,14 +188,14 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
   });
 
   app.get('/parent/tutor-reference', async (request, reply) => {
-    const claims = await parentIdentity(request);
+    const claims = await parentIdentity(request, reply);
     if (!claims) return unauthorized(reply);
     const reference = await store.tutorReference(claims);
     return reference ? { reference } : unauthorized(reply);
   });
 
   app.get('/parent/agenda/reminders', { schema: { querystring: remindersQuerySchema } }, async (request, reply) => {
-    const claims = await parentIdentity(request);
+    const claims = await parentIdentity(request, reply);
     if (!claims) return unauthorized(reply);
     const page = readAgendaCursor(request.query.cursor);
     if (!page) return reply.code(400).send({ error: 'Page non valide.' });
@@ -200,13 +203,29 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     return reminders ?? unauthorized(reply);
   });
 
+  app.get('/parent/assignments/next', authenticated(async (_request, db, actor) => {
+    const { rows } = await db.query(`
+      WITH calendar AS (SELECT (statement_timestamp() AT TIME ZONE 'Europe/Paris')::date AS today)
+      SELECT h.id, h.title, h.domain, h.entry_date::text AS date,
+        json_build_object('id',s.id,'displayName',s.display_name,'className',c.name) AS child
+      FROM guardian_students l JOIN students s ON (s.school_id,s.id) = (l.school_id,l.student_id)
+      JOIN classes c ON (c.school_id,c.id) = (s.school_id,s.class_id)
+      JOIN homework_entries h ON (h.school_id,h.class_id) = (c.school_id,c.id)
+      CROSS JOIN calendar
+      WHERE (l.school_id,l.guardian_id) = ($1,$2) AND s.left_at IS NULL AND c.archived_year IS NULL
+        AND h.kind = 'assignment' AND h.entry_date BETWEEN today AND today + 13
+      ORDER BY h.entry_date,s.display_name,h.id,s.id LIMIT 12
+    `, [actor.school_id, actor.guardian_id]);
+    return { assignments: rows };
+  }));
+
   app.get('/parent/children/:childId/homework', {
     schema: {
       params: jsonBody({ childId: uuidPattern }),
       querystring: homeworkQuerySchema,
     },
   }, async (request, reply) => {
-    const claims = await parentIdentity(request);
+    const claims = await parentIdentity(request, reply);
     if (!claims) return unauthorized(reply);
     const period = readPeriod(request.query);
     if (!period) return reply.code(400).send({ error: 'Période ou page non valide.' });
@@ -221,7 +240,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
   app.get(calendar, {
     schema: { params: jsonBody({ childId: uuidPattern }), querystring: agendaQuerySchema },
   }, async (request, reply) => {
-    const claims = await parentIdentity(request);
+    const claims = await parentIdentity(request, reply);
     if (!claims) return unauthorized(reply);
     const period = agendaPeriod(request.query);
     if (!period) return reply.code(400).send({ error: 'Période ou page non valide.' });
@@ -234,7 +253,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
   app.get(calendar + '/:eventId/ical', {
     schema: { params: jsonBody({ childId: uuidPattern, eventId: uuidPattern }) },
   }, async (request, reply) => {
-    const claims = await parentIdentity(request);
+    const claims = await parentIdentity(request, reply);
     if (!claims) return unauthorized(reply);
     const { childId, eventId } = request.params;
     const { authenticated, event } = await store.agendaEvent(claims, childId, eventId);

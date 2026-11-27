@@ -13,6 +13,71 @@ const databaseUrl = process.env.TEST_DATABASE_URL;
 const origin = 'https://ent.ecole.example';
 const email = 'direction@ecole.example';
 
+test('la direction impose la 2FA et ne rouvre un appareil reconnu qu’avec un code neuf',
+  { skip: !databaseUrl }, async (context) => {
+    const schema = 'direction_access_test_' + randomUUID().replaceAll('-', '');
+    const admin = openDatabase(databaseUrl);
+    const pool = new pg.Pool({ connectionString: databaseUrl, options: '-c search_path=' + schema });
+    const totpKey = randomBytes(32);
+    const app = buildApp({ direction: { pool, webOrigin: origin, totpKey, requireTotp: true } });
+    context.after(async () => {
+      await app.close();
+      await pool.end();
+      try { await admin.query('DROP SCHEMA IF EXISTS ' + schema + ' CASCADE'); }
+      finally { await admin.end(); }
+    });
+    await admin.query('CREATE SCHEMA ' + schema);
+    await migrate(pool);
+    await seedDemo(pool);
+    const { id, code: schoolCode } = demo.school;
+    const password = randomBytes(24).toString('base64url');
+    await transaction(pool, async (db) => setDirectionPassword(db, id, await hashPassword(password)));
+    const call = (method, path, payload, headers = { origin }) => app.inject({
+      method, url: '/api/v1/direction' + path, headers, payload,
+    });
+    const login = await call('POST', '/auth/login', { schoolCode, password });
+    assert.equal(login.statusCode, 202);
+    const enrollment = { origin, cookie: login.headers['set-cookie'].split(';')[0] };
+    assert.equal((await call('GET', '/classes', undefined, enrollment)).statusCode, 401);
+    assert.equal((await call('GET', '/auth/state', undefined, enrollment)).json().state, 'enroll');
+    const setup = await call('POST', '/auth/enrollment', undefined, enrollment);
+    assert.equal(setup.statusCode, 200);
+    const totp = new TOTP({ secret: Secret.fromBase32(setup.json().secret) });
+    const firstCode = totp.generate({ timestamp: Date.now() - 30_000 });
+    const confirmed = await call('PUT', '/auth/enrollment', { code: firstCode }, enrollment);
+    assert.equal(confirmed.statusCode, 204);
+    const [activeCookie, deviceCookie] = confirmed.cookies;
+    assert.equal(activeCookie.maxAge, 8 * 60 * 60);
+    assert.equal(deviceCookie.maxAge, 180 * 24 * 60 * 60);
+    for (const cookie of confirmed.cookies) assert.ok(cookie.httpOnly && cookie.secure);
+    const cookies = (entries) => entries.map(({ name, value }) => name + '=' + value).join('; ');
+    const active = { origin, cookie: cookies(confirmed.cookies) };
+    assert.equal((await call('GET', '/classes', undefined, active)).statusCode, 200);
+    assert.equal((await call('GET', '/classes', undefined, enrollment)).statusCode, 401);
+    assert.equal((await call('DELETE', '/security/totp', { password, code: firstCode }, active)).statusCode, 403);
+
+    await pool.query("UPDATE direction_sessions SET expires_at = statement_timestamp() - interval '1 second'");
+    assert.equal((await call('GET', '/classes', undefined, active)).statusCode, 401);
+    assert.equal((await call('GET', '/auth/state', undefined, active)).json().state, 'verify');
+    assert.equal((await call('POST', '/auth/resume', { code: firstCode }, active)).statusCode, 422);
+    const native = { 'x-open-cartable-client': 'native' };
+    const currentTime = Date.now();
+    const nextCode = totp.generate({ timestamp: currentTime });
+    assert.equal((await call('POST', '/auth/resume', { code: nextCode }, { ...active, origin: 'https://autre.example', ...native })).statusCode, 403);
+    const deviceHeader = { ...native, 'x-open-cartable-device': deviceCookie.value };
+    const resumed = await call('POST', '/auth/resume', { code: nextCode }, deviceHeader);
+    assert.equal(resumed.statusCode, 200);
+    assert.equal(resumed.headers['set-cookie'], undefined);
+    const { token, deviceToken } = resumed.json();
+    assert.notEqual(deviceToken, deviceCookie.value);
+    assert.equal((await call('GET', '/auth/state', undefined, active)).json().state, 'login');
+    const signedIn = { ...native, authorization: 'Bearer ' + token, 'x-open-cartable-device': deviceToken };
+    assert.equal((await call('GET', '/classes', undefined, signedIn)).statusCode, 200);
+    assert.equal((await call('GET', '/classes', undefined, { ...signedIn, origin })).statusCode, 401);
+    assert.equal((await call('POST', '/auth/logout', undefined, signedIn)).statusCode, 204);
+    assert.equal((await call('GET', '/auth/state', undefined, signedIn)).json().state, 'login');
+  });
+
 test('la récupération vérifie l’adresse et protège le compte avec des liens et des codes à usage unique',
   { skip: !databaseUrl }, async (context) => {
     const schema = 'direction_security_test_' + randomUUID().replaceAll('-', '');

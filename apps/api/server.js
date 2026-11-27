@@ -69,7 +69,9 @@ try {
     throw new Error('CLASS_MEDIA_QUOTA_MIB doit être un nombre entier compris entre 24 et 1048576.');
   }
   const classMediaQuota = quotaMib * 1024 ** 2;
-  const direction = webOrigin ? { pool, webOrigin, totpKey, mailer, classMediaQuota, invitationKey: directionInvitationKey } : undefined;
+  if (webOrigin && !totpKey) throw new Error('DIRECTION_TOTP_KEY est requise pour l’accès direction.');
+  const direction = webOrigin ? { pool, webOrigin, totpKey, mailer, classMediaQuota, invitationKey: directionInvitationKey,
+    requireTotp: true } : undefined;
   const blogMediaKey = mediaSecret === undefined ? undefined : Buffer.from(mediaSecret, 'hex');
   const pushSecret = readSecret(env, 'WEB_PUSH_KEY');
   const webPush = webPushSettings(pushSecret, webOrigin);

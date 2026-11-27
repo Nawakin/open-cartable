@@ -42,17 +42,21 @@ Si l’école est encore à configurer, le lien contient le code d’installatio
 2. Cliquez sur « Créer l’école ». Conservez le code école et le code d’invitation parent qui s’affichent.
 3. Cliquez sur « Aller à la connexion », puis sur « Se connecter ». Le compte affiche l’élève créé. Ouvrez son cahier de texte pour consulter ses publications.
 
-Le code d’invitation est valable sept jours et pour une seule activation. Pour connecter un deuxième appareil, générez une invitation supplémentaire pour le même tuteur. La configuration initiale est enregistrée dans PostgreSQL. Les lancements suivants ouvrent directement l’espace parent.
+Le code d’invitation est valable sept jours et pour une seule activation. Pour connecter un deuxième appareil, générez une invitation supplémentaire pour le même tuteur. La configuration initiale est enregistrée dans PostgreSQL. Le navigateur et l’application rouvrent le dernier espace utilisé tant que l’accès est reconnu.
 
 Si l’assistant vous demande le code d’installation après un rechargement, relancez l’installateur pour ouvrir son lien. Si la création a réussi mais que l’invitation a été perdue, utilisez la procédure de réémission ci-dessous.
 
-## 4. Essayer le cahier de texte et l’accès mobile
+## 4. Se connecter sur le web ou sur l’application
+
+Ouvrez la page d’accueil de l’ENT ou lancez l’application. Sur Android et iOS, saisissez l’adresse HTTPS fournie par votre école lors de la première connexion. Dans « Connexion à l’ENT », saisissez le code de l’école et le code d’accès parent ou le code d’activation enseignant. Pour la direction ou un compte enseignant déjà activé, ouvrez « Accès pour l’équipe » et choisissez votre rôle. La web-app et l’application utilisent les mêmes espaces et les mêmes droits.
+
+Les sessions parent et enseignant restent ouvertes jusqu’à 90 jours d’inactivité dans le navigateur et 365 jours dans l’application. Le navigateur utilise un cookie sécurisé. L’application conserve ses accès dans le stockage sécurisé du système. Déconnectez-vous après utilisation d’un appareil partagé.
 
 ### Publier une entrée
 
-1. À la fin de l’installation, choisissez « Ouvrir l’espace direction ». Pour y revenir, ajoutez `/?espace=direction` à l’adresse de la web-app. Saisissez le code école et le mot de passe choisi dans l’assistant.
-2. Sélectionnez une classe. Renseignez la date, le titre, le domaine et la description, puis cliquez sur « Publier ».
-3. Revenez à « Espace parent » et ouvrez le cahier de texte de l’enfant. Sélectionnez la période de l’entrée. Dans l’espace direction, « Modifier » et « Retirer » permettent de corriger ou supprimer une publication. [Guide du cahier de texte](cahier-texte.md)
+1. À la fin de l’installation, choisissez « Ouvrir l’espace direction ». Vous pouvez aussi choisir « Accès pour l’équipe → Direction » depuis la connexion commune. Saisissez le code de l’école et le mot de passe choisi dans l’assistant, puis configurez votre authentificateur.
+2. Sélectionnez une classe. Choisissez « Note de classe » ou « Devoir à rendre ». Renseignez la date, le titre, le domaine et la description, puis sélectionnez « Publier ».
+3. Depuis un compte parent, ouvrez le cahier de texte de l’enfant. Sélectionnez la période de l’entrée. Les devoirs des deux prochaines semaines sont également accessibles depuis l’accueil. Dans l’espace direction, « Modifier » et « Retirer » permettent de corriger ou supprimer une publication. [Guide du cahier de texte](cahier-texte.md)
 
 ### Activer ou réinitialiser le compte direction
 
@@ -85,9 +89,11 @@ Pour récupérer un mot de passe, choisissez « Mot de passe oublié ? » sur la
 
 ### Activer la double authentification
 
-Dans « École → Sécurité du compte », choisissez « Configurer un authentificateur » et saisissez votre mot de passe. Scannez le QR code ou copiez la clé dans une application libre comme Aegis ou FreeOTP, ou dans toute application compatible TOTP. Saisissez les six chiffres de l’application pour activer la protection. Une connexion suivante demande un nouveau code après le mot de passe.
+Lors du premier accès direction, l’ENT demande de configurer la double authentification. Scannez le QR code sur le web ou copiez la clé dans une application libre comme Aegis, ente Auth ou FreeOTP. Saisissez les six chiffres affichés pour ouvrir l’espace direction.
 
-Docker Compose prépare la clé de chiffrement de la double authentification dans le volume `app-secrets`. Conservez ce volume avec vos sauvegardes. Une installation manuelle peut fournir cette clé avec `DIRECTION_TOTP_KEY_FILE` et l’URL SMTP avec `DIRECTION_SMTP_URL_FILE`, à partir de fichiers privés.
+La session direction dure huit heures. Ensuite, l’ENT demande un nouveau code TOTP sur les appareils reconnus. La reconnaissance de l’appareil reste valable 180 jours et se renouvelle après la validation d’un nouveau code. Après une déconnexion, une réinitialisation du mot de passe ou cette période d’inactivité, saisissez le mot de passe et un code TOTP.
+
+Docker Compose prépare la clé de chiffrement requise pour la double authentification dans le volume `app-secrets`. Conservez ce volume avec vos sauvegardes. Une installation manuelle fournit cette clé avec `DIRECTION_TOTP_KEY_FILE` et peut fournir l’URL SMTP avec `DIRECTION_SMTP_URL_FILE`, à partir de fichiers privés.
 
 ### Personnaliser le bandeau de l’école
 
@@ -101,15 +107,15 @@ Les écrans de connexion et d’installation affichent le bandeau Open Cartable.
 ### Créer un accès enseignant
 
 1. Dans « Espace direction », ouvrez « École », puis « Enseignants ». Choisissez un identifiant, affectez une ou plusieurs classes puis cliquez sur « Créer le compte enseignant ».
-2. Transmettez en privé le lien vers l’espace enseignant, le code école, l’identifiant et le code d’activation affichés. Le lien se termine par `/?espace=enseignant`. Le code est valable sept jours et s’utilise une seule fois.
-3. Dans « Espace enseignant », cliquez sur « Activer mon compte ». Saisissez le code école, l’identifiant et le code d’activation, puis choisissez un mot de passe de 15 à 128 caractères. Après activation, connectez-vous avec le code école, l’identifiant et ce mot de passe.
+2. Transmettez en privé l’adresse de l’ENT, le code de l’école et le code d’activation. Le code est valable sept jours et s’utilise une seule fois. Communiquez aussi l’identifiant à conserver pour une connexion sur un nouvel appareil.
+3. Saisissez le code de l’école et le code d’activation depuis « Connexion à l’ENT ». Choisissez un mot de passe de 15 à 128 caractères et confirmez-le. L’espace enseignant s’ouvre après l’activation.
 
 L’enseignant retrouve le même formulaire de publication que la direction, avec ses seules classes affectées. La direction peut modifier les affectations, réinitialiser l’activation ou retirer le compte. Réinitialiser ou retirer un compte ferme ses sessions. Les publications restent dans le cahier de la classe. [Guide du cahier de texte](cahier-texte.md)
 
 ### Utiliser ses comptes parent et enseignant
 
-1. Activez le compte enseignant créé par la direction. Connectez-vous dans un autre onglet de la même web-app avec l’invitation parent remise pour vos propres enfants.
-2. Dans l’espace enseignant, ouvrez « Vie de classe → Mes accès ». Vérifiez les prénoms ou noms d’affichage des enfants et saisissez votre mot de passe enseignant pour associer les deux comptes de la même école.
+1. Activez le compte enseignant créé par la direction. Dans la web-app, ouvrez « Vie de classe → Mes accès », puis « Ouvrir la connexion parent dans un autre onglet » et utilisez l’invitation remise pour vos propres enfants.
+2. Revenez à « Mes accès » et vérifiez le compte parent. Vérifiez les noms d’affichage des enfants et saisissez votre mot de passe enseignant pour confirmer l’association.
 3. Retrouvez « Espace enseignant » dans « Compte » côté parent et « Espace parent » dans « Mes accès » côté enseignant. Si la session de destination a expiré, identifiez-vous à nouveau dans l’espace choisi.
 
 L’association ajoute ces raccourcis. Les enfants suivent leur compte tuteur et les affectations suivent le compte enseignant. Vous pouvez dissocier les comptes depuis l’un ou l’autre espace. Une réinitialisation du compte enseignant dissocie aussi les comptes.
@@ -174,7 +180,7 @@ Pour préparer un fichier d’import LSU, complétez les éléments de programme
 
 1. Dans l’espace enseignant, ouvrez « Vie de classe → Médiathèque ». Ajoutez un PDF fictif, donnez-lui un titre et choisissez une matière dans le champ de dossier. La famille le retrouve dans sa médiathèque de classe. Les dossiers, la recherche, l’aperçu et le téléchargement se font dans le navigateur.
 2. Pour voir une vidéo du blog, enregistrez d’abord un brouillon et ajoutez un court MP4 ou WebM. Vérifiez la prévisualisation, puis publiez l’article et ouvrez-le avec le compte parent. [Guide du blog](blog-de-classe.md#ajouter-une-vidéo)
-3. Sur l’instance HTTPS, ouvrez « Compte → Notifications » dans l’espace parent, puis « Activer les notifications ». Autorisez l’affichage dans le navigateur. Choisissez les rubriques souhaitées et décidez si les alertes doivent arriver le week-end. Sur iOS, utilisez la web-app ajoutée à l’écran d’accueil avec un système compatible Web Push.
+3. Sur l’instance HTTPS, ouvrez « Compte → Paramètres de notification » dans l’espace parent, puis « Activer les notifications ». Autorisez l’affichage dans le navigateur. Choisissez les rubriques souhaitées sur cet appareil et décidez si les alertes doivent arriver le week-end. Sur iOS, utilisez la web-app ajoutée à l’écran d’accueil avec un système compatible Web Push.
 4. Depuis le compte enseignant, publiez un devoir fictif. Ouvrez l’alerte et vérifiez que le cahier de texte s’affiche après connexion. Pour essayer les rappels, créez un événement fictif à plus de 24 heures ou enregistrez une absence fictive. [Horaires des rappels](agenda.md#activer-les-rappels-web)
 
 Compose génère la clé Web Push lors de l’installation. Le service de notification du navigateur reçoit le type d’alerte. Les noms, titres d’événements, dates et messages se consultent après connexion à l’ENT. Le quota de la médiathèque est réglable avec `CLASS_MEDIA_QUOTA_MIB`, dont la valeur par défaut est `5120`.

@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
 import { dayInSchoolCalendar, movePeriod, periodRange } from '../parent/homework';
 import { Button, Field, styles } from '../parent/ui';
-import { classPath, staffRequest } from './api';
+import { staffNeedsSchoolAddress, staffProfile, staffRequest } from './api';
+import { classPath } from './paths';
+import { parseSchoolAddress } from '../parent/http';
+import { lastSchoolAddress } from '../access/remember';
 import { TeacherDirectory } from './teacher-directory';
 import { StaffAgenda } from '../agenda/staff-agenda';
 import { Messages } from '../messaging/messages';
@@ -18,7 +21,7 @@ import { DirectionAttendance } from '../attendance/monthly';
 import { YearTransition } from '../year-transition/year-transition';
 import { AuthenticatorField, validCode } from '../direction-security/fields';
 import { consumeRecoveryLink, DirectionRecovery } from '../direction-security/recovery';
-import { DirectionSecurity } from '../direction-security/settings';
+import { DirectionSecurity, EnrollmentQr } from '../direction-security/settings';
 import { AccountLink } from '../account-link';
 import { Illustration, IllustratedMenu } from '../illustrations';
 import { SchoolDirectory } from './school-directory';
@@ -28,7 +31,7 @@ import { StaffLibrary } from '../files/library';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
-const blankEntry = () => ({ date: dayInSchoolCalendar(), title: '', domain: '', description: '' });
+const blankEntry = () => ({ date: dayInSchoolCalendar(), title: '', domain: '', description: '', kind: 'notebook' });
 const commonSections = [
   { id: 'homework', label: 'Cahier de texte' },
   { id: 'agenda', label: 'Agenda' },
@@ -70,12 +73,13 @@ function message(error, activating) {
     case 409: return 'Cet identifiant est déjà utilisé dans votre école.';
     case 413: return 'Le fichier dépasse la taille autorisée.';
     case 415: return 'Choisissez un fichier PDF, JPEG, PNG ou WebP valide.';
+    case 422: return 'Saisissez le nouveau code à six chiffres affiché par votre authentificateur.';
     case 429: return 'Trop de tentatives. Réessayez dans une minute.';
     default: return 'L’opération n’a pas abouti. Réessayez dans un instant.';
   }
 }
 
-export function Staff({ role, onParent }) {
+export function Staff({ role, access, onParent, onLogout }) {
   const isTeacher = role === 'teacher';
   const title = isTeacher ? 'Espace enseignant' : 'Espace direction';
   const request = useCallback((path, options) => staffRequest(role, path, options), [role]);
@@ -85,14 +89,16 @@ export function Staff({ role, onParent }) {
   const [subpage, setSubpage] = useState(null);
   const [messageDraft, setMessageDraft] = useState(null);
   const [desk, setDesk] = useState(null);
-  const [school, setSchool] = useState('');
+  const [school, setSchool] = useState(access?.schoolCode ?? '');
+  const [address, setAddress] = useState(access?.origin ?? '');
   const [teacherLogin, setTeacherLogin] = useState('');
-  const [activationCode, setActivationCode] = useState('');
-  const [activating, setActivating] = useState(false);
+  const [activationCode, setActivationCode] = useState(access?.code ?? '');
+  const [activating, setActivating] = useState(Boolean(access?.code));
   const [confirmation, setConfirmation] = useState('');
   const [password, setPassword] = useState('');
   const [needsCode, setNeedsCode] = useState(false);
   const [authCode, setAuthCode] = useState('');
+  const [enrollment, setEnrollment] = useState(null);
   const [recovery, setRecovery] = useState(null);
   const [classId, setClassId] = useState(null);
   const [month, setMonth] = useState(dayInSchoolCalendar);
@@ -116,12 +122,14 @@ export function Staff({ role, onParent }) {
     setPassword('');
     setNeedsCode(false);
     setAuthCode('');
+    setEnrollment(null);
     setPhase('login');
   }
 
   function expireSession() {
     resetDesk();
-    setProblem('Votre session a expiré. Reconnectez-vous.');
+    setPhase('loading');
+    void restore().catch((error) => setProblem(message(error, activating)));
   }
 
   function resetClass() {
@@ -158,6 +166,19 @@ export function Staff({ role, onParent }) {
 
   async function restore() {
     try {
+      const accessState = await request('/auth/state');
+      setSchool((current) => accessState.schoolCode ?? current);
+      if (accessState.state === 'enroll') {
+        setPhase('enroll');
+        setEnrollment(await request('/auth/enrollment', { method: 'POST' }));
+        return;
+      }
+      if (accessState.state === 'verify') {
+        resetDesk();
+        setPhase('verify');
+        return;
+      }
+      if (accessState.state !== 'active') { resetDesk(); return; }
       setDesk(await request('/classes'));
       setPhase('desk');
     } catch (error) {
@@ -171,7 +192,13 @@ export function Staff({ role, onParent }) {
   }
 
   useEffect(() => {
-    void run(restore);
+    void run(async () => {
+      const profile = await staffProfile(role);
+      setAddress(access?.origin || profile?.origin || await lastSchoolAddress());
+      setSchool(access?.schoolCode || profile?.schoolCode || '');
+      if (access?.code) setPhase('login');
+      else await restore();
+    });
   }, []);
 
   useEffect(() => {
@@ -186,10 +213,11 @@ export function Staff({ role, onParent }) {
   }, [isTeacher]);
 
   useEffect(() => {
-    if (!isTeacher || phase !== 'desk') return undefined;
+    if (phase !== 'desk') return undefined;
     const subscription = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       void run(async () => {
+        if (isTeacher) await request('/auth/state');
         const current = await request('/classes');
         setDesk(current);
         if (section !== 'homework' || !classId) return;
@@ -208,11 +236,16 @@ export function Staff({ role, onParent }) {
       const schoolCode = school.trim().toUpperCase();
       const length = [...password].length;
       const login = teacherLogin.trim().toLowerCase();
+      const origin = staffNeedsSchoolAddress ? parseSchoolAddress(address) : undefined;
+      if (staffNeedsSchoolAddress && !origin) {
+        setProblem('Saisissez l’adresse HTTPS de votre école, sans chemin.');
+        return;
+      }
       if (!/^[A-Z0-9][A-Z0-9-]{1,31}$/.test(schoolCode) || !password.trim() || length < 15 || length > 128) {
         setProblem('Renseignez le code de l’école et un mot de passe de 15 à 128 caractères.');
         return;
       }
-      if (isTeacher && !/^[a-z0-9][a-z0-9._-]{2,31}$/.test(login)) {
+      if (isTeacher && !activating && !/^[a-z0-9][a-z0-9._-]{2,31}$/.test(login)) {
         setProblem('Saisissez l’identifiant transmis par la direction.');
         return;
       }
@@ -222,12 +255,12 @@ export function Staff({ role, onParent }) {
           setProblem('Vérifiez le code d’activation et la confirmation du mot de passe.');
           return;
         }
-        await request('/auth/activate', { method: 'POST', body: { schoolCode, login, code, password } });
+        await request('/auth/claim', { origin, method: 'POST', body: { schoolCode, code, password } });
         setActivating(false);
         setActivationCode('');
         setPassword('');
         setConfirmation('');
-        setNotice('Compte activé. Connectez-vous avec votre mot de passe.');
+        await restore();
         return;
       }
       if (needsCode && !validCode(authCode)) {
@@ -237,7 +270,7 @@ export function Staff({ role, onParent }) {
       const body = isTeacher ? { schoolCode, login, password }
         : { schoolCode, password, ...(needsCode ? { code: authCode } : {}) };
       try {
-        await request('/auth/login', { method: 'POST', body });
+        await request('/auth/login', { origin, method: 'POST', body });
       } catch (error) {
         if (!isTeacher && error.status === 428) {
           setNeedsCode(true);
@@ -253,6 +286,24 @@ export function Staff({ role, onParent }) {
       setPassword('');
       setAuthCode('');
       setNeedsCode(false);
+      await restore();
+    });
+  }
+
+  function completeFactor() {
+    void run(async () => {
+      const enrolling = phase === 'enroll';
+      const code = authCode;
+      setAuthCode('');
+      try {
+        await request(enrolling ? '/auth/enrollment' : '/auth/resume', { method: enrolling ? 'PUT' : 'POST', body: { code } });
+      } catch (error) {
+        if (error.status !== 401) throw error;
+        await restore();
+        setProblem('Cet accès a expiré. Saisissez de nouveau les identifiants de l’école.');
+        return;
+      }
+      setEnrollment(null);
       await restore();
     });
   }
@@ -293,10 +344,10 @@ export function Staff({ role, onParent }) {
   }
 
   function edit(entry) {
-    const { id, date, title, domain, description } = entry;
+    const { id, date, title, domain, description, kind = 'notebook' } = entry;
     setEditing(id);
     setRemoving(null);
-    setDraft({ date, title, domain, description });
+    setDraft({ date, title, domain, description, kind });
   }
 
   function save() {
@@ -332,6 +383,7 @@ export function Staff({ role, onParent }) {
     void run(async () => {
       await request('/auth/logout', { method: 'POST' });
       resetDesk();
+      onLogout?.();
     });
   }
 
@@ -351,11 +403,32 @@ export function Staff({ role, onParent }) {
       {notice ? <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text> : null}
       {phase === 'loading' && <Text style={styles.body}>Chargement de votre espace…</Text>}
       {phase === 'unavailable' && <Button label="Réessayer" onPress={() => void run(restore)} busy={busy} />}
+      {(phase === 'enroll' || phase === 'verify') && <>
+        {phase === 'enroll' ? <>
+          <Text style={styles.label}>Configurer la double authentification</Text>
+          {enrollment ? <>
+            <Text style={styles.body}>{Platform.OS === 'web'
+              ? 'Scannez le QR code avec Aegis, ente Auth ou un autre authentificateur TOTP.'
+              : 'Ajoutez cette clé dans Aegis, ente Auth ou un autre authentificateur TOTP.'}</Text>
+            <EnrollmentQr uri={enrollment.uri} />
+            <Text style={styles.label}>Clé à saisir dans l’authentificateur</Text>
+            <Text accessibilityLabel="Clé de l’authentificateur" selectable style={styles.body}>{enrollment.secret}</Text>
+          </> : <Button label="Afficher la clé" secondary busy={busy} onPress={() => void run(restore)} />}
+        </> : <Text style={styles.body}>Saisissez le code de l’authentificateur pour retrouver l’espace direction de {school}.</Text>}
+        {(phase === 'verify' || enrollment) && <>
+          <AuthenticatorField value={authCode} onChangeText={setAuthCode} editable={!busy} onSubmitEditing={completeFactor} />
+          <Button label={phase === 'enroll' ? 'Activer et ouvrir la direction' : 'Ouvrir la direction'}
+            icon="shield-checkmark-outline" busy={busy || !validCode(authCode)} onPress={completeFactor} />
+        </>}
+        <Button label="Oublier cet accès et revenir à la connexion" secondary busy={busy} onPress={logout} />
+      </>}
       {phase === 'login' && (
         <>
+          {staffNeedsSchoolAddress && <Field label="Adresse de l’école" value={address} onChangeText={setAddress} autoCapitalize="none"
+            keyboardType="url" placeholder="https://ent.ecole.example" maxLength={512} editable={!busy} />}
           <Field label="Code de l’école" value={school} onChangeText={setSchool}
             autoCapitalize="characters" maxLength={32} editable={!busy} />
-          {isTeacher && <Field label="Identifiant enseignant" value={teacherLogin} onChangeText={setTeacherLogin}
+          {isTeacher && !activating && <Field label="Identifiant enseignant" value={teacherLogin} onChangeText={setTeacherLogin}
             autoCapitalize="none" autoComplete="username" maxLength={32} editable={!busy} />}
           {activating && <Field label="Code d’activation" value={activationCode} onChangeText={setActivationCode}
             autoCapitalize="none" maxLength={26} editable={!busy} secureTextEntry />}
@@ -370,9 +443,13 @@ export function Staff({ role, onParent }) {
           {isTeacher && <Button label={activating ? 'Revenir à la connexion' : 'Activer mon compte'} busy={busy} secondary
             onPress={() => { setActivating(!activating); setPassword(''); setConfirmation(''); setActivationCode(''); setProblem(''); setNotice(''); }} />}
           {!isTeacher && <Button label="Mot de passe oublié ?" busy={busy} secondary onPress={() => {
+            if (staffNeedsSchoolAddress && !parseSchoolAddress(address)) {
+              setProblem('Saisissez l’adresse HTTPS de votre école.');
+              return;
+            }
             setPassword(''); setAuthCode(''); setNeedsCode(false); setRecovery({ phase: 'request' });
           }} />}
-          <Button label="Connexion parent" icon="arrow-back-outline" onPress={onParent} busy={busy} secondary />
+          <Button label="Retour à la connexion" icon="arrow-back-outline" onPress={onParent} busy={busy} secondary />
         </>
       )}
       {phase === 'desk' && (
@@ -390,11 +467,11 @@ export function Staff({ role, onParent }) {
                 </View>
               </View>
               <IllustratedMenu items={subpages.map((item) => ({ ...item, onPress: () => setSubpage(item.id) }))} busy={busy} />
-              {classLifeGroup && <View style={styles.actions}>
+              {classLifeGroup && Platform.OS === 'web' && <View style={styles.actions}>
                 <Button label="Mes accès" icon="link-outline" secondary busy={busy} onPress={() => setSubpage('account-link')} />
               </View>}
             </>}
-            {schoolGroup && subpage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} />}
+            {schoolGroup && subpage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} schoolAddress={address} />}
             {schoolGroup && subpage === 'enrolment' && <SchoolDirectory request={request} run={run} busy={busy} onChanged={restore} />}
             {subpage === 'reports' && <StaffReports classes={desk.classes} request={request} onExpired={expireSession} teacher={isTeacher} />}
             {subpage === 'library' && <StaffLibrary classes={desk.classes} request={request} onExpired={expireSession} role={role} />}
@@ -406,7 +483,7 @@ export function Staff({ role, onParent }) {
               request={request} onExpired={expireSession} onApplied={() => void run(restore)} />}
             {schoolGroup && subpage === 'security' && <DirectionSecurity request={request} onExpired={expireSession} />}
             {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
-            {classLifeGroup && subpage === 'account-link' && <AccountLink role="teacher" request={request}
+            {classLifeGroup && subpage === 'account-link' && Platform.OS === 'web' && <AccountLink role="teacher" request={request}
               onExpired={expireSession} onOpen={onParent} />}
             {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
               onReply={(target) => { setMessageDraft(target); setSubpage(null); setSection('messages'); }} />}
@@ -429,6 +506,11 @@ export function Staff({ role, onParent }) {
               {classId && (
                 <>
                   <Text accessibilityRole="header" style={staffStyles.heading}>{editing ? 'Modifier l’entrée' : 'Publier une entrée'}</Text>
+                  <View style={styles.actions}>
+                    {[['notebook', 'Note de classe'], ['assignment', 'Devoir à rendre']].map(([kind, label]) =>
+                      <Button key={kind} label={label} selected={draft.kind === kind} secondary={draft.kind !== kind}
+                        busy={busy} onPress={() => setDraft({ ...draft, kind })} />)}
+                  </View>
                   <Field label="Date" value={draft.date} onChangeText={(date) => setDraft({ ...draft, date })} placeholder="AAAA-MM-JJ" maxLength={10} editable={!busy} />
                   <Field label="Titre" value={draft.title} onChangeText={(title) => setDraft({ ...draft, title })} maxLength={120} editable={!busy} />
                   <Field label="Domaine" value={draft.domain} onChangeText={(domain) => setDraft({ ...draft, domain })} maxLength={80} editable={!busy} />
@@ -448,7 +530,7 @@ export function Staff({ role, onParent }) {
                   {!busy && page.entries.length === 0 && <Text style={styles.body}>Aucune publication pour ce mois.</Text>}
                   {page.entries.map((entry) => (
                     <View key={entry.id} style={staffStyles.entry}>
-                      <Text style={styles.body}>{entry.date} · {entry.domain}</Text>
+                      <Text style={styles.body}>{entry.kind === 'assignment' ? 'À rendre · ' : ''}{entry.date} · {entry.domain}</Text>
                       <Text accessibilityRole="header" style={staffStyles.heading}>{entry.title}</Text>
                       <Text style={styles.body}>{entry.description}</Text>
                       <View style={styles.actions}>
@@ -491,7 +573,8 @@ export function Staff({ role, onParent }) {
   );
 
   if (recovery) return <AppFrame scrollKey={recovery.phase} busy={busy}>
-    <DirectionRecovery key={recovery.token ?? recovery.phase} flow={recovery} school={school} request={request} onBack={(reset) => {
+    <DirectionRecovery key={recovery.token ?? recovery.phase} flow={recovery} school={school}
+      request={(path, options) => request(path, { ...options, ...(staffNeedsSchoolAddress ? { origin: parseSchoolAddress(address) } : {}) })} onBack={(reset) => {
       setRecovery(null);
       if (reset) resetDesk();
       else void run(restore);

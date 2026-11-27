@@ -1,7 +1,7 @@
 import { registerStaffAgenda } from '../agenda/staff-routes.js';
 import { schoolCodePattern } from '../auth/credentials.js';
 import { passwordLimits } from '../auth/password.js';
-import { authRateLimit, cookieOptions, registerStaffWeb, teacherCookieName as cookieName, unauthorized } from '../auth/staff-web.js';
+import { authRateLimit, cookieOptions, nativeStaffClient, registerStaffWeb, teacherCookieName as cookieName, unauthorized } from '../auth/staff-web.js';
 import { registerTeacherAccountLink } from '../auth/account-links.js';
 import { registerStaffHomework } from '../homework/staff-routes.js';
 import { registerTeacherMessages } from '../messaging/routes.js';
@@ -15,7 +15,7 @@ import { registerHomeworkAttachments } from '../homework/attachments.js';
 import { registerStaffMedia } from '../files/class-media.js';
 import {
   activateTeacher, canTeachClass, signInTeacher, signOutTeacher, teacherActivationPattern,
-  teacherLoginPattern, teacherSessionSeconds, withTeacherSession,
+  teacherLoginPattern, teacherSessionSeconds, teacherNativeSessionSeconds, withTeacherSession, renewTeacherSession,
 } from './store.js';
 
 const credentials = {
@@ -46,10 +46,36 @@ export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey, classM
     return reply.code(204).send();
   });
 
-  app.post('/teacher/auth/login', credentialsOptions(credentials), async (request, reply) => {
-    const token = await signInTeacher(pool, request.body);
+  async function openSession(request, reply, input) {
+    const native = nativeStaffClient(request);
+    const seconds = native ? teacherNativeSessionSeconds : teacherSessionSeconds;
+    const token = await signInTeacher(pool, input, seconds);
     if (!token) return unauthorized(reply);
-    return reply.setCookie(cookieName, token, { ...cookieOptions, maxAge: teacherSessionSeconds }).code(204).send();
+    if (native) return reply.send({ state: 'active', token });
+    return reply.setCookie(cookieName, token, { ...cookieOptions, maxAge: seconds }).code(204).send();
+  }
+
+  app.post('/teacher/auth/login', credentialsOptions(credentials), (request, reply) => openSession(request, reply, request.body));
+  app.post('/teacher/auth/claim', credentialsOptions({
+    schoolCode: credentials.schoolCode, password: credentials.password, code: { type: 'string', pattern: teacherActivationPattern.source },
+  }), async (request, reply) => {
+    const login = await activateTeacher(pool, request.body);
+    if (!login) return unauthorized(reply);
+    return openSession(request, reply, { ...request.body, login });
+  });
+
+  app.get('/teacher/auth/state', async (request, reply) => {
+    const token = tokenFor(request);
+    if (!token) return { state: 'login' };
+    const result = await withTeacherSession(pool, token, (_db, actor) => ({
+      state: 'active', schoolCode: actor.school_code, schoolName: actor.school_name,
+    }));
+    if (!result.authorized) return { state: 'login' };
+    const native = nativeStaffClient(request);
+    const seconds = native ? teacherNativeSessionSeconds : teacherSessionSeconds;
+    await renewTeacherSession(pool, token, seconds);
+    if (!native) reply.setCookie(cookieName, token, { ...cookieOptions, maxAge: seconds });
+    return result.value;
   });
 
   app.post('/teacher/auth/logout', async (request, reply) => {

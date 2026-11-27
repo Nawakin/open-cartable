@@ -45,7 +45,7 @@ export async function needsInstallation() {
   return !(await response.json()).installed;
 }
 
-export function FirstRun({ token, onComplete }) {
+export function FirstRun({ token, onComplete, onDirection }) {
   const [form, setForm] = useState(empty);
   const [manualToken, setManualToken] = useState('');
   const [directionPassword, setDirectionPassword] = useState('');
@@ -121,7 +121,7 @@ export function FirstRun({ token, onComplete }) {
         </View>
         <Button label="Aller à la connexion" onPress={() => onComplete(result)} />
         <Button label="Ouvrir l’espace direction" icon="lock-closed-outline" secondary
-          onPress={() => window.location.assign('/?espace=direction')} />
+          onPress={() => onDirection(result.schoolCode)} />
       </View>
     );
   }

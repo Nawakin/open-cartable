@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as Notifications from 'expo-notifications';
 import { currentDeviceToken, pushPath, tokenValue } from './device';
 
-export function useNativeNotifications(signedIn, request, onDestination) {
+export function useNativeNotificationDestination(onDestination) {
   const open = useRef(onDestination);
   open.current = onDestination;
 
@@ -27,12 +27,14 @@ export function useNativeNotifications(signedIn, request, onDestination) {
       Notifications.setNotificationHandler(null);
     };
   }, []);
+}
 
+export function useNativeNotifications(signedIn, request) {
   useEffect(() => {
     if (!signedIn || !pushPath) return;
     let current = true;
     function replace(token) {
-      if (current) return request(pushPath + '/token', { method: 'PATCH', body: { token } });
+      if (current) return request(pushPath + '/token', { method: 'PATCH', body: { token, payloadVersion: 3 } });
     }
     const subscription = Notifications.addPushTokenListener((token) => {
       Promise.resolve().then(() => replace(tokenValue(token))).catch(() => {});

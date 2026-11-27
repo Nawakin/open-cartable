@@ -7,6 +7,15 @@ export const parentCookieName = '__Host-open-cartable';
 export const teacherCookieName = '__Host-open-cartable-teacher';
 export const authRateLimit = { rateLimit: { max: 5, timeWindow: '1 minute' } };
 
+export function nativeStaffClient(request) {
+  return request.headers.origin === undefined && request.headers['x-open-cartable-client'] === 'native';
+}
+
+export function nativeStaffDevice(request) {
+  const token = nativeStaffClient(request) ? request.headers['x-open-cartable-device'] : undefined;
+  return typeof token === 'string' && refreshTokenPattern.test(token) ? token : undefined;
+}
+
 export function webSessionToken(request, cookieName) {
   const token = request.cookies?.[cookieName];
   return typeof token === 'string' && refreshTokenPattern.test(token) ? token : null;
@@ -29,7 +38,8 @@ export async function registerStaffWeb(app, { webOrigin, cookieName, withSession
   await app.register(rateLimit, { global: false, cache: 10_000 });
   app.addHook('onRequest', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    if (request.method !== 'GET' && request.method !== 'HEAD' && request.headers.origin !== webOrigin) {
+    if (request.method !== 'GET' && request.method !== 'HEAD' && request.headers.origin !== webOrigin
+        && !nativeStaffClient(request)) {
       return reply.code(403).send({ error: 'Origine non autorisée.' });
     }
   });
@@ -42,6 +52,10 @@ export async function registerStaffWeb(app, { webOrigin, cookieName, withSession
   });
 
   function tokenFor(request) {
+    if (nativeStaffClient(request)) {
+      const match = /^Bearer ([A-Za-z0-9_-]{43})$/.exec(request.headers.authorization ?? '');
+      return match?.[1];
+    }
     return webSessionToken(request, cookieName);
   }
 

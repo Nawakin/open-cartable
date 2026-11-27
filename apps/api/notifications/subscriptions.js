@@ -1,5 +1,6 @@
-export const notificationCategories = ['homework', 'messages', 'liaison', 'blog', 'agenda', 'attendance'];
-export const payloadVersionBody = { const: 2 };
+export const notificationCategories = ['homework', 'assignments', 'messages', 'liaison', 'blog', 'agenda', 'agenda-reminder',
+  'attendance', 'reports', 'library'];
+export const payloadVersionBody = { enum: [2, 3] };
 export const preferenceFields = {
   type: 'object', additionalProperties: false, required: ['categories', 'weekends'],
   properties: {
@@ -14,13 +15,14 @@ export async function readPreferences(db, sessionId, transport) {
     SELECT ${preferenceColumns} FROM parent_push_subscriptions WHERE (session_id, transport) = ($1, $2)
   `, [sessionId, transport]);
   return { enabled: Boolean(preferences),
-    ...(preferences ?? { categories: notificationCategories, weekends: true, payloadVersion: 2 }) };
+    ...(preferences ?? { categories: notificationCategories, weekends: true, payloadVersion: 3 }) };
 }
 
 export async function savePreferences(db, sessionId, transport, body) {
   const { rows: [preferences] } = await db.query(`
     UPDATE parent_push_subscriptions
-    SET categories = COALESCE($3, categories), weekends = COALESCE($4, weekends), payload_version = COALESCE($5, payload_version)
+    SET categories = COALESCE($3, categories), weekends = COALESCE($4, weekends),
+      payload_version = GREATEST(payload_version, COALESCE($5, payload_version))
     WHERE (session_id, transport) = ($1, $2) RETURNING ${preferenceColumns}
   `, [sessionId, transport, body.categories ?? null, body.weekends ?? null, body.payloadVersion ?? null]);
   return preferences ?? null;

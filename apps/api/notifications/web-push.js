@@ -90,8 +90,9 @@ async function claim(pool, transports) {
               AND EXTRACT(ISODOW FROM statement_timestamp() AT TIME ZONE 'Europe/Paris') <= 5
             ))
             AND CASE e.kind
-              WHEN 'agenda-reminder' THEN 'agenda' = ANY(p.categories)
               WHEN 'general' THEN cardinality(p.categories) > 0
+              WHEN 'agenda-reminder' THEN e.kind = ANY(p.categories) OR (p.payload_version < 3 AND 'agenda' = ANY(p.categories))
+              WHEN 'assignments' THEN e.kind = ANY(p.categories) OR (p.payload_version < 3 AND 'homework' = ANY(p.categories))
               ELSE e.kind = ANY(p.categories)
             END
             AND NOT EXISTS (
@@ -141,8 +142,10 @@ export async function purgeParentPush(pool) {
 function notifications({ ids, kinds, payload_version: version }) {
   if (version === 1) return [{ kind: 'nouveaute', topic: 'open-cartable', ids }];
   const groups = new Map();
-  for (const [index, kind] of kinds.entries()) {
-    const category = kind === 'agenda-reminder' ? 'agenda' : kind;
+  const previousKind = { assignments: 'homework', reports: 'general', library: 'general' };
+  for (const [index, source] of kinds.entries()) {
+    const kind = version === 2 ? previousKind[source] ?? source : source;
+    const category = version === 2 && kind === 'agenda-reminder' ? 'agenda' : kind;
     if (!groups.has(category)) groups.set(category, { kind: kind === 'general' ? 'nouveaute' : kind, topic: 'oc-' + category, ids: [] });
     groups.get(category).ids.push(ids[index]);
   }

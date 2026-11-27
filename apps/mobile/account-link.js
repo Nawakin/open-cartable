@@ -92,7 +92,11 @@ export function AccountLink({ role, request, onOpen, onExpired }) {
           <Button label="Actualiser" secondary busy={busy} onPress={() => load()} />
         </View>
       </> : <>
-        {status && <Text style={styles.body}>Connectez votre compte parent de cette école dans un autre onglet avec le code reçu pour vos enfants.</Text>}
+        {status && <>
+          <Text style={styles.body}>Connectez votre compte parent de cette école avec le code reçu pour vos enfants.</Text>
+          <Button label="Ouvrir la connexion parent dans un autre onglet" secondary busy={busy}
+            onPress={() => window.open('/?espace=parent', '_blank', 'noopener,noreferrer')} />
+        </>}
         {!status && busy && <Text style={styles.body}>Vérification des accès…</Text>}
         <Button label="Vérifier le compte parent" secondary busy={busy} onPress={() => load()} />
       </>}

@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'qrcode/lib/browser';
 import { Button, Field, styles } from '../parent/ui';
 import { AuthenticatorField, EmailField, validCode, validEmail, validPassword } from './fields';
 
-function EnrollmentQr({ uri }) {
+export function EnrollmentQr({ uri }) {
   const canvas = useRef(null);
   const [ready, setReady] = useState(true);
   useEffect(() => {
+    if (Platform.OS !== 'web') return;
     void QRCode.toCanvas(canvas.current, uri, { width: 164, margin: 3, errorCorrectionLevel: 'M' })
       .catch(() => setReady(false));
   }, [uri]);
-  return ready ? <canvas ref={canvas} role="img" aria-label="QR code pour configurer l’authentificateur" /> : null;
+  return ready && Platform.OS === 'web' ? <canvas ref={canvas} role="img" aria-label="QR code pour configurer l’authentificateur" /> : null;
 }
 
 const failureMessage = (status) => ({
@@ -158,7 +159,8 @@ export function DirectionSecurity({ request, onExpired }) {
             {cancel}
           </View>
         </>}
-        {!panel && status.totpAvailable && <View style={styles.actions}>
+        {status.totpRequired && <Text style={styles.body}>La double authentification est obligatoire pour la direction.</Text>}
+        {!panel && status.totpAvailable && !status.totpRequired && <View style={styles.actions}>
           <Button label={status.totpEnabled ? 'Désactiver' : 'Configurer un authentificateur'} icon="shield-checkmark-outline"
             secondary={status.totpEnabled} busy={busy} onPress={() => show(status.totpEnabled ? 'disable' : 'begin')} />
         </View>}

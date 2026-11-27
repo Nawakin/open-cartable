@@ -55,7 +55,7 @@ function formatDate(value) {
 
 export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, error, onDocument }) {
   const [domainInput, setDomainInput] = useState(notebook.domain);
-  const { child, anchor, view, domain, entries, nextCursor } = notebook;
+  const { child, anchor, view, domain, entries, nextCursor, entryKind } = notebook;
   const { from, to } = periodRange(anchor, view);
   const update = (changes) => onChange({ ...notebook, ...changes });
   const filter = () => update({ domain: domainInput.trim() });
@@ -72,6 +72,11 @@ export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, e
       </View>
       <Text accessibilityRole="header" style={styles.title}>Cahier de texte</Text>
       <Text style={styles.body}>{child.displayName} · {child.className}</Text>
+      <View style={styles.actions}>
+        {[[undefined, 'Tout'], ['assignment', 'Devoirs'], ['notebook', 'Notes de classe']].map(([value, label]) =>
+          <Button key={label} label={label} selected={entryKind === value} secondary={entryKind !== value} busy={busy}
+            onPress={() => update({ entryKind: value })} />)}
+      </View>
       <View style={styles.actions}>
         {views.map(({ id, label }) => (
           <Button key={id} label={label} onPress={() => update({ view: id })} busy={busy} secondary={view !== id} />
@@ -103,7 +108,7 @@ export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, e
       {!busy && !error && entries.length === 0 && <Text style={styles.body}>Aucune entrée pour cette période.</Text>}
       {entries.map((entry) => (
         <View key={entry.id} style={bookStyles.entry}>
-          <Text style={bookStyles.metadata}>{formatDate(entry.date)} · {entry.domain}</Text>
+          <Text style={bookStyles.metadata}>{entry.kind === 'assignment' ? 'À rendre le ' : ''}{formatDate(entry.date)} · {entry.domain}</Text>
           <Text accessibilityRole="header" style={bookStyles.title}>{entry.title}</Text>
           <Text style={styles.body}>{entry.description}</Text>
           {entry.hasDocument && <Button label="Télécharger le document" icon="download-outline"

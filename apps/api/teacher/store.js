@@ -5,7 +5,8 @@ import { hashPassword, validPassword, verifyPassword } from '../auth/password.js
 
 export const teacherLoginPattern = /^[a-z0-9][a-z0-9._-]{2,31}$/;
 export const teacherActivationPattern = /^ENS-[A-Za-z0-9_-]{22}$/;
-export const teacherSessionSeconds = 8 * 60 * 60;
+export const teacherSessionSeconds = 90 * 24 * 60 * 60;
+export const teacherNativeSessionSeconds = 365 * 24 * 60 * 60;
 
 function newActivationCode() {
   return 'ENS-' + randomBytes(16).toString('base64url');
@@ -86,11 +87,11 @@ export async function activateTeacher(pool, { schoolCode, login, code, password 
   if (!validPassword(password)) return false;
   const digest = refreshDigest(code);
   const account = await pool.query(`
-    SELECT a.school_id, a.id FROM teacher_accounts a JOIN schools s ON s.id = a.school_id
-    WHERE s.code = $1 AND a.login = $2 AND a.activation_digest = $3
+    SELECT a.school_id, a.id, a.login FROM teacher_accounts a JOIN schools s ON s.id = a.school_id
+    WHERE s.code = $1 AND ($2::text IS NULL OR a.login = $2) AND a.activation_digest = $3
       AND a.activation_expires_at > statement_timestamp()
   `, [schoolCode, login, digest]);
-  if (!account.rowCount) return false;
+  if (account.rowCount !== 1) return false;
 
   const { salt, hash } = await hashPassword(password);
   const { school_id: schoolId, id } = account.rows[0];
@@ -100,10 +101,10 @@ export async function activateTeacher(pool, { schoolCode, login, code, password 
     WHERE school_id = $1 AND id = $2 AND activation_digest = $3
       AND activation_expires_at > statement_timestamp()
   `, [schoolId, id, digest, salt, hash]);
-  return result.rowCount === 1;
+  return result.rowCount === 1 ? account.rows[0].login : false;
 }
 
-export async function signInTeacher(pool, { schoolCode, login, password }) {
+export async function signInTeacher(pool, { schoolCode, login, password }, seconds = teacherSessionSeconds) {
   const { rows: [account] } = await pool.query(`
     SELECT a.school_id, a.id, a.password_salt, a.password_hash
     FROM teacher_accounts a JOIN schools s ON s.id = a.school_id WHERE s.code = $1 AND a.login = $2
@@ -120,9 +121,17 @@ export async function signInTeacher(pool, { schoolCode, login, password }) {
     await db.query(`
       INSERT INTO teacher_sessions (digest, school_id, teacher_id, expires_at)
       VALUES ($1, $2, $3, statement_timestamp() + $4 * interval '1 second')
-    `, [refreshDigest(token), account.school_id, account.id, teacherSessionSeconds]);
+    `, [refreshDigest(token), account.school_id, account.id, seconds]);
     return token;
   });
+}
+
+export async function renewTeacherSession(pool, token, seconds) {
+  await pool.query(`
+    UPDATE teacher_sessions SET expires_at = statement_timestamp() + $2 * interval '1 second'
+    WHERE digest = $1 AND expires_at > statement_timestamp()
+      AND expires_at < statement_timestamp() + ($2 - 86400) * interval '1 second'
+  `, [refreshDigest(token), seconds]);
 }
 
 export async function withTeacherSession(pool, token, operation) {

@@ -18,15 +18,16 @@ import { registerBlogExport } from '../blog/export-routes.js';
 import { registerDirectionSecurity } from './security-routes.js';
 import { authenticatorCode } from './totp.js';
 import { createTeacher, deleteTeacher, listTeachers, resetTeacher, teacherLoginPattern, updateTeacherClasses } from '../teacher/store.js';
-import { directionSessionSeconds, needsAuthenticator, signInDirection, signOutDirection, withDirectionSession } from './store.js';
+import { needsAuthenticator, signInDirection, signOutDirection, withDirectionSession } from './store.js';
+import { deviceFor, directionDeviceCookie, registerDirectionAccess, sendDirectionSession } from './access.js';
 
 const cookieName = '__Host-open-cartable-direction';
 const teacherParams = uuidParams('teacherId');
 const classIds = { type: 'array', maxItems: 100, uniqueItems: true, items: { type: 'string', pattern: uuidPattern.source } };
 
-export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mailer, totpKey, invitationKey, classMediaQuota }) {
+export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mailer, totpKey, invitationKey, classMediaQuota, requireTotp = false }) {
   const { tokenFor, authenticated } = await registerStaffWeb(app, {
-    webOrigin, cookieName, withSession: (token, operation, options) => withDirectionSession(pool, token, operation, options),
+    webOrigin, cookieName, withSession: (token, operation, options) => withDirectionSession(pool, token, operation, { ...options, requireTotp }),
   });
 
   app.post('/direction/auth/login', {
@@ -44,16 +45,17 @@ export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mail
     },
   }, async (request, reply) => {
     const { schoolCode, password, code } = request.body;
-    const token = await signInDirection(pool, schoolCode, password, code, totpKey);
-    if (token === needsAuthenticator) return reply.code(428).send({ error: 'Code de double authentification requis.' });
-    if (!token) return unauthorized(reply);
-    return reply.setCookie(cookieName, token, { ...cookieOptions, maxAge: directionSessionSeconds }).code(204).send();
+    const session = await signInDirection(pool, schoolCode, password, code, totpKey, { requireTotp, deviceToken: deviceFor(request) });
+    if (session === needsAuthenticator) return reply.code(428).send({ error: 'Code de double authentification requis.' });
+    if (!session) return unauthorized(reply);
+    return sendDirectionSession(request, reply, session, cookieName);
   });
 
   app.post('/direction/auth/logout', async (request, reply) => {
     const token = tokenFor(request);
-    if (token) await signOutDirection(pool, token);
-    return reply.clearCookie(cookieName, cookieOptions).code(204).send();
+    const device = deviceFor(request);
+    if (token || device) await signOutDirection(pool, token, device);
+    return reply.clearCookie(cookieName, cookieOptions).clearCookie(directionDeviceCookie, cookieOptions).code(204).send();
   });
 
   app.get('/direction/classes', authenticated(async (_request, db, school) => {
@@ -76,7 +78,8 @@ export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mail
   registerYearTransition(app, authenticated);
   registerSchoolDirectory(app, authenticated, invitationKey);
   registerBlogExport(app, authenticated, blogMediaKey);
-  registerDirectionSecurity(app, { pool, tokenFor, authenticated, mailer, totpKey, cookieName });
+  registerDirectionAccess(app, { pool, tokenFor, totpKey, requireTotp, cookieName });
+  registerDirectionSecurity(app, { pool, tokenFor, authenticated, mailer, totpKey, cookieName, requireTotp });
 
   app.get('/direction/teachers', authenticated(async (_request, db, actor) => ({
     teachers: await listTeachers(db, actor.school_id),

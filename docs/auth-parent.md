@@ -27,14 +27,14 @@ La commande `replace`, avec les mêmes arguments, révoque toutes les sessions a
 
 ## Parcours web
 
-Après avoir appliqué les migrations et chargé la configuration d’authentification, générer le site et démarrer l’API avec l’origine exacte du navigateur.
+Après avoir appliqué les migrations et chargé la configuration d’authentification, générez une clé `DIRECTION_TOTP_KEY` distincte avec `openssl rand -hex 32` et ajoutez-la dans le fichier privé `.local/auth.env`. Chargez ce fichier, générez le site et démarrez l’API avec l’origine exacte du navigateur.
 
 ```sh
 npm run build:web
 WEB_ORIGIN=http://127.0.0.1:3000 npm run dev:api
 ```
 
-Ouvrir `http://127.0.0.1:3000/`, puis saisir `ECOLE-DEMO` et l’invitation générée. La session du navigateur dure au maximum 30 jours. Le cookie `__Host-open-cartable` est `HttpOnly`, `Secure`, `SameSite=Strict` et limité à l’hôte. Le serveur vérifie l’origine de chaque connexion ou déconnexion web et révoque la session lors de la déconnexion. Le cookie reste `Secure` sur l’origine de test de bouclage, que les navigateurs récents traitent comme un contexte de confiance. Se déconnecter sur un appareil partagé.
+Ouvrez `http://127.0.0.1:3000/`, puis saisissez `ECOLE-DEMO` et l’invitation générée. La session du navigateur expire après 90 jours d’inactivité. Le cookie `__Host-open-cartable` est `HttpOnly`, `Secure`, `SameSite=Strict` et limité à l’hôte. Le serveur vérifie l’origine de chaque connexion ou déconnexion web et révoque la session lors de la déconnexion. Le cookie reste `Secure` sur l’origine de test de bouclage, que les navigateurs récents traitent comme un contexte de confiance. Déconnectez-vous sur un appareil partagé.
 
 Pour un déploiement derrière un proxy TLS, fixer `WEB_ORIGIN` à l’origine HTTPS publique de l’école, sans barre finale. Le proxy sert le site et l’API via la même origine et transmet l’en-tête `Origin`. Utiliser une invitation par appareil ou navigateur à activer. Un code déjà utilisé ne peut pas servir sur un autre appareil.
 
@@ -57,7 +57,7 @@ Préfixe `/api/v1/parent`. Les réponses d’authentification et de consultation
 
 Les codes inconnus, expirés, consommés ou révoqués donnent la même réponse `401`. Ce choix évite d’exposer publiquement l’état des invitations. Un format invalide donne `400`. Les demandes de connexion et de renouvellement sont limitées par IP dans le processus API, respectivement à 10 et 30 par minute, avec réponse `429` et en-tête `Retry-After`.
 
-Le JWT d’accès expire au bout de 15 minutes au plus. Chaque session a une durée totale de 30 jours à partir de sa création. Le jeton de renouvellement est à usage unique. Le client doit sérialiser les renouvellements, remplacer l’ancien jeton à la réception d’un nouveau et revenir à la connexion si le résultat est perdu ou si la session est révoquée. Il doit garder le JWT d’accès en mémoire et utiliser Keychain ou Keystore pour le jeton de renouvellement.
+Le JWT d’accès expire au bout de 15 minutes au plus. Chaque rotation réussie prolonge la session mobile de 365 jours. Le jeton de renouvellement est à usage unique. Le client sérialise les renouvellements et remplace l’ancien jeton à la réception du nouveau. Il garde le JWT d’accès en mémoire et utilise Keychain ou Keystore pour le jeton de renouvellement. Il conserve l’accès lors d’une panne réseau et revient à la connexion si le serveur le refuse.
 
 ## Vérification et périmètre
 
@@ -67,4 +67,4 @@ TEST_DATABASE_URL="$DATABASE_URL" npm test
 
 Les tests utilisent un schéma temporaire dans la base de test et le suppriment à la fin. Le rôle PostgreSQL doit pouvoir créer un schéma. Sans `TEST_DATABASE_URL`, la suite PostgreSQL est déclarée ignorée.
 
-Les comptes du personnel et l’interface d’administration restent à développer. Avant tout déploiement avec des données réelles, ajouter le journal d’audit, la configuration TLS et des proxies de confiance, le nettoyage planifié des identifiants et les protections réseau détaillées dans [les exigences de sécurité](securite.md). Valider les seuils de blocage en tenant compte des connexions partagées entre familles.
+Les accès enseignant et direction se vérifient depuis le même écran de connexion. Reportez-vous au tutoriel pour configurer HTTPS, le compte direction et les accès des familles. [Tutoriel d’installation](installation.md)

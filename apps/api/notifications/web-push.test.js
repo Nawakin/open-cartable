@@ -129,6 +129,42 @@ test('les préférences de notification et les rappels respectent la tutelle et 
     `, [schoolId, classA.id]);
     await dispatchParentPush(pool, webPush, send);
     assert.deepEqual(received.slice(2), [[guardian.url, 'agenda']]);
+
+    const nextPreferences = { categories: ['assignments', 'reports', 'agenda-reminder'], weekends: true };
+    for (const { headers } of [guardian, other]) {
+      assert.equal((await call('PATCH', headers, { payloadVersion: 3 })).statusCode, 200);
+      assert.deepEqual((await call('PATCH', headers, nextPreferences)).json(), { ...nextPreferences, payloadVersion: 3 });
+    }
+    const assignment = randomUUID();
+    await pool.query(`
+      INSERT INTO homework_entries (school_id,class_id,id,entry_date,title,domain,description,kind)
+      VALUES ($1,$2,$3,(statement_timestamp() AT TIME ZONE 'Europe/Paris')::date + 3,
+        'Lecture à rendre','Lecture','Préparer le texte.','assignment')
+    `, [schoolId, classA.id, assignment]);
+    const report = randomUUID();
+    await pool.query(`
+      INSERT INTO school_reports (school_id,id,class_id,student_id,school_year,term,assessments,revision)
+      VALUES ($1,$2,$3,$4,2026,1,'[]',gen_random_uuid())
+    `, [schoolId, report, classA.id, childA.id]);
+    assert.equal((await pool.query("SELECT 1 FROM parent_push_events WHERE kind = 'reports'")).rowCount, 0);
+    await pool.query('UPDATE school_reports SET published = true WHERE (school_id,id) = ($1,$2)', [schoolId, report]);
+    await pool.query("UPDATE parent_push_subscriptions SET attempted_at = '-infinity'");
+    await dispatchParentPush(pool, webPush, send);
+    assert.deepEqual(received.slice(3).sort(), [
+      [guardian.url, 'assignments'], [guardian.url, 'reports'], [other.url, 'assignments'],
+    ]);
+    const upcoming = await app.inject({ url: '/api/v1/parent/assignments/next', headers: guardian.headers });
+    assert.equal(upcoming.statusCode, 200);
+    assert.deepEqual(upcoming.json().assignments.map(({ id, child }) => [id, child.id]), [[assignment, childA.id]]);
+    const date = upcoming.json().assignments[0].date;
+    const agenda = await app.inject({
+      url: '/api/v1/parent/children/' + childA.id + '/homework?from=' + date + '&to=' + date + '&kind=assignment',
+      headers: guardian.headers,
+    });
+    assert.deepEqual(agenda.json().entries.map(({ id, kind }) => [id, kind]), [[assignment, 'assignment']]);
+
+    assert.equal((await call('PATCH', guardian.headers, preferences)).statusCode, 200);
+    assert.equal((await call('PATCH', other.headers, { ...preferences, weekends: false })).statusCode, 200);
     await pool.query('DELETE FROM guardian_students WHERE (school_id,guardian_id,student_id) = ($1,$2,$3)',
       [schoolId, demo.guardians[0], childA.id]);
     await pool.query("UPDATE parent_push_subscriptions SET attempted_at = '-infinity'");
@@ -137,7 +173,7 @@ test('les préférences de notification et les rappels respectent la tutelle et 
       VALUES ($1,$2,$3,'attendance')
     `, [schoolId, classA.id, childA.id]);
     await dispatchParentPush(pool, webPush, send);
-    assert.equal(received.length, 3);
+    assert.equal(received.length, 6);
     assert.equal((await call('DELETE', guardian.headers)).statusCode, 204);
     assert.equal((await call('PATCH', guardian.headers, { payloadVersion: 2 })).statusCode, 404);
   });

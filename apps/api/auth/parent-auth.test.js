@@ -248,7 +248,7 @@ test('parcours parent sur PostgreSQL', { skip: !databaseUrl }, async (context) =
     assert.equal(result.headers['cache-control'], 'no-store');
     const setCookie = result.headers['set-cookie'];
     assert.match(setCookie, /^__Host-open-cartable=[A-Za-z0-9_-]{43};/);
-    for (const attribute of ['Path=/', 'Max-Age=2592000', 'Secure', 'HttpOnly', 'SameSite=Strict']) {
+    for (const attribute of ['Path=/', 'Max-Age=7776000', 'Secure', 'HttpOnly', 'SameSite=Strict']) {
       assert.ok(setCookie.split(/;\s*/).includes(attribute));
     }
     assert.doesNotMatch(setCookie, /;\s*Domain=/i);
@@ -265,6 +265,13 @@ test('parcours parent sur PostgreSQL', { skip: !databaseUrl }, async (context) =
       assert.equal(tab.headers['cache-control'], 'no-store');
       assert.deepEqual(tab.json().children.map(({ id }) => id), [demo.students[2].id]);
     }
+    await pool.query(`
+      UPDATE parent_sessions s SET expires_at = statement_timestamp() + interval '2 days'
+      FROM parent_browser_sessions b WHERE s.id = b.session_id AND b.digest = $1
+    `, [refreshDigest(token)]);
+    const renewed = await browserChildren();
+    assert.equal(renewed.statusCode, 200);
+    assert.match(renewed.headers['set-cookie'], /; Max-Age=7776000;/);
     assert.equal((await webPost('logout', { origin: 'https://autre.ecole.example', cookie })).statusCode, 403);
     assert.equal((await browserChildren()).statusCode, 200);
     const logout = await webPost('logout', { origin: webOrigin, cookie });

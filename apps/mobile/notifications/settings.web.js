@@ -4,14 +4,14 @@ import { notificationIds, NotificationOptions } from './options';
 const path = '/web/notifications';
 
 async function supportsDestinations(worker) {
-  if (!worker) return false;
+  if (!worker) return 1;
   const channel = new MessageChannel();
   try {
     return await new Promise((resolve) => {
-      const timeout = setTimeout(() => resolve(false), 900);
+      const timeout = setTimeout(() => resolve(1), 900);
       channel.port1.onmessage = ({ data }) => {
         clearTimeout(timeout);
-        resolve(data === 2);
+        resolve([2, 3].includes(data) ? data : 1);
       };
       worker.postMessage('notification-version', [channel.port2]);
     });
@@ -22,9 +22,9 @@ async function supportsDestinations(worker) {
 
 async function saveSubscription(request, registration, subscription) {
   const { endpoint, keys: { p256dh, auth } } = subscription.toJSON();
-  const supportsLinks = await supportsDestinations(registration.active);
-  await request(path, { method: 'PUT', body: { endpoint, p256dh, auth, ...(supportsLinks ? { payloadVersion: 2 } : {}) } });
-  return supportsLinks ? 2 : 1;
+  const payloadVersion = await supportsDestinations(registration.active);
+  await request(path, { method: 'PUT', body: { endpoint, p256dh, auth, ...(payloadVersion > 1 ? { payloadVersion } : {}) } });
+  return payloadVersion;
 }
 
 export function PushSettings({ request, onExpired }) {
@@ -40,14 +40,18 @@ export function PushSettings({ request, onExpired }) {
     request(path).then(async (result) => {
       if (!current) return;
       setSettings(result);
-      if (result.enabled && result.payloadVersion === 1) {
+      if (result.enabled && result.payloadVersion < 3) {
         const registration = await navigator.serviceWorker.getRegistration('/');
-        if (!await supportsDestinations(registration?.active) || !current) return;
-        const { payloadVersion } = await request(path, { method: 'PATCH', body: { payloadVersion: 2 } });
-        if (current) setSettings((old) => old?.enabled ? { ...old, payloadVersion } : old);
+        const payloadVersion = await supportsDestinations(registration?.active);
+        if (payloadVersion <= result.payloadVersion || !current) return;
+        const saved = await request(path, { method: 'PATCH', body: { payloadVersion } });
+        if (current) setSettings((old) => old?.enabled ? { ...old, payloadVersion: saved.payloadVersion } : old);
       }
     }).catch((error) => {
-      if (current && error.status === 401) onExpired();
+      if (!current) return;
+      if (error.status === 401) onExpired();
+      else setProblem(error.status === 404 ? 'Les notifications web ne sont pas activées par votre école.'
+        : 'Les réglages n’ont pas pu être chargés. Revenez dans ce menu pour réessayer.');
     });
     return () => { current = false; };
   }, [request, available]);
@@ -59,7 +63,7 @@ export function PushSettings({ request, onExpired }) {
     try {
       if (settings.enabled) {
         await request(path, { method: 'DELETE' });
-        setSettings({ ...settings, enabled: false, categories: notificationIds, weekends: true, payloadVersion: 2 });
+        setSettings({ ...settings, enabled: false, categories: notificationIds, weekends: true, payloadVersion: 3 });
         const registration = await navigator.serviceWorker.getRegistration('/');
         await (await registration?.pushManager.getSubscription())?.unsubscribe().catch(() => {});
         return;
@@ -107,5 +111,6 @@ export function PushSettings({ request, onExpired }) {
     }
   }
 
-  return <NotificationOptions settings={settings} busy={busy} problem={problem} change={change} save={save} />;
+  return <NotificationOptions settings={settings} busy={busy}
+    problem={available ? problem : 'Ce navigateur ne prend pas en charge les notifications de l’ENT.'} change={change} save={save} />;
 }

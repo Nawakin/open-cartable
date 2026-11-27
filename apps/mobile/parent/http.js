@@ -1,9 +1,10 @@
 const parentPath = '/api/v1/parent';
 
-export function homeworkPath(childId, { from, to, domain, cursor }) {
+export function homeworkPath(childId, { from, to, domain, cursor, kind }) {
   const search = new URLSearchParams({ from, to });
   if (domain) search.set('domain', domain);
   if (cursor) search.set('cursor', cursor);
+  if (kind) search.set('kind', kind);
   return `/children/${encodeURIComponent(childId)}/homework?${search.toString()}`;
 }
 
@@ -42,11 +43,16 @@ export function request(fetcher, origin, path, options) {
 
 export async function requestJson(fetcher, url, {
   method = 'GET', body, token, credentials, cache, binary = false, responseType = 'json', timeoutMs, attachmentAsBytes = false,
+  nativeStaff = false, device,
 } = {}) {
   const accept = { bytes: 'image/jpeg', pdf: 'application/pdf', attachment: '*/*' };
   const headers = { Accept: accept[responseType] ?? 'application/json' };
   if (body !== undefined) headers['Content-Type'] = binary ? 'application/octet-stream' : 'application/json';
   if (token) headers.Authorization = 'Bearer ' + token;
+  if (nativeStaff) {
+    headers['X-Open-Cartable-Client'] = 'native';
+    if (device) headers['X-Open-Cartable-Device'] = device;
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs ??

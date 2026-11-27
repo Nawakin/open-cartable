@@ -8,12 +8,15 @@ const title = 'Open Cartable';
 const summaries = {
   nouveaute: 'Vous avez une nouveauté dans votre espace.',
   homework: 'Une nouvelle entrée est disponible dans le cahier de texte.',
+  assignments: 'Un devoir a été publié.',
   messages: 'Vous avez un nouveau message.',
   liaison: 'Un nouveau mot est disponible dans le cahier de liaison.',
   blog: 'Un nouvel article est disponible dans le blog de classe.',
   agenda: 'Un événement a été ajouté ou modifié dans l’agenda.',
   'agenda-reminder': 'Un événement de l’agenda approche.',
   attendance: 'Vérifiez le suivi des absences dans votre espace.',
+  reports: 'Un bilan du livret scolaire est disponible.',
+  library: 'Une nouvelle ressource est disponible dans la médiathèque.',
 };
 
 function configuration(service) {

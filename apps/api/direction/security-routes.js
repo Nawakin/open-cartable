@@ -21,10 +21,13 @@ function body(required, extra = {}) {
   };
 }
 
-export function registerDirectionSecurity(app, { pool, tokenFor, authenticated, mailer, totpKey, cookieName }) {
+export function registerDirectionSecurity(app, { pool, tokenFor, authenticated, mailer, totpKey, cookieName, requireTotp }) {
   const path = '/direction/security';
   const recovery = '/direction/recovery';
-  const status = (db, schoolId) => securityStatus(db, schoolId, mailer, totpKey);
+  const status = async (db, schoolId) => {
+    const result = await securityStatus(db, schoolId, mailer, totpKey);
+    return result ? { ...result, ...(requireTotp ? { totpRequired: true } : {}) } : null;
+  };
   const withLock = (operation) => authenticated(operation, 200, { lockAccount: true });
   app.get(path, authenticated((_request, db, actor) => status(db, actor.school_id)));
 
@@ -39,7 +42,7 @@ export function registerDirectionSecurity(app, { pool, tokenFor, authenticated, 
     const message = await withDirectionSession(pool, session, (db, actor) => {
       if (!mailer) securityError(503);
       return verificationMessage(db, actor.school_id);
-    }, { lockAccount: true });
+    }, { lockAccount: true, requireTotp });
     if (!message.authorized) return unauthorized(reply);
     try {
       await mailer(message.value.address, 'verify', message.value.token);
@@ -56,6 +59,7 @@ export function registerDirectionSecurity(app, { pool, tokenFor, authenticated, 
     return status(db, actor.school_id);
   }));
   app.delete(path + '/totp', body({ password, code: authenticatorCode }), withLock(async (request, db, actor) => {
+    if (requireTotp) securityError(403);
     await disableAuthenticator(db, actor, totpKey, request.body);
     return status(db, actor.school_id);
   }));

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Field, styles } from '../parent/ui';
 import { layout, Select } from './ui';
+import { downloadDocument } from '../files/documents';
 
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const dateLabel = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'Europe/Paris' });
@@ -14,20 +15,6 @@ function monthChoices(year) {
       return { value: month.toISOString().slice(0, 7), label: monthLabel.format(month) };
     }),
   ];
-}
-
-function downloadFile(file, filename) {
-  const link = document.createElement('a');
-  const url = URL.createObjectURL(file);
-  link.href = url;
-  link.download = filename;
-  document.body.append(link);
-  try {
-    link.click();
-  } finally {
-    link.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 30_000);
-  }
 }
 
 function failureMessage(status) {
@@ -93,7 +80,7 @@ export function BlogExport({ classes, startYear, request, onExpired }) {
   function download() {
     void run('pdf', async () => {
       const file = await request(path + '/pdf?' + query, { method: 'POST', responseType: 'pdf' });
-      downloadFile(file, 'blog-' + (month || year + '-' + (Number(year) + 1)) + '.pdf');
+      await downloadDocument(file, 'blog-' + (month || year + '-' + (Number(year) + 1)), 'pdf');
       setNotice('Téléchargement du PDF lancé.');
     });
   }

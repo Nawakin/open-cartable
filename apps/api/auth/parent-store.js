@@ -4,7 +4,8 @@ import { transaction } from '../db/database.js';
 import { homeworkPage, homeworkPageSize } from '../homework/entries.js';
 import { generateInvitationCode, generateRefreshToken, invitationDigest, refreshDigest } from './credentials.js';
 
-export const parentSessionSeconds = 30 * 24 * 60 * 60;
+export const parentSessionSeconds = 90 * 24 * 60 * 60;
+const nativeParentSessionSeconds = 365 * 24 * 60 * 60;
 
 const activeParentQuery = `
   SELECT s.school_id, s.guardian_id
@@ -100,7 +101,7 @@ export function createParentStore(pool, invitationKey) {
           INSERT INTO parent_sessions (id, school_id, guardian_id, expires_at)
           VALUES ($1, $2, $3, statement_timestamp() + $4::interval)
           RETURNING id, guardian_id, expires_at
-        `, [randomUUID(), invitation.school_id, invitation.guardian_id, `${parentSessionSeconds} seconds`]);
+        `, [randomUUID(), invitation.school_id, invitation.guardian_id, browser ? `${parentSessionSeconds} seconds` : `${nativeParentSessionSeconds} seconds`]);
         const session = result.rows[0];
         if (browser) {
           const browserToken = generateRefreshToken();
@@ -117,14 +118,23 @@ export function createParentStore(pool, invitationKey) {
       });
     },
 
-    async browserIdentity(token) {
+    async browserIdentity(token, remember = false) {
       const result = await pool.query(`
-        SELECT s.id AS "sessionId", s.guardian_id AS "guardianId"
+        SELECT s.id AS "sessionId", s.guardian_id AS "guardianId",
+          s.expires_at < statement_timestamp() + ($2 - 86400) * interval '1 second' AS renewal
         FROM parent_browser_sessions b
         JOIN parent_sessions s ON s.id = b.session_id
-        WHERE b.digest = $1 AND s.revoked_at IS NULL AND s.expires_at > statement_timestamp()
-      `, [refreshDigest(token)]);
-      return result.rows[0] ?? null;
+        JOIN guardians g ON (g.school_id,g.id) = (s.school_id,s.guardian_id)
+        WHERE b.digest = $1 AND s.revoked_at IS NULL AND s.expires_at > statement_timestamp() AND g.active
+      `, [refreshDigest(token), parentSessionSeconds]);
+      if (!result.rowCount) return null;
+      const { renewal, ...identity } = result.rows[0];
+      if (!remember || !renewal) return identity;
+      const updated = await pool.query(`
+        UPDATE parent_sessions SET expires_at = GREATEST(expires_at, statement_timestamp() + $2 * interval '1 second')
+        WHERE id = $1 AND revoked_at IS NULL AND expires_at > statement_timestamp()
+      `, [identity.sessionId, parentSessionSeconds]);
+      return updated.rowCount ? { ...identity, renewed: true } : null;
     },
 
     async rotate(token) {
@@ -157,6 +167,11 @@ export function createParentStore(pool, invitationKey) {
         await client.query('INSERT INTO parent_refresh_tokens (digest, session_id) VALUES ($1, $2)', [
           refreshDigest(refreshToken), session.id,
         ]);
+        const { rows: [renewed] } = await client.query(`
+          UPDATE parent_sessions SET expires_at = GREATEST(expires_at, statement_timestamp() + $2 * interval '1 second')
+          WHERE id = $1 RETURNING expires_at
+        `, [sessionId, nativeParentSessionSeconds]);
+        session.expires_at = renewed.expires_at;
         return { session, refreshToken };
       });
     },
@@ -213,24 +228,25 @@ export function createParentStore(pool, invitationKey) {
       });
     },
 
-    async homework({ sessionId, guardianId }, childId, { from, to, domain, beforeDate, beforeId }) {
+    async homework({ sessionId, guardianId }, childId, { from, to, domain, beforeDate, beforeId, kind }) {
       const result = await pool.query(`
         ${permittedChildQuery}, page AS (
-          SELECT e.id, e.entry_date, e.title, e.domain, e.description, e.attachment_kind IS NOT NULL AS "hasDocument"
+          SELECT e.id, e.entry_date, e.title, e.domain, e.description, e.kind, e.attachment_kind IS NOT NULL AS "hasDocument"
           FROM permitted_child c
           JOIN homework_entries e ON (e.school_id, e.class_id) = (c.school_id, c.class_id)
           WHERE e.entry_date BETWEEN $4 AND $5
             AND ($6::text IS NULL OR strpos(lower(e.domain), lower($6)) > 0)
             AND ($7::date IS NULL OR (e.entry_date, e.id) < ($7, $8::uuid))
+            AND ($10::text IS NULL OR e.kind = $10)
           ORDER BY e.entry_date DESC, e.id DESC
           LIMIT $9
         )
         SELECT ${childFields},
                COALESCE((SELECT json_agg(json_build_object(
                  'id', id, 'date', to_char(entry_date, 'YYYY-MM-DD'),
-                 'title', title, 'domain', domain, 'description', description, 'hasDocument', "hasDocument"
+                 'title', title, 'domain', domain, 'description', description, 'hasDocument', "hasDocument", 'kind', kind
                ) ORDER BY entry_date DESC, id DESC) FROM page), '[]'::json) AS entries
-      `, [sessionId, guardianId, childId, from, to, domain, beforeDate, beforeId, homeworkPageSize + 1]);
+      `, [sessionId, guardianId, childId, from, to, domain, beforeDate, beforeId, homeworkPageSize + 1, kind]);
       const { authenticated, child, entries } = result.rows[0];
       return { authenticated, child, ...homeworkPage(entries) };
     },

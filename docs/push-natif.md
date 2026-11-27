@@ -1,6 +1,6 @@
 # Activer le push dans l’application parent
 
-Le serveur d’Open Cartable envoie les alertes Android à Firebase Cloud Messaging (FCM) et les alertes iOS à Apple Push Notification service (APNs). Les préférences se règlent dans « Compte → Notifications » pour chaque appareil. Les alertes contiennent une rubrique et un libellé générique. L’ouverture de la rubrique passe par la session parent.
+Le serveur d’Open Cartable envoie les alertes Android à Firebase Cloud Messaging (FCM) et les alertes iOS à Apple Push Notification service (APNs). Dans l’espace parent, ouvrez « Compte → Paramètres de notification » pour régler les alertes de chaque appareil. Vous pouvez choisir les messages, les notes du cahier de texte, les devoirs, les livrets, les événements et rappels d’agenda, les absences, la liaison, le blog et la médiathèque, ainsi que les alertes du week-end. Les alertes contiennent une rubrique et un libellé générique. L’ouverture de la rubrique passe par la session parent.
 
 ## Préparer l’application Android
 
@@ -46,6 +46,6 @@ Définissez les chemins et les identifiants dans votre `.env` local ou dans l’
 ## Vérifier sur un appareil de test
 
 1. Installez le binaire signé et connectez un compte parent fictif à l’adresse HTTPS de l’école.
-2. Ouvrez « Compte → Notifications », activez les alertes et accordez la permission système. Activez la rubrique « Cahier de texte » et gardez les alertes du week-end pour un essai effectué ces jours-là.
-3. Fermez l’application et publiez un devoir fictif dans la classe de l’enfant. Ouvrez l’alerte et vérifiez le retour au cahier de texte.
+2. Ouvrez « Compte → Paramètres de notification », activez les alertes et accordez la permission système. Activez la rubrique « Devoirs à rendre » et gardez les alertes du week-end pour un essai effectué ces jours-là.
+3. Fermez l’application et publiez un devoir fictif dans la classe de l’enfant en sélectionnant le type « Devoir à rendre ». Ouvrez l’alerte et vérifiez le retour aux devoirs de l’enfant.
 4. Désactivez les alertes dans « Compte » ou déconnectez le compte. Publiez un second devoir d’essai et vérifiez le comportement de l’appareil.

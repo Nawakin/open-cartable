@@ -1,6 +1,7 @@
 import { fetch } from 'expo/fetch';
 import * as SecureStore from 'expo-secure-store';
 import { agendaPath, agendaRemindersPath, homeworkPath, parseSchoolAddress, request, RequestError } from './http';
+import { rememberSchoolAddress } from '../access/remember';
 
 const storageKey = 'open-cartable-parent-session';
 const storageOptions = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
@@ -57,8 +58,8 @@ function refresh(session, version) {
       });
       return version === sessionVersion ? await remember(session.origin, result) : null;
     } catch (error) {
-      // Une réponse perdue peut avoir consommé le jeton. Éviter de le réutiliser.
-      if (error.status === 429) throw error;
+      // Une panne réseau ne suffit pas à déterminer si le serveur a révoqué l’accès.
+      if (error.status !== 401) throw error;
       if (version === sessionVersion && !signingOut) await forget();
       return null;
     }
@@ -73,6 +74,7 @@ export async function signIn({ origin, schoolCode, code }) {
   sessionVersion += 1;
   await refreshing?.catch(() => {});
   await remember(origin, result);
+  await rememberSchoolAddress(origin);
 }
 
 async function withSession(operation) {

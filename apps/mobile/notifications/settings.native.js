@@ -15,7 +15,10 @@ export function PushSettings({ request, onExpired }) {
     request(pushPath).then((value) => {
       if (mounted.current) setSettings(value);
     }).catch((error) => {
-      if (mounted.current && error.status === 401) onExpired();
+      if (!mounted.current) return;
+      if (error.status === 401) onExpired();
+      else setProblem(error.status === 404 ? 'Les notifications mobiles ne sont pas activées par votre école.'
+        : 'Les réglages n’ont pas pu être chargés. Revenez dans ce menu pour réessayer.');
     });
     return () => { mounted.current = false; };
   }, [request]);
@@ -51,7 +54,7 @@ export function PushSettings({ request, onExpired }) {
         setProblem('Autorisez les notifications d’Open Cartable dans les réglages de l’appareil.');
         return;
       }
-      await request(pushPath, { method: 'PUT', body: { token } });
+      await request(pushPath, { method: 'PUT', body: { token, payloadVersion: 3 } });
       setSettings({ ...settings, enabled: true });
     }, 'Impossible de modifier les notifications sur cet appareil. Réessayez dans un instant.');
   }
@@ -63,5 +66,6 @@ export function PushSettings({ request, onExpired }) {
     }, 'Les préférences n’ont pas été enregistrées. Réessayez dans un instant.');
   }
 
-  return <NotificationOptions settings={settings} busy={busy} problem={problem} change={change} save={save} />;
+  return <NotificationOptions settings={settings} busy={busy}
+    problem={pushPath ? problem : 'Ce type d’appareil ne prend pas en charge les notifications de l’ENT.'} change={change} save={save} />;
 }

@@ -11,6 +11,7 @@ export const homeworkQuerySchema = {
     from: { type: 'string', minLength: 10, maxLength: 10 },
     to: { type: 'string', minLength: 10, maxLength: 10 },
     domain: { type: 'string', maxLength: 80 },
+    kind: { enum: ['notebook', 'assignment'] },
     cursor: { type: 'string', minLength: 47, maxLength: 47 },
   },
 };
@@ -21,7 +22,7 @@ export function isSchoolDate(date) {
   return Number.isFinite(instant.getTime()) && instant.toISOString().slice(0, 10) === date;
 }
 
-export function readPeriod({ from, to, domain, cursor }) {
+export function readPeriod({ from, to, domain, cursor, kind }) {
   if (!isSchoolDate(from) || !isSchoolDate(to) || from > to
       || Date.parse(to) - Date.parse(from) >= 31 * dayMilliseconds) return null;
 
@@ -36,5 +37,5 @@ export function readPeriod({ from, to, domain, cursor }) {
 
   const filter = domain?.trim() || null;
   if (filter?.includes('\0')) return null;
-  return { from, to, domain: filter, beforeDate, beforeId };
+  return { from, to, domain: filter, beforeDate, beforeId, ...(kind ? { kind } : {}) };
 }

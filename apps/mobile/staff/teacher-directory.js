@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { Button, Field, styles } from '../parent/ui';
 
 const statusLabels = {
@@ -8,7 +8,8 @@ const statusLabels = {
   expired: 'Code expiré',
 };
 
-export function TeacherDirectory({ classes, request, run, busy }) {
+export function TeacherDirectory({ classes, request, run, busy, schoolAddress }) {
+  const origin = Platform.OS === 'web' ? window.location.origin : schoolAddress;
   const [teachers, setTeachers] = useState(null);
   const [login, setLogin] = useState('');
   const [classIds, setClassIds] = useState([]);
@@ -90,8 +91,8 @@ export function TeacherDirectory({ classes, request, run, busy }) {
         <View style={directoryStyles.card}>
           <Text style={styles.label}>Code d’activation de {issued.login}</Text>
           <Text selectable style={directoryStyles.code}>{issued.code}</Text>
-          <Text style={styles.body}>Transmettez ce code en privé avec le code école et l’identifiant. Il expire dans sept jours.</Text>
-          <Text selectable style={styles.label}>{new URL('/?espace=enseignant', window.location.origin).href}</Text>
+          <Text style={styles.body}>Transmettez ce code en privé avec le code de l’école. Il expire dans sept jours.</Text>
+          {origin && <Text selectable style={styles.label}>{origin}</Text>}
           <Button label="Masquer le code" onPress={() => setIssued(null)} busy={busy} secondary />
         </View>
       )}

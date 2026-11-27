@@ -118,6 +118,12 @@ export async function startEnrollment(db, actor, key, credentials) {
   const account = await accountFor(db, actor.school_id);
   if (account.totp_secret) securityError(409);
   await requirePassword(db, actor.school_id, key, credentials);
+  return beginEnrollment(db, actor, key);
+}
+
+export async function beginEnrollment(db, actor, key) {
+  const account = await accountFor(db, actor.school_id);
+  if (account.totp_secret) securityError(409);
   const { sealed, ...enrollment } = generateEnrollment(key, actor);
   await db.query(`
     UPDATE direction_accounts SET totp_pending = $2, totp_pending_session = $3,
@@ -156,10 +162,13 @@ export async function disableAuthenticator(db, actor, key, credentials) {
 async function revokeOtherSessions(db, actor) {
   await db.query('DELETE FROM direction_sessions WHERE school_id = $1 AND digest <> $2', [actor.school_id, actor.sessionDigest]);
   await db.query("DELETE FROM direction_recovery_tokens WHERE school_id = $1 AND purpose = 'reset'", [actor.school_id]);
+  await db.query('DELETE FROM direction_devices WHERE school_id = $1', [actor.school_id]);
 }
 
 export async function purgeExpiredDirectionSecurity(pool) {
   await pool.query('DELETE FROM direction_recovery_tokens WHERE expires_at <= statement_timestamp()');
+  await pool.query('DELETE FROM direction_sessions WHERE expires_at <= statement_timestamp()');
+  await pool.query('DELETE FROM direction_devices WHERE expires_at <= statement_timestamp()');
   await pool.query(`
     UPDATE direction_accounts SET totp_pending = NULL, totp_pending_session = NULL, totp_pending_until = NULL
     WHERE totp_pending_until <= statement_timestamp()
