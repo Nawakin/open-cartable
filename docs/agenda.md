@@ -42,7 +42,7 @@ Choisissez « Ouvrir l’agenda » sur un rappel pour consulter la semaine de l�
 
 ## Activer les rappels web
 
-Dans l’espace parent, ouvrez « Compte → Notifications ». Activez les alertes, puis cochez « Agenda et rappels ». Une publication d’agenda peut déclencher une alerte dès sa création. Les événements saisis à l’avance déclenchent un rappel 24 heures avant leur début. Une modification d’horaire recalcule le rappel et une suppression l’annule.
+Dans l’espace parent, ouvrez « Compte → Paramètres de notification ». Activez les alertes, puis choisissez « Nouveaux événements », « Rappels d’agenda » ou les deux. Le premier réglage concerne les publications à leur création. Le second envoie un rappel pour les événements saisis à l’avance, 24 heures avant leur début. Une modification d’horaire recalcule le rappel et une suppression l’annule.
 
 Pour une absence toujours à justifier, l’alerte est programmée le lendemain à 9 h, heure de Paris. Elle est suspendue pendant l’examen du justificatif. Vous pouvez couper les alertes du week-end et choisir les catégories séparément. Les choix s’appliquent à ce navigateur. Une notification ouverte mène à la rubrique concernée après vérification de la session.
 
