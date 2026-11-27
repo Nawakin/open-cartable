@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Button, styles } from '../parent/ui';
 import {
   AttendanceRow, attendance, classAttendancePath, ClassPicker, formatDay, MonthPicker, schoolDay, statuses, useAttendanceTask,
@@ -8,8 +8,8 @@ import { downloadDocument, encodedFile, FileButton } from '../files/documents';
 
 const justificationLabels = { pending: 'Justificatif reçu', accepted: 'Justificatif accepté', refused: 'Justificatif refusé' };
 
-function useAttendanceMonth(path, request, onExpired) {
-  const [month, setMonth] = useState(() => schoolDay().slice(0, 7));
+function useAttendanceMonth(path, request, onExpired, initialMonth) {
+  const [month, setMonth] = useState(() => initialMonth ?? schoolDay().slice(0, 7));
   const [data, setData] = useState(null);
   const task = useAttendanceTask(onExpired);
   const load = async () => {
@@ -32,9 +32,9 @@ function Entry({ entry, children, includeClass = false }) {
   return <AttendanceRow title={formatDay(entry.day)} detail={detail} icon={status.icon}>{children}</AttendanceRow>;
 }
 
-export function ParentAttendance({ child, request, onBack, onExpired }) {
+export function ParentAttendance({ child, request, onBack, onExpired, initialMonth }) {
   const path = '/children/' + encodeURIComponent(child.id) + '/attendance';
-  const page = useAttendanceMonth(path, request, onExpired);
+  const page = useAttendanceMonth(path, request, onExpired, initialMonth);
   function submit(entry, file) {
     void page.run(async () => {
       const endpoint = path + '/' + encodeURIComponent(entry.classId) + '/' + entry.day + '/justification';
@@ -54,7 +54,7 @@ export function ParentAttendance({ child, request, onBack, onExpired }) {
     {page.data && !page.data.entries.length && <Text style={styles.body}>Aucune absence, aucun retard ni aucune sortie enregistrés.</Text>}
     <View style={attendance.list}>
       {page.data?.entries.map((entry) => <Entry key={entry.day + entry.classId} entry={entry} includeClass>
-        {entry.status === 'absent' && !entry.justified && Platform.OS === 'web' && <View style={[styles.actions, attendance.controls]}>
+        {entry.status === 'absent' && !entry.justified && <View style={[styles.actions, attendance.controls]}>
           <FileButton label={entry.justificationStatus ? 'Remplacer le justificatif' : 'Envoyer un justificatif'}
             busy={page.busy} onFile={(file) => submit(entry, file)} />
         </View>}
@@ -99,7 +99,7 @@ export function DirectionAttendance({ classes, request, onExpired }) {
     void page.run(async () => {
       const url = path + '/' + entry.day + '/students/' + encodeURIComponent(studentId) + '/justification';
       const file = await request(url, { responseType: 'attachment' });
-      downloadDocument(file, 'justificatif-' + entry.day);
+      await downloadDocument(file, 'justificatif-' + entry.day);
     });
   }
 

@@ -22,11 +22,26 @@ import { AccountLink } from './account-link';
 import { Illustration, IllustratedMenu } from './illustrations';
 import { ParentReports } from './school-reports/reports';
 import { ParentLibrary } from './files/library';
+import { cleanupTemporaryDocuments, downloadDocument } from './files/documents';
 import { PushSettings } from './notifications/settings';
 
 const emptyReminders = { reminders: [], nextCursor: null };
 const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'attendance', 'reports', 'library', 'messages', 'account'];
+const notificationLabels = {
+  homework: 'Cahier de texte', agenda: 'Agenda', 'agenda-reminder': 'Rappel de l’agenda',
+  liaison: 'Cahier de liaison', blog: 'Blog de classe', attendance: 'Absences', messages: 'Messagerie',
+};
 const welcomeImage = require('./assets/accueil.jpg');
+
+function consumeNotification() {
+  if (Platform.OS !== 'web') return null;
+  const url = new URL(window.location.href);
+  const kind = url.searchParams.get('notification');
+  if (!kind) return null;
+  url.searchParams.delete('notification');
+  window.history.replaceState(window.history.state, '', url);
+  return Object.hasOwn(notificationLabels, kind) ? kind : null;
+}
 
 function openTeacher() {
   window.location.assign('/?espace=enseignant');
@@ -35,6 +50,7 @@ function openTeacher() {
 function ParentApp() {
   const [phase, setPhase] = useState('loading');
   const [installationToken, setInstallationToken] = useState(consumeInstallationLink);
+  const [notification, setNotification] = useState(consumeNotification);
   const [children, setChildren] = useState([]);
   const [reminders, setReminders] = useState(emptyReminders);
   const [reminderError, setReminderError] = useState('');
@@ -167,6 +183,27 @@ function ParentApp() {
     setReminders(emptyReminders);
     void run(() => loadSchoolPanel({ child, kind, anchor, view: 'week', domain: '' }));
   }
+
+  function openNotification(child) {
+    const kind = notification;
+    setNotification(null);
+    if (kind === 'messages') {
+      showParentSection('messages');
+    } else if (kind === 'homework' || kind === 'agenda' || kind === 'agenda-reminder') {
+      const day = kind === 'agenda-reminder' ? dayInSchoolCalendar(new Date(Date.now() + 86_400_000)) : dayInSchoolCalendar();
+      openSchoolPanel(child, kind === 'homework' ? kind : 'agenda', day);
+    } else {
+      const month = kind === 'attendance' ? dayInSchoolCalendar(new Date(Date.now() - 86_400_000)).slice(0, 7) : undefined;
+      setSchoolPanel({ child, month });
+      setPhase(kind);
+    }
+  }
+
+  useEffect(() => {
+    if (phase !== 'children' || busy || !notification) return;
+    if (notification === 'messages' || children.length === 1) openNotification(children[0]);
+    else if (!children.length) setNotification(null);
+  }, [phase, busy, notification, children]);
 
   function toggleTutorReference() {
     if (tutorReference) {
@@ -303,6 +340,14 @@ function ParentApp() {
             onMore={() => void run(() => loadReminders(reminders.nextCursor))} />
           <View style={styles.panel}>
             <Text accessibilityRole="header" style={styles.title}>Vos enfants</Text>
+            {notification && notification !== 'messages' && children.length > 1 && <View style={styles.field}>
+              <Text style={styles.label}>{notificationLabels[notification]} · Choisir un enfant</Text>
+              <View style={styles.actions}>
+                {children.map((child) => <Button key={child.id} label={child.displayName}
+                  busy={busy} secondary onPress={() => openNotification(child)} />)}
+                <Button label="Fermer" secondary onPress={() => setNotification(null)} />
+              </View>
+            </View>}
             {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
             {children.map((child) => (
               <View key={child.id} style={shell.child}>
@@ -375,9 +420,9 @@ function ParentApp() {
           onMore={() => void run(() => loadSchoolPanel(schoolPanel, true))}
           onBack={() => void run(load)}
           onLogout={logout}
-          onDocument={(id, download) => void run(async () => {
+          onDocument={(id) => void run(async () => {
             const url = '/children/' + encodeURIComponent(schoolPanel.child.id) + '/homework/' + id + '/document';
-            download(await requestParent(url, { responseType: 'attachment' }), 'cahier-de-texte');
+            await downloadDocument(await requestParent(url, { responseType: 'attachment' }), 'cahier-de-texte');
           })}
           busy={busy}
           error={error}
@@ -403,7 +448,7 @@ function ParentApp() {
 
       {phase === 'attendance' && schoolPanel && (
         <ParentAttendance key={schoolPanel.child.id} child={schoolPanel.child} request={requestParent}
-          onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
+          initialMonth={schoolPanel.month} onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
       )}
 
       {phase === 'reports' && schoolPanel && <ParentReports key={schoolPanel.child.id} child={schoolPanel.child}
@@ -426,6 +471,7 @@ function ParentApp() {
 }
 
 function App() {
+  useEffect(cleanupTemporaryDocuments, []);
   const section = Platform.OS === 'web' ? new URLSearchParams(window.location.search).get('espace') : null;
   const role = section === 'direction' ? 'direction' : (section === 'enseignant' ? 'teacher' : null);
   return (

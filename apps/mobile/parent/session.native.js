@@ -96,7 +96,8 @@ async function withSession(operation) {
 async function get(path, options) {
   const version = sessionVersion;
   try {
-    return await withSession(({ origin, accessToken }) => request(fetch, origin, path, { ...options, token: accessToken }));
+    return await withSession(({ origin, accessToken }) => request(fetch, origin, path,
+      { ...options, token: accessToken, attachmentAsBytes: true }));
   } catch (error) {
     if (error.status !== 401) throw error;
     if (version === sessionVersion && !signingOut) await forget();

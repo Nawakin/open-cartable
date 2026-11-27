@@ -10,7 +10,7 @@ export const migrations = [
   '015-photo-authorizations.sql', '016-school-banner.sql', '017-attendance.sql', '018-year-transition-drafts.sql',
   '019-direction-security.sql', '020-account-links.sql', '021-school-years.sql',
   '022-school-directory.sql', '023-absence-justifications.sql', '024-school-reports.sql', '025-attachments.sql',
-  '026-class-media.sql', '027-web-push.sql',
+  '026-class-media.sql', '027-web-push.sql', '028-notification-preferences.sql',
 ];
 
 export function openDatabase(connectionString) {

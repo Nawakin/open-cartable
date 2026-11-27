@@ -4,6 +4,7 @@ import { Button, Field, styles } from '../parent/ui';
 import { useAttendanceTask } from '../attendance/ui';
 import { layout, Select } from '../year-transition/ui';
 import { downloadDocument, encodedFile, FileButton } from './documents';
+import { MediaPreview } from './media-preview';
 
 const formats = { pdf: 'PDF', image: 'Image', video: 'Vidéo', audio: 'Audio' };
 const accepts = 'application/pdf,image/jpeg,image/png,image/webp,video/mp4,video/webm,audio/mpeg,audio/wav,.mp3,.wav';
@@ -16,27 +17,21 @@ function kindOf(file) {
   return 'pdf';
 }
 
-function MediaCard({ entry, path, role, request, remove, task }) {
+function MediaCard({ entry, path, role, request, remove, task, onExpired }) {
   const [open, setOpen] = useState(false);
   const url = path + '/' + encodeURIComponent(entry.id);
   const media = entry.kind === 'video' || entry.kind === 'audio';
   const src = '/api/v1/' + role + url;
+  const isWeb = Platform.OS === 'web';
   return <View style={layout.card}>
     <Text style={styles.label}>{entry.title}</Text>
     <Text style={layout.status}>{formats[entry.kind]}{entry.folder ? ' · ' + entry.folder : ''}</Text>
-    {open && entry.kind === 'video' && <video aria-label={entry.title} controls playsInline src={src}
-      style={{ width: '100%', maxHeight: 430, borderRadius: 10, background: '#142720' }} />
-    }
-    {open && entry.kind === 'audio' && <audio aria-label={entry.title} controls src={src} style={{ width: '100%' }} />}
-    {open && entry.kind === 'image' && <img alt={entry.title} src={src + '?preview=1'}
-      style={{ display: 'block', maxWidth: '100%', maxHeight: 480, objectFit: 'contain' }} />}
-    {open && entry.kind === 'pdf' && <iframe title={entry.title} src={src + '?preview=1'}
-      style={{ width: '100%', minHeight: 450, border: 0, borderRadius: 10 }} />}
+    {open && <MediaPreview entry={entry} source={src} path={url} request={request} onExpired={onExpired} />}
     <View style={styles.actions}>
-      {Platform.OS === 'web' && <Button label={open ? 'Fermer l’aperçu' : media ? 'Lire' : 'Ouvrir'}
+      {(isWeb || entry.kind !== 'pdf') && <Button label={open ? 'Fermer l’aperçu' : media ? 'Lire' : 'Ouvrir'}
         icon={media ? 'play-outline' : 'eye-outline'} busy={task.busy} secondary onPress={() => setOpen(!open)} />}
-      {Platform.OS === 'web' && <Button label="Télécharger" icon="download-outline" busy={task.busy} secondary onPress={() =>
-        void task.run(async () => downloadDocument(await request(url + '?download=1', { responseType: 'attachment' }), 'ressource-classe'))} />}
+      <Button label={isWeb ? 'Télécharger' : 'Ouvrir ou enregistrer'} icon="download-outline" busy={task.busy} secondary onPress={() =>
+        void task.run(async () => downloadDocument(await request(url + '?download=1', { responseType: 'attachment' }), 'ressource-classe'))} />
       {remove && <Button label="Retirer" accessibilityLabel={'Retirer ' + entry.title} busy={task.busy} secondary onPress={() => remove(entry.id)} />}
     </View>
   </View>;
@@ -102,7 +97,7 @@ function Contents({ path, role, request, onExpired, archive, article, onChange }
     </>}
     {page && !page.items.length && <Text style={styles.body}>{article ? 'Aucune vidéo.' : 'Aucune ressource dans cette sélection.'}</Text>}
     {page?.items.map((entry) => <View key={entry.id} style={layout.group}>
-      <MediaCard entry={entry} path={path} role={role} request={request} remove={canManage ? remove : undefined} task={task} />
+      <MediaCard entry={entry} path={path} role={role} request={request} remove={canManage ? remove : undefined} task={task} onExpired={onExpired} />
       {deleting === entry.id && <View style={styles.actions}>
         <Button label="Confirmer le retrait" busy={task.busy} onPress={() => remove(entry.id)} />
         <Button label="Annuler" secondary busy={task.busy} onPress={() => setDeleting(null)} />

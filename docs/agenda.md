@@ -40,4 +40,10 @@ Choisissez « Ouvrir l’agenda » sur un rappel pour consulter la semaine de l�
 - Un parent obtient sa référence via `GET /api/v1/parent/tutor-reference`, avec sa session. Les rendez-vous se gèrent sous `/api/v1/{role}/classes/{classId}/appointments`. `GET .../appointments/students` liste les élèves de cette classe ayant un tuteur actif. La création reçoit `studentId`, `guardianReference` et `event`, avec les champs horaires et descriptifs ci-dessus. La référence sert à désigner un destinataire dans une opération authentifiée.
 - `GET /api/v1/parent/agenda/reminders` retourne jusqu’à 30 rappels de l’accueil parent. Passez `nextCursor` comme paramètre `cursor` pour lire la suite.
 
-Les notifications push et l’export depuis l’application native restent à développer.
+## Activer les rappels web
+
+Dans l’espace parent, ouvrez « Compte → Notifications ». Activez les alertes, puis cochez « Agenda et rappels ». Une publication d’agenda peut déclencher une alerte dès sa création. Les événements saisis à l’avance déclenchent un rappel 24 heures avant leur début. Une modification d’horaire recalcule le rappel et une suppression l’annule.
+
+Pour une absence toujours à justifier, l’alerte est programmée le lendemain à 9 h, heure de Paris. Elle est suspendue pendant l’examen du justificatif. Vous pouvez couper les alertes du week-end et choisir les catégories séparément. Les choix s’appliquent à ce navigateur. Une notification ouverte mène à la rubrique concernée après vérification de la session.
+
+L’export iCalendar depuis l’application native figure dans la feuille de route. [État des parcours natifs](developpement.md)

@@ -1,11 +1,9 @@
 import React, { useRef } from 'react';
-import { Platform } from 'react-native';
 import { Button } from '../parent/ui';
 import { RequestError } from '../parent/http';
 
 export function FileButton({ label, onFile, busy, accept = 'image/jpeg,image/png,image/webp,application/pdf' }) {
   const input = useRef(null);
-  if (Platform.OS !== 'web') return null;
   return <>
     <input ref={input} type="file" accept={accept} hidden disabled={busy} onChange={(event) => {
       const file = event.target.files?.[0];
@@ -37,3 +35,5 @@ export function downloadDocument(file, name, extension) {
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
+
+export function cleanupTemporaryDocuments() {}

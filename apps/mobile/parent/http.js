@@ -41,7 +41,7 @@ export function request(fetcher, origin, path, options) {
 }
 
 export async function requestJson(fetcher, url, {
-  method = 'GET', body, token, credentials, cache, binary = false, responseType = 'json', timeoutMs,
+  method = 'GET', body, token, credentials, cache, binary = false, responseType = 'json', timeoutMs, attachmentAsBytes = false,
 } = {}) {
   const accept = { bytes: 'image/jpeg', pdf: 'application/pdf', attachment: '*/*' };
   const headers = { Accept: accept[responseType] ?? 'application/json' };
@@ -64,7 +64,11 @@ export async function requestJson(fetcher, url, {
     if (!response.ok) throw new RequestError(response.status);
     if (response.status === 204) return undefined;
     if (responseType === 'bytes') return await response.arrayBuffer();
-    if (responseType === 'pdf' || responseType === 'attachment') return await response.blob();
+    if (responseType === 'pdf' || responseType === 'attachment') {
+      if (!attachmentAsBytes) return await response.blob();
+      const type = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase() ?? '';
+      return { type, bytes: new Uint8Array(await response.arrayBuffer()) };
+    }
     return await response.json();
   } catch (error) {
     if (error instanceof RequestError) throw error;

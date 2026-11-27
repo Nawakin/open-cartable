@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Button, Field, styles } from './ui';
-import { downloadDocument } from '../files/documents';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' });
 const views = [{ id: 'day', label: 'Jour' }, { id: 'week', label: 'Semaine' }, { id: 'month', label: 'Mois' }];
@@ -107,8 +106,8 @@ export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, e
           <Text style={bookStyles.metadata}>{formatDate(entry.date)} · {entry.domain}</Text>
           <Text accessibilityRole="header" style={bookStyles.title}>{entry.title}</Text>
           <Text style={styles.body}>{entry.description}</Text>
-          {entry.hasDocument && Platform.OS === 'web' && <Button label="Télécharger le document" icon="download-outline"
-            secondary busy={busy} onPress={() => onDocument(entry.id, downloadDocument)} />}
+          {entry.hasDocument && <Button label="Télécharger le document" icon="download-outline"
+            secondary busy={busy} onPress={() => onDocument(entry.id)} />}
         </View>
       ))}
       {nextCursor && <Button label="Afficher la suite" onPress={onMore} busy={busy} secondary />}

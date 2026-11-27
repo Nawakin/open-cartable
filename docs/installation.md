@@ -172,9 +172,14 @@ Après avoir publié l’article de démonstration, ouvrez « École → Clôtur
 
 1. Dans l’espace enseignant, ouvrez « Vie de classe → Médiathèque ». Ajoutez un PDF fictif, donnez-lui un titre et choisissez une matière dans le champ de dossier. La famille le retrouve dans sa médiathèque de classe. Les dossiers, la recherche, l’aperçu et le téléchargement se font dans le navigateur.
 2. Pour voir une vidéo du blog, enregistrez d’abord un brouillon et ajoutez un court MP4 ou WebM. Vérifiez la prévisualisation, puis publiez l’article et ouvrez-le avec le compte parent. [Guide du blog](blog-de-classe.md#ajouter-une-vidéo)
-3. Sur l’instance HTTPS, ouvrez « Compte → Notifications » dans l’espace parent avec un navigateur compatible, puis « Activer les notifications ». Autorisez l’affichage dans le navigateur. Depuis le compte enseignant, publiez un devoir de démonstration. Le navigateur peut afficher une alerte générique, y compris page fermée, si le service de notification du navigateur est disponible.
+3. Sur l’instance HTTPS, ouvrez « Compte → Notifications » dans l’espace parent, puis « Activer les notifications ». Autorisez l’affichage dans le navigateur. Choisissez les rubriques souhaitées et décidez si les alertes doivent arriver le week-end. Sur iOS, utilisez la web-app ajoutée à l’écran d’accueil avec un système compatible Web Push.
+4. Depuis le compte enseignant, publiez un devoir fictif. Ouvrez l’alerte et vérifiez que le cahier de texte s’affiche après connexion. Pour essayer les rappels, créez un événement fictif à plus de 24 heures ou enregistrez une absence fictive. [Horaires des rappels](agenda.md#activer-les-rappels-web)
 
-Compose génère la clé Web Push lors de l’installation. Le serveur ne contacte le service du navigateur qu’après une activation et lorsqu’une nouveauté concerne le compte. Les alertes contiennent un titre et un message générique. Le quota de la médiathèque est réglable avec `CLASS_MEDIA_QUOTA_MIB`, dont la valeur par défaut est `5120`.
+Compose génère la clé Web Push lors de l’installation. Le service de notification du navigateur reçoit le type d’alerte. Les noms, titres d’événements, dates et messages se consultent après connexion à l’ENT. Le quota de la médiathèque est réglable avec `CLASS_MEDIA_QUOTA_MIB`, dont la valeur par défaut est `5120`.
+
+### Ouvrir les documents dans l’application parent
+
+Dans l’application iOS ou Android, connectez-vous à l’adresse HTTPS de l’école. Depuis la médiathèque, utilisez « Ouvrir » pour les images et « Lire » pour les vidéos et les audios. « Ouvrir ou enregistrer » ouvre le menu système, notamment pour les PDF. Pour joindre un document à un message ou à une absence, choisissez un fichier depuis le sélecteur de l’appareil. Les boutons de téléchargement restent disponibles dans le cahier de texte et le livret.
 
 ### Ouvrir le service depuis un autre appareil
 

@@ -1,8 +1,20 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import { styles } from '../parent/ui';
+import React, { useState } from 'react';
+import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Button, styles } from '../parent/ui';
 
 export function Select({ label, value, choices, onChange, disabled }) {
+  const [expanded, setExpanded] = useState(false);
+  const selected = choices.find((choice) => choice.value === value);
+  if (Platform.OS !== 'web') return <View style={styles.field}>
+    <Text style={styles.label}>{label}</Text>
+    <Button label={selected?.label ?? label} accessibilityLabel={selected ? label + ' · ' + selected.label : label}
+      icon={expanded ? 'chevron-up-outline' : 'chevron-down-outline'} secondary expanded={expanded}
+      busy={disabled} onPress={() => setExpanded(!expanded)} />
+    {expanded && <ScrollView nestedScrollEnabled style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 6 }}>
+      {choices.map((choice) => <Button key={choice.value} label={choice.label} selected={value === choice.value}
+        secondary={value !== choice.value} busy={disabled} onPress={() => { setExpanded(false); onChange(choice.value); }} />)}
+    </ScrollView>}
+  </View>;
   return <View style={styles.field}>
     <Text style={styles.label}>{label}</Text>
     <select aria-label={label} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}

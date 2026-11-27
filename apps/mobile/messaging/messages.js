@@ -33,6 +33,8 @@ function messageError(error, sending) {
       : 'Le serveur est inaccessible. Vérifiez votre connexion et actualisez.';
     case 400: return 'Vérifiez le texte et la longueur des champs.';
     case 404: return 'Cette conversation ou ce destinataire n’est plus accessible. Vérifiez le lien avec l’élève.';
+    case 413: return 'Choisissez une pièce jointe de 5 Mo maximum.';
+    case 415: return 'Choisissez un PDF statique ou une photo JPEG, PNG ou WebP.';
     default: return 'L’opération a échoué. Réessayez dans un instant.';
   }
 }
@@ -355,10 +357,10 @@ export function Messages({ request, role = 'parent', children = [], classes = []
             <View key={entry.id} style={[ui.bubble, own && ui.ownBubble]}>
               <Text style={styles.label}>{own ? 'Vous' : (isParent ? contactLabel(thread.conversation) : 'Tuteur')}</Text>
               <Text selectable style={[styles.body, ui.text]}>{entry.body}</Text>
-              {entry.hasDocument && typeof document !== 'undefined' && <Button label="Télécharger la pièce jointe"
+              {entry.hasDocument && <Button label="Ouvrir la pièce jointe"
                 icon="download-outline" secondary busy={busy} onPress={() => void run(async () => {
                   const url = conversationPath(view.id) + '/' + entry.id + '/document';
-                  downloadDocument(await request(url, { responseType: 'attachment' }), 'message-' + entry.id);
+                  await downloadDocument(await request(url, { responseType: 'attachment' }), 'message-' + entry.id);
                 })} />}
               <Text style={ui.date}>{dateLabel.format(new Date(entry.sentAt))}</Text>
             </View>

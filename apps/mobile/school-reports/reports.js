@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { useAttendanceTask } from '../attendance/ui';
 import { downloadDocument } from '../files/documents';
 import { Button, Field, styles } from '../parent/ui';
@@ -21,9 +21,9 @@ function ReportCard({ report, request, downloadPath, task }) {
     {!report.published && <Text style={styles.body}>Brouillon</Text>}
     <View style={styles.actions}>
       <Button label={open ? 'Masquer le bilan' : 'Voir le bilan'} secondary onPress={() => setOpen(!open)} />
-      {Platform.OS === 'web' && <Button label="Télécharger en PDF" icon="download-outline" busy={task.busy} secondary
+      <Button label="Télécharger en PDF" icon="download-outline" busy={task.busy} secondary
         onPress={() => void task.run(async () => downloadDocument(await request(downloadPath, { responseType: 'pdf' }),
-          'livret-' + report.year + '-t' + report.term))} />}
+          'livret-' + report.year + '-t' + report.term))} />
     </View>
     {open && <>
       {report.assessments.map(({ subject, mark, note }) => <View key={subject} style={layout.details}>
