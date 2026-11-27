@@ -18,3 +18,8 @@
 **/*.log
 **/*.key
 **/*.pem
+**/*.p8
+**/*.jks
+**/google-services.json
+**/GoogleService-Info.plist
+**/fcm-service-account*.json

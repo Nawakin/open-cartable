@@ -8,6 +8,7 @@ coverage/
 *.pem
 *.key
 *.p12
+*.p8
 *.jks
 *.mobileprovision
 *.sqlite*
@@ -16,4 +17,6 @@ coverage/
 *.pgdump
 google-services.json
 GoogleService-Info.plist
+fcm-service-account*.json
+compose.override.yaml
 .local/

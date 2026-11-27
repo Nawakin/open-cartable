@@ -4,15 +4,15 @@
 
 | Phase | Déjà disponible | Reste à faire |
 | --- | --- | --- |
-| v0.1 · Socle | Configuration web depuis les lanceurs Docker, comptes direction et enseignant, récupération et TOTP, pièces jointes au cahier de texte et à la messagerie, alertes web avec catégories, option week-end, rappels agenda et absences et liens vers les rubriques | Notifications natives Android et iOS, profils et QR d’école, rôles restreints du personnel. |
+| v0.1 · Socle | Configuration web depuis les lanceurs Docker, comptes direction et enseignant, récupération et TOTP, pièces jointes au cahier de texte et à la messagerie, alertes web et [push natif optionnel](push-natif.md) avec catégories, rappels et liens vers les rubriques | Recette push sur appareils signés et clés des fournisseurs, profils et QR d’école, rôles restreints du personnel. |
 | v0.2 · Vie de classe | Cahier de liaison, blog avec galeries et vidéos, registre des autorisations, repérage local des visages, médiathèque avec dossiers, recherche, quota et archives, lecture et téléchargement dans l’application parent | Publications transversales à l’échelle de l’école et recette des parcours médias sur appareils iOS et Android. |
-| v0.3 · Suivi et administration | Annuaire des classes, élèves et tuteurs, invitations groupées, appel, justificatifs photo/PDF, livrets par trimestre et PDF, [bascule de rentrée et archives](cloture-annee.md) | Export officiel LSU XML, réglages de conservation, statistiques générales et journal d’audit étendu. |
+| v0.3 · Suivi et administration | Annuaire des classes, élèves et tuteurs, invitations groupées, appel, justificatifs photo/PDF, livrets par trimestre et PDF, [export LSU des bilans périodiques](lsu.md), [bascule de rentrée et archives](cloture-annee.md) | Recette d’import LSU en académie, bilans de fin de cycle, réglages de conservation, statistiques générales et journal d’audit étendu. |
 | v0.4 · Exploitation et RGPD | Contrôles d’accès, conservation automatique des messages et des mots de liaison, point de contrôle de l’API | Sauvegardes chiffrées et restaurations, chiffrement au repos, procédure TLS et supervision, export et effacement des données d’un élève, mentions d’information, registre, AIPD et procédures d’incident. |
 | v1.0 · Publication | Code Expo partagé et export web livré avec Compose | Valider l’installation sur Windows et macOS, les usages sur appareils iOS et Android, les performances, l’accessibilité et les mises à jour. Préparer la bêta et les publications sur les stores. |
 
 Le repérage des visages s’exécute dans le navigateur avec une API locale ou BlazeFace distribué avec l’ENT. L’enseignant vérifie les zones, puis le serveur remplace la photo et la vignette par les versions masquées. [Guide du blog](blog-de-classe.md#masquer-une-zone-sur-une-photo)
 
-L’import LSU doit être validé avec le cahier des charges d’interfaçage officiel du premier degré, son schéma XML et une procédure de recette. Le livret actuel propose un PDF aux personnes autorisées.
+L’export LSU des bilans périodiques applique les règles de complétude du dossier ministériel et se valide contre les schémas 9.0 et 10.0 du premier degré. L’école vérifie le compte rendu d’import dans son LSU. [Parcours et références LSU](lsu.md)
 
 ### Interface et personnalisation
 

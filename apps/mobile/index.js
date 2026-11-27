@@ -24,6 +24,7 @@ import { ParentReports } from './school-reports/reports';
 import { ParentLibrary } from './files/library';
 import { cleanupTemporaryDocuments, downloadDocument } from './files/documents';
 import { PushSettings } from './notifications/settings';
+import { useNativeNotifications } from './notifications/listen';
 
 const emptyReminders = { reminders: [], nextCursor: null };
 const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'attendance', 'reports', 'library', 'messages', 'account'];
@@ -66,6 +67,11 @@ function ParentApp() {
   const signedIn = parentSections.includes(phase);
   const { banner } = useSchoolBanner(requestParent, signedIn);
   const unread = useUnreadMessages(requestMessages, signedIn);
+  useNativeNotifications(signedIn, requestParent, (kind) => {
+    if (!Object.hasOwn(notificationLabels, kind)) return;
+    setNotification(kind);
+    if (signedIn) showParentSection('children');
+  });
 
   async function run(operation) {
     if (inProgress.current) return;
@@ -409,7 +415,7 @@ function ParentApp() {
         </View>
         {Platform.OS === 'web' && <AccountLink role="parent" request={requestParent}
           onOpen={openTeacher} onExpired={() => void run(load)} />}
-        {Platform.OS === 'web' && <PushSettings request={requestParent} onExpired={() => void run(load)} />}
+        <PushSettings request={requestParent} onExpired={() => void run(load)} />
       </View>}
 
       {phase === 'homework' && schoolPanel && (

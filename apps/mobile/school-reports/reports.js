@@ -4,6 +4,7 @@ import { useAttendanceTask } from '../attendance/ui';
 import { downloadDocument } from '../files/documents';
 import { Button, Field, styles } from '../parent/ui';
 import { layout, Select } from '../year-transition/ui';
+import { LsuExport } from './lsu-export';
 
 const labels = {
   french: 'Français', math: 'Mathématiques', languages: 'Langues vivantes', science: 'Sciences et technologie',
@@ -64,6 +65,7 @@ export function StaffReports({ classes, request, onExpired, teacher }) {
   const [marksBySubject, setMarks] = useState({});
   const [appreciation, setAppreciation] = useState('');
   const [notice, setNotice] = useState('');
+  const [lsuOpen, setLsuOpen] = useState(false);
   const task = useAttendanceTask(onExpired);
   const path = '/classes/' + encodeURIComponent(classId) + '/reports';
   const chosen = path + '/' + encodeURIComponent(studentId) + '?term=' + term;
@@ -76,7 +78,9 @@ export function StaffReports({ classes, request, onExpired, teacher }) {
 
   function useReport(value) {
     setReport(value);
-    setMarks(Object.fromEntries((value?.assessments ?? []).map((assessment) => [assessment.subject, assessment])));
+    setMarks(Object.fromEntries((value?.assessments ?? []).map((assessment) => [
+      assessment.subject, { ...assessment, programmeText: (assessment.programme ?? []).join('\n') },
+    ])));
     setAppreciation(value?.appreciation ?? '');
   }
 
@@ -92,18 +96,30 @@ export function StaffReports({ classes, request, onExpired, teacher }) {
   useEffect(loadStudent, [studentId, term]);
 
   function save(published) {
+    setNotice('');
+    const assessments = Object.keys(labels).map((key) => {
+      const { subject, mark, note, programmeText = '' } = marksBySubject[key] ?? blank(key);
+      return { subject, mark, note, programme: programmeText.split('\n').map((line) => line.trim()).filter(Boolean) };
+    });
+    if (assessments.some(({ programme }) => programme.length > 12 || programme.some((item) => [...item].length > 300))) {
+      setNotice('Indiquez jusqu’à 12 éléments par domaine, de 300 caractères maximum chacun.');
+      return;
+    }
     void task.run(async () => {
       const result = await request(chosen, { method: 'PUT', body: {
-        revision: report?.revision ?? null, published, appreciation,
-        assessments: Object.keys(labels).map((key) => marksBySubject[key] ?? blank(key)),
+        revision: report?.revision ?? null, published, appreciation, assessments,
       } });
       useReport(result.report);
       setNotice(published ? 'Bilan publié.' : 'Brouillon enregistré.');
     });
   }
 
+  if (lsuOpen) return <LsuExport request={request} onExpired={onExpired} onBack={() => setLsuOpen(false)} />;
+
   return <View style={layout.group}>
     <Text accessibilityRole="header" style={styles.title}>Livret scolaire</Text>
+    {!teacher && <View style={styles.actions}><Button label="Exporter vers le LSU" icon="document-outline"
+      secondary onPress={() => setLsuOpen(true)} /></View>}
     {!classes.length && <Text style={styles.body}>Aucune classe disponible.</Text>}
     {classes.length > 1 && <Select label="Classe" value={classId} disabled={task.busy}
       choices={[option('Choisir une classe'), ...classes.map(({ id, name }) => ({ value: id, label: name }))]}
@@ -126,6 +142,9 @@ export function StaffReports({ classes, request, onExpired, teacher }) {
           onChange={(mark) => setMarks({ ...marksBySubject, [subject]: { ...assessment, mark } })} />
         <Field label="Appréciation du domaine" value={assessment.note} maxLength={600} multiline editable={!task.busy}
           onChangeText={(note) => setMarks({ ...marksBySubject, [subject]: { ...assessment, note } })} />
+        <Field label="Éléments de programme pour le LSU" value={assessment.programmeText ?? ''} maxLength={3612}
+          placeholder="Un élément travaillé par ligne" multiline editable={!task.busy}
+          onChangeText={(programmeText) => setMarks({ ...marksBySubject, [subject]: { ...assessment, programmeText } })} />
         <Field label="Appréciation générale" value={appreciation} maxLength={2000} multiline editable={!task.busy}
           onChangeText={setAppreciation} />
         <View style={styles.actions}>

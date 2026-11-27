@@ -3,6 +3,7 @@ import { linkedChildClass, lockActiveClass, forTeacherClass } from '../auth/clas
 import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
 import { writeSchoolPdf } from '../blog/export-pdf.js';
+import { validXmlText } from './lsu.js';
 
 export const subjects = {
   french: 'Français', math: 'Mathématiques', languages: 'Langues vivantes',
@@ -20,11 +21,12 @@ const uuid = { type: 'string', pattern: uuidPattern.source };
 const term = { type: 'string', enum: ['1', '2', '3'] };
 const schema = fields({
   revision: { anyOf: [uuid, { type: 'null' }] },
-  assessments: { type: 'array', minItems: 1, maxItems: Object.keys(subjects).length, items: fields({
+  assessments: { type: 'array', minItems: 1, maxItems: Object.keys(subjects).length, items: { ...fields({
     subject: { type: 'string', enum: Object.keys(subjects) },
     mark: { type: 'string', enum: Object.keys(marks) },
     note: { type: 'string', maxLength: 600 },
-  }) },
+    programme: { type: 'array', maxItems: 12, items: { type: 'string', minLength: 1, maxLength: 300 } },
+  }), required: ['subject', 'mark', 'note'] } },
   appreciation: { type: 'string', maxLength: 2000 },
   published: { type: 'boolean' },
 });
@@ -64,7 +66,8 @@ async function save(db, [schoolId, classId, studentId], period, { revision, asse
   `, [schoolId, classId, studentId]);
   if (!student.rowCount) return null;
   if (new Set(assessments.map(({ subject }) => subject)).size !== assessments.length
-    || /\0/.test(appreciation) || assessments.some(({ note }) => /\0/.test(note))) fail(400);
+    || /\0/.test(appreciation) || assessments.some(({ note, programme }) => /\0/.test(note)
+      || programme?.some((item) => !validXmlText(item, 300)))) fail(400);
   const previous = await reportForTerm(db, [schoolId, classId, studentId], period);
   if ((previous?.revision ?? null) !== revision) fail(409);
   await db.query(`
@@ -124,7 +127,7 @@ export function registerTeacherReports(app, authenticated) {
     const report = await reportForTerm(db, [school, classId, studentId], { year: await currentYear(db, school), term: request.query.term });
     return { report };
   }));
-  app.put(studentPath, { bodyLimit: 32 * 1024, schema: { params, querystring, body: schema } },
+  app.put(studentPath, { bodyLimit: 160 * 1024, schema: { params, querystring, body: schema } },
     forTeacherClass(authenticated, async (request, db, school, id) => save(db, [school, id, request.params.studentId],
       { year: await currentYear(db, school), term: request.query.term }, request.body)));
 }

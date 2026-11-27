@@ -1,17 +1,10 @@
 import { createECDH } from 'node:crypto';
 import { sendNotification } from 'web-push';
 import { openPrivateFile, sealPrivateFile } from '../files/private-files.js';
+import { payloadVersionBody, preferenceFields, readPreferences, removeSubscription, savePreferences } from './subscriptions.js';
 
 const path = '/parent/web/notifications';
-const categories = ['homework', 'messages', 'liaison', 'blog', 'agenda', 'attendance'];
-const payloadVersionBody = { const: 2 };
-const preferencesBody = { anyOf: [{
-  type: 'object', additionalProperties: false, required: ['categories', 'weekends'],
-  properties: {
-    categories: { type: 'array', maxItems: categories.length, uniqueItems: true, items: { enum: categories } },
-    weekends: { type: 'boolean' },
-  },
-}, {
+const preferencesBody = { anyOf: [preferenceFields, {
   type: 'object', additionalProperties: false, required: ['payloadVersion'],
   properties: { payloadVersion: payloadVersionBody },
 }] };
@@ -35,12 +28,16 @@ function allowedEndpoint(endpoint) {
     || url.hostname === 'web.push.apple.com';
 }
 
+export function pushEncryptionKey(hex) {
+  if (!/^[0-9a-f]{64}$/.test(hex ?? '')) throw new Error('WEB_PUSH_KEY doit contenir 64 caractères hexadécimaux.');
+  return Buffer.from(hex, 'hex');
+}
+
 export function webPushSettings(hex, webOrigin) {
   if (!webOrigin || hex === undefined) return undefined;
-  if (!/^[0-9a-f]{64}$/.test(hex)) throw new Error('La clé Web Push est invalide.');
+  const key = pushEncryptionKey(hex);
   const order = BigInt('0xffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551');
   const scalar = BigInt('0x' + hex) % (order - 1n) + 1n;
-  const key = Buffer.from(hex, 'hex');
   const privateKey = Buffer.from(scalar.toString(16).padStart(64, '0'), 'hex');
   const ecdh = createECDH('prime256v1');
   ecdh.setPrivateKey(privateKey);
@@ -50,12 +47,7 @@ export function webPushSettings(hex, webOrigin) {
 
 export function registerParentPush(app, authenticated, requireWebOrigin, { key, vapidDetails }) {
   app.get(path, authenticated(async (_request, db, _actor, _reply, { sessionId }) => {
-    const { rows: [preferences] } = await db.query(`
-      SELECT categories, weekends, payload_version AS "payloadVersion"
-      FROM parent_push_subscriptions WHERE session_id = $1
-    `, [sessionId]);
-    return { enabled: Boolean(preferences), publicKey: vapidDetails.publicKey,
-      ...(preferences ?? { categories, weekends: true, payloadVersion: 2 }) };
+    return { ...await readPreferences(db, sessionId, 'web'), publicKey: vapidDetails.publicKey };
   }));
   app.put(path, { onRequest: requireWebOrigin, bodyLimit: 2048, schema: { body: subscriptionBody },
     config: { rateLimit: { max: 12, timeWindow: '1 minute' } },
@@ -65,29 +57,22 @@ export function registerParentPush(app, authenticated, requireWebOrigin, { key, 
     }
     const { endpoint, p256dh, auth, payloadVersion = 1 } = body;
     const bytes = sealPrivateFile(Buffer.from(JSON.stringify({ endpoint, p256dh, auth })), key, ['web-push', sessionId]);
-    await db.query(`
+    const result = await db.query(`
       INSERT INTO parent_push_subscriptions (session_id, subscription, payload_version) VALUES ($1, $2, $3)
       ON CONFLICT (session_id) DO UPDATE SET subscription = excluded.subscription,
         payload_version = GREATEST(parent_push_subscriptions.payload_version, excluded.payload_version),
         attempted_at = '-infinity'
+      WHERE parent_push_subscriptions.transport = 'web'
     `, [sessionId, bytes, payloadVersion]);
+    if (!result.rowCount) return null;
   }, 204));
   app.patch(path, { onRequest: requireWebOrigin, bodyLimit: 1024, schema: { body: preferencesBody } },
-    authenticated(async ({ body }, db, _actor, _reply, { sessionId }) => {
-      const preferences = await db.query(`
-        UPDATE parent_push_subscriptions
-        SET categories = COALESCE($2, categories), weekends = COALESCE($3, weekends),
-          payload_version = COALESCE($4, payload_version)
-        WHERE session_id = $1 RETURNING categories, weekends, payload_version AS "payloadVersion"
-      `, [sessionId, body.categories ?? null, body.weekends ?? null, body.payloadVersion ?? null]);
-      return preferences.rows[0] ?? null;
-    }));
-  app.delete(path, { onRequest: requireWebOrigin }, authenticated(async (_request, db, _actor, _reply, { sessionId }) => {
-    await db.query('DELETE FROM parent_push_subscriptions WHERE session_id = $1', [sessionId]);
-  }, 204));
+    authenticated(({ body }, db, _actor, _reply, { sessionId }) => savePreferences(db, sessionId, 'web', body)));
+  app.delete(path, { onRequest: requireWebOrigin },
+    authenticated((_request, db, _actor, _reply, { sessionId }) => removeSubscription(db, sessionId, 'web'), 204));
 }
 
-async function claim(pool) {
+async function claim(pool, transports) {
   const { rows } = await pool.query(`
     WITH due AS (
       SELECT p.session_id, events.ids, events.kinds FROM parent_push_subscriptions p
@@ -133,14 +118,15 @@ async function claim(pool) {
         ) e
       ) events
       WHERE s.revoked_at IS NULL AND s.expires_at > statement_timestamp() AND g.active
+        AND p.transport = ANY($1::text[])
         AND p.attempted_at < statement_timestamp() - interval '1 minute'
         AND events.ids IS NOT NULL
       ORDER BY p.attempted_at, p.session_id LIMIT 25 FOR UPDATE OF p SKIP LOCKED
     )
     UPDATE parent_push_subscriptions p SET attempted_at = date_trunc('milliseconds', statement_timestamp())
     FROM due WHERE due.session_id = p.session_id
-    RETURNING p.session_id, p.subscription, p.attempted_at, p.payload_version, due.ids, due.kinds
-  `);
+    RETURNING p.session_id, p.subscription, p.attempted_at, p.payload_version, p.transport, due.ids, due.kinds
+  `, [transports]);
   return rows;
 }
 
@@ -163,26 +149,38 @@ function notifications({ ids, kinds, payload_version: version }) {
   return groups.values();
 }
 
-export async function dispatchParentPush(pool, { key, vapidDetails }, send = sendNotification) {
+function deliveryFor({ session_id: id, subscription, transport }, { key, vapidDetails, transports }, sendWeb) {
+  if (transport !== 'web') {
+    const token = openPrivateFile(subscription, key, ['native-push', transport, id]).toString();
+    return (kind, options) => transports[transport].send(token, kind, options);
+  }
+  const { endpoint, p256dh, auth } = JSON.parse(openPrivateFile(subscription, key, ['web-push', id]).toString());
+  if (!allowedEndpoint(endpoint)) return null;
+  return (kind, options) => sendWeb({ endpoint, keys: { p256dh, auth } }, kind, { ...options, vapidDetails, timeout: 5000 });
+}
+
+export async function dispatchParentPush(pool, { key, vapidDetails, transports = {} }, sendWeb = sendNotification) {
   await purgeParentPush(pool);
-  const rows = await claim(pool);
+  const active = [...Object.keys(transports), ...(vapidDetails ? ['web'] : [])];
+  const rows = await claim(pool, active);
   await Promise.all(rows.map(async (row) => {
     const { session_id: id, subscription, attempted_at: at } = row;
     try {
-      const { endpoint, p256dh, auth } = JSON.parse(openPrivateFile(subscription, key, ['web-push', id]).toString());
-      if (!allowedEndpoint(endpoint)) return;
+      const deliver = deliveryFor(row, { key, vapidDetails, transports }, sendWeb);
+      if (!deliver) return;
       for (const { kind, topic, ids } of notifications(row)) {
-        await send({ endpoint, keys: { p256dh, auth } }, kind, { vapidDetails, TTL: 300, timeout: 5000, topic });
+        await deliver(kind, { TTL: 300, topic });
         await pool.query(`
           INSERT INTO parent_push_deliveries (session_id, event_id)
           SELECT p.session_id, e.id FROM parent_push_subscriptions p CROSS JOIN parent_push_events e
-          WHERE (p.session_id,p.attempted_at) = ($1,$2) AND e.id = ANY($3::bigint[])
+          WHERE (p.session_id,p.attempted_at,p.subscription) = ($1,$2,$3) AND e.id = ANY($4::bigint[])
           ON CONFLICT DO NOTHING
-        `, [id, at, ids]);
+        `, [id, at, subscription, ids]);
       }
     } catch (error) {
       if (error.statusCode === 404 || error.statusCode === 410) {
-        await pool.query('DELETE FROM parent_push_subscriptions WHERE (session_id,attempted_at) = ($1,$2)', [id, at]);
+        await pool.query('DELETE FROM parent_push_subscriptions WHERE (session_id,attempted_at,subscription) = ($1,$2,$3)',
+          [id, at, subscription]);
       }
     }
   }));
@@ -193,10 +191,14 @@ export function startParentPush(pool, settings) {
   function run() {
     if (pending) return;
     pending = dispatchParentPush(pool, settings).catch(() => {
-      console.error('Le traitement des notifications web sera réessayé.');
+      console.error('Le traitement des notifications sera réessayé.');
     }).finally(() => { pending = undefined; });
   }
   const timer = setInterval(run, 15_000);
   timer.unref();
-  return async () => { clearInterval(timer); await pending; };
+  return async () => {
+    clearInterval(timer);
+    await pending;
+    for (const transport of Object.values(settings.transports ?? {})) transport.close?.();
+  };
 }

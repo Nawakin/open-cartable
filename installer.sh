@@ -8,6 +8,9 @@ if ! docker compose version >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; th
 fi
 
 if [ -n "${OPEN_CARTABLE_BUILD_CA:-}" ]; then
+  if [ -z "${COMPOSE_FILE:-}" ] && [ -f compose.override.yaml ]; then
+    COMPOSE_FILE=compose.yaml:compose.override.yaml
+  fi
   export COMPOSE_FILE="${COMPOSE_FILE:-compose.yaml}:compose.ca.yaml"
 fi
 if ! docker compose up -d --build --wait --wait-timeout 180; then

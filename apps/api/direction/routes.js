@@ -9,6 +9,7 @@ import { registerSchoolBanner } from '../school-banner/routes.js';
 import { registerDirectionAttendance } from '../attendance/routes.js';
 import { registerDirectionJustifications } from '../attendance/justifications.js';
 import { registerDirectionReports } from '../school-reports/routes.js';
+import { registerLsuExport } from '../school-reports/lsu-routes.js';
 import { registerHomeworkAttachments } from '../homework/attachments.js';
 import { registerStaffMedia } from '../files/class-media.js';
 import { registerYearTransition } from '../year-transition/routes.js';
@@ -71,6 +72,7 @@ export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mail
   registerDirectionAttendance(app, authenticated);
   registerDirectionJustifications(app, authenticated, blogMediaKey);
   registerDirectionReports(app, authenticated);
+  registerLsuExport(app, authenticated);
   registerYearTransition(app, authenticated);
   registerSchoolDirectory(app, authenticated, invitationKey);
   registerBlogExport(app, authenticated, blogMediaKey);

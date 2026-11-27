@@ -168,6 +168,8 @@ Après avoir publié l’article de démonstration, ouvrez « École → Clôtur
 2. Renseignez les domaines et les appréciations. Enregistrez le brouillon et vérifiez le contenu avant publication.
 3. Dans l’espace parent, ouvrez « Vie de classe → Livret scolaire » sous le nom de l’enfant. Ouvrez le bilan publié et téléchargez le PDF.
 
+Pour préparer un fichier d’import LSU, complétez les éléments de programme côté enseignant puis ouvrez « École → Livrets scolaires → Exporter vers le LSU » avec le compte direction. [Tutoriel LSU](lsu.md)
+
 ### Partager une ressource et activer les notifications web
 
 1. Dans l’espace enseignant, ouvrez « Vie de classe → Médiathèque ». Ajoutez un PDF fictif, donnez-lui un titre et choisissez une matière dans le champ de dossier. La famille le retrouve dans sa médiathèque de classe. Les dossiers, la recherche, l’aperçu et le téléchargement se font dans le navigateur.
@@ -176,6 +178,8 @@ Après avoir publié l’article de démonstration, ouvrez « École → Clôtur
 4. Depuis le compte enseignant, publiez un devoir fictif. Ouvrez l’alerte et vérifiez que le cahier de texte s’affiche après connexion. Pour essayer les rappels, créez un événement fictif à plus de 24 heures ou enregistrez une absence fictive. [Horaires des rappels](agenda.md#activer-les-rappels-web)
 
 Compose génère la clé Web Push lors de l’installation. Le service de notification du navigateur reçoit le type d’alerte. Les noms, titres d’événements, dates et messages se consultent après connexion à l’ENT. Le quota de la médiathèque est réglable avec `CLASS_MEDIA_QUOTA_MIB`, dont la valeur par défaut est `5120`.
+
+Les notifications dans l’application parent compilée utilisent Firebase sur Android et APNs sur iOS. Configurez uniquement les fournisseurs de vos applications signées. [Tutoriel du push natif](push-natif.md)
 
 ### Ouvrir les documents dans l’application parent
 

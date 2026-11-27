@@ -16,6 +16,7 @@ import { registerParentReports } from '../school-reports/routes.js';
 import { registerParentHomeworkAttachments } from '../homework/attachments.js';
 import { registerParentMedia } from '../files/class-media.js';
 import { registerParentPush } from '../notifications/web-push.js';
+import { registerNativePush } from '../notifications/native-routes.js';
 import { registerParentAccountLink } from './account-links.js';
 import { cookieOptions, parentCookieName as browserCookie, webSessionToken } from './staff-web.js';
 
@@ -34,7 +35,7 @@ function unauthorized(reply) {
   return reply.code(401).send({ error: 'Identifiants non valides.' });
 }
 
-export async function parentRoutes(app, { store, signingKey, webOrigin, blogMediaKey, webPush }) {
+export async function parentRoutes(app, { store, signingKey, webOrigin, blogMediaKey, webPush, nativePush }) {
   await app.register(rateLimit, { global: false, cache: 10_000 });
   if (webOrigin) await app.register(cookie);
   app.addHook('onRequest', async (_request, reply) => {
@@ -98,6 +99,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
   registerParentAttendance(app, authenticated);
   registerParentJustifications(app, authenticated, writes, blogMediaKey);
   registerParentReports(app, authenticated);
+  if (nativePush) registerNativePush(app, (operation, success) => authenticated(operation, success, bearerIdentity), nativePush);
 
   const invitationOptions = {
     bodyLimit: 1024,

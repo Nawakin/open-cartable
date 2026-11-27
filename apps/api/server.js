@@ -7,7 +7,8 @@ import { migrate, migrations, openDatabase } from './db/database.js';
 import { readSecret } from './installation/secrets.js';
 import { startRetention } from './db/retention.js';
 import { createRecoveryMailer } from './direction/recovery-mail.js';
-import { startParentPush, webPushSettings } from './notifications/web-push.js';
+import { pushEncryptionKey, startParentPush, webPushSettings } from './notifications/web-push.js';
+import { nativePushTransports } from './notifications/native-providers.js';
 
 function readWebOrigin(value) {
   const url = URL.parse(value);
@@ -70,8 +71,11 @@ try {
   const classMediaQuota = quotaMib * 1024 ** 2;
   const direction = webOrigin ? { pool, webOrigin, totpKey, mailer, classMediaQuota, invitationKey: directionInvitationKey } : undefined;
   const blogMediaKey = mediaSecret === undefined ? undefined : Buffer.from(mediaSecret, 'hex');
-  const webPush = webPushSettings(readSecret(env, 'WEB_PUSH_KEY'), webOrigin);
-  const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey, webPush });
+  const pushSecret = readSecret(env, 'WEB_PUSH_KEY');
+  const webPush = webPushSettings(pushSecret, webOrigin);
+  const transports = nativePushTransports(env);
+  const nativePush = Object.keys(transports).length ? { key: pushEncryptionKey(pushSecret), transports } : undefined;
+  const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey, webPush, nativePush });
   let stopRetention;
   let stopPush;
   if (pool) app.addHook('onClose', async () => {
@@ -81,7 +85,7 @@ try {
   });
   const address = await app.listen({ host: env.OPEN_CARTABLE_HOST ?? '127.0.0.1', port: 3000 });
   if (pool) stopRetention = startRetention(pool);
-  if (pool && webPush) stopPush = startParentPush(pool, webPush);
+  if (pool && (nativePush || webPush)) stopPush = startParentPush(pool, { ...nativePush, ...webPush });
   for (const signal of ['SIGINT', 'SIGTERM']) {
     process.once(signal, async () => {
       try {
