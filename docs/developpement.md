@@ -22,6 +22,20 @@ Les menus principaux et les raccourcis par enfant utilisent des cartes illustré
 
 Il reste à simplifier les écrans les plus chargés. Regrouper les actions liées, rendre l’action suivante évidente et afficher les réglages secondaires au moment où ils deviennent utiles. Vérifier sur téléphone et ordinateur que les utilisateurs trouvent où consulter, publier ou gérer une autorisation sans tutoriel.
 
+## Prochains lots fonctionnels
+
+Ordre proposé pour les prochains développements web, Android et iOS. Chaque lot part des parcours existants et inclut sa vérification du point de vue des familles, de l’équipe et de la direction.
+
+| Priorité | Fonctionnalités à ajouter | Résultat à vérifier |
+| --- | --- | --- |
+| 1 · Accueil famille | Regrouper les devoirs, rendez-vous, messages non lus et documents qui demandent une action. Ajouter un filtre « Tous mes enfants » ou par enfant et des liens directs vers les éléments. | Avec trois enfants, un parent repère ce qui demande une action et ouvre le bon document ou échange depuis l’accueil. |
+| 2 · Communication de l’école | Publier une annonce à l’échelle de l’école ou de certaines classes. Préparer un brouillon, programmer la publication et demander un accusé de lecture si nécessaire. | La direction prévisualise les destinataires. Chaque responsable répond pour son propre compte et retrouve les annonces autorisées dans l’ENT. |
+| 3 · Organisation quotidienne | Publier des créneaux de rendez-vous réservables, annoncer une absence à l’avance et faire répondre les familles aux sorties et réunions. | L’équipe suit les réponses par enfant, le parent retrouve la date dans son agenda et un créneau reste réservable une seule fois. |
+| 4 · Outils enseignants | Préparer des exercices et mots de liaison réutilisables, dupliquer un devoir vers une autre échéance et programmer des publications. | L’enseignant peut préparer sa semaine, vérifier les classes destinataires et corriger un brouillon avant diffusion. |
+| 5 · Administration de rentrée | Importer les classes, élèves et responsables avec prévisualisation, contrôles de doublons et validation explicite des rattachements. Ajouter le suivi des invitations et un journal des changements de droits. | La direction repère les homonymes avant de valider et retrouve qui a créé, modifié ou suspendu un rattachement. |
+
+Le premier lot est l’accueil famille. La recette du pilote comprend un compte avec plusieurs enfants et deux adultes partageant seulement une partie des rattachements. Avant utilisation avec des données réelles, vérifier aussi la restauration sur une instance vierge, les parcours sur des téléphones signés et l’accessibilité des actions principales au clavier et au lecteur d’écran.
+
 ## Architecture cible
 
 Une instance par école. React Native avec Expo et la nouvelle architecture, navigation React Navigation et état local limité. API REST Fastify avec schémas de validation, migrations PostgreSQL 16 et contrôle d'accès côté serveur. Pour les traitements différés, prévoir un worker local reprenant ses tâches de manière idempotente après redémarrage. Le futur Compose reliera Nginx, API, PostgreSQL et worker sur un réseau privé. Seul Nginx publiera un port. Valider les images et la restauration sur amd64 et arm64.

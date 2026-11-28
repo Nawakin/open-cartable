@@ -47,7 +47,7 @@ const teacherSections = [
 ];
 const schoolPages = [
   { id: 'directory', label: 'Enseignants', detail: 'Gérer les comptes et les affectations.' },
-  { id: 'enrolment', art: 'home', label: 'Classes et familles', detail: 'Gérer les élèves, les tuteurs et leurs invitations.' },
+  { id: 'enrolment', art: 'home', label: 'Classes et familles', detail: 'Gérer les élèves, les accès parents et les invitations.' },
   { id: 'reports', art: 'homework', label: 'Livrets scolaires', detail: 'Consulter les bilans et télécharger les PDF.' },
   { id: 'library', art: 'blog', label: 'Médiathèque', detail: 'Consulter les documents, images et enregistrements de classe.' },
   { id: 'photo-authorizations', label: 'Autorisations photo', detail: 'Consulter et renseigner les décisions des familles.' },

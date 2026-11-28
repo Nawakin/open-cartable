@@ -138,7 +138,8 @@ export function registerSchoolDirectory(app, authenticated, invitationKey) {
       SELECT g.id, g.display_name AS name FROM guardians g
       WHERE g.school_id = $1 AND g.id = ANY($2::uuid[]) AND g.active AND EXISTS (
         SELECT 1 FROM guardian_students l JOIN students s ON (s.school_id, s.id) = (l.school_id, l.student_id)
-        WHERE (l.school_id, l.guardian_id) = (g.school_id, g.id) AND s.left_at IS NULL
+        JOIN classes c ON (c.school_id, c.id) = (s.school_id, s.class_id)
+        WHERE (l.school_id, l.guardian_id) = (g.school_id, g.id) AND s.left_at IS NULL AND c.archived_year IS NULL
       ) ORDER BY g.id FOR UPDATE OF g
     `, [schoolId, body.guardianIds]);
     if (rows.length !== body.guardianIds.length) invalid(409);

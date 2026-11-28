@@ -42,7 +42,7 @@ Si l’école est encore à configurer, le lien contient le code d’installatio
 2. Cliquez sur « Créer l’école ». Conservez le code école et le code d’invitation parent qui s’affichent.
 3. Cliquez sur « Aller à la connexion », puis sur « Se connecter ». Le compte affiche l’élève créé. Ouvrez son cahier de texte pour consulter ses publications.
 
-Le code d’invitation est valable sept jours et pour une seule activation. Pour connecter un deuxième appareil, générez une invitation supplémentaire pour le même tuteur. La configuration initiale est enregistrée dans PostgreSQL. Le navigateur et l’application rouvrent le dernier espace utilisé tant que l’accès est reconnu.
+Le code d’invitation est valable sept jours et pour une seule activation. Il ouvre l’accès à tous les enfants rattachés au compte du responsable. Pour connecter un deuxième appareil, générez une invitation supplémentaire pour ce même compte. La configuration initiale est enregistrée dans PostgreSQL. Le navigateur et l’application rouvrent le dernier espace utilisé tant que l’accès est reconnu.
 
 Si l’assistant vous demande le code d’installation après un rechargement, relancez l’installateur pour ouvrir son lien. Si la création a réussi mais que l’invitation a été perdue, utilisez la procédure de réémission ci-dessous.
 
@@ -162,11 +162,15 @@ Pour vérifier le registre avec les données fictives de l’assistant, ouvrez �
 
 Après avoir publié l’article de démonstration, ouvrez « École → Clôture d’année → PDF du blog » dans l’espace direction. Choisissez sa classe, affichez l’aperçu et téléchargez le PDF. Ouvrez le fichier pour contrôler la couverture, le texte et les photos. [Guide de l’export](cloture-annee.md#exporter-le-blog-en-pdf)
 
-### Générer une invitation supplémentaire
+### Rattacher plusieurs enfants à un compte parent
 
-1. Ouvrez « École → Classes et familles » dans l’espace direction. Créez ou ouvrez une classe, puis ajoutez une fiche élève.
-2. Dans « Tuteurs », associez le compte responsable à l’enfant. Dans « Invitations », sélectionnez un ou plusieurs tuteurs et générez les codes.
-3. Remettez les codes séparément à chaque famille par un canal privé. Le CSV est proposé pour la préparation. En cas de perte d’un appareil, choisissez aussi de révoquer les anciennes sessions.
+1. Ouvrez « École → Classes et familles » dans l’espace direction. Créez une fiche par élève dans « Élèves » et affectez-la à la classe correspondante.
+2. Dans « Accès parents », ouvrez la fiche d’un responsable ou choisissez « Ajouter un responsable ». Recherchez les élèves par nom ou par classe, ajoutez ceux auxquels cette personne doit avoir accès et enregistrez. Pour les enfants communs à deux responsables, rattachez les mêmes fiches élèves à chacun des deux comptes.
+3. Sélectionnez « Inviter » sur la fiche du responsable puis vérifiez les enfants affichés avant de générer son code. Remettez le code de l’école et le code d’accès à la personne concernée par un canal privé. Pour préparer plusieurs invitations à la fois, utilisez « Invitations » et sélectionnez les responsables. Le CSV contient une ligne par compte invité.
+
+Par exemple, rattachez les élèves fictifs A et B au premier responsable. Rattachez A, B et C au second si la direction a validé cet accès. Chacun reçoit son propre code et retrouve uniquement ses enfants autorisés. Les deux comptes voient la scolarité de A et B et disposent chacun de leurs échanges privés avec l’école. Les seuls rattachements saisis par la direction déterminent les accès.
+
+Pour ajouter ou retirer un enfant sur un compte déjà connecté, modifiez la fiche du responsable. La liste des enfants se met à jour à l’ouverture de l’ENT ou avec « Actualiser » sur l’accueil parent. Pour remplacer l’accès après la perte d’un appareil, générez une invitation et choisissez « Fermer aussi les anciennes sessions ».
 
 ### Publier un livret d’essai
 
