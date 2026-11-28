@@ -1,0 +1,27 @@
+services:
+  api:
+    environment:
+      WEB_ORIGIN: "https://${OPEN_CARTABLE_LAN_IP:?Renseignez une adresse IPv4 privée}:${OPEN_CARTABLE_LAN_PORT:-3443}"
+      OPEN_CARTABLE_LAN_IP: "${OPEN_CARTABLE_LAN_IP:?Renseignez une adresse IPv4 privée}"
+  lan:
+    build:
+      context: .
+      target: lan
+    environment:
+      OPEN_CARTABLE_LAN_IP: "${OPEN_CARTABLE_LAN_IP:?Renseignez une adresse IPv4 privée}"
+      NO_PROXY: "api,127.0.0.1,${OPEN_CARTABLE_LAN_IP}"
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${OPEN_CARTABLE_LAN_IP}:${OPEN_CARTABLE_LAN_PORT:-3443}:3443"
+    volumes:
+      - lan-certificates:/data
+    healthcheck:
+      test: ["CMD", "wget", "-Y", "off", "--no-check-certificate", "-qO", "/dev/null", "https://127.0.0.1:3443/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+volumes:
+  lan-certificates:

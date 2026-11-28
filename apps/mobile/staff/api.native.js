@@ -34,7 +34,7 @@ export async function staffRequest(role, path, { origin, ...requestOptions } = {
     token: sameSchoolServer ? profile.token : undefined,
     device: sameSchoolServer && path.startsWith('/auth/') ? profile.deviceToken : undefined,
   });
-  const createsSession = ['/auth/login', '/auth/claim', '/auth/resume'].includes(path)
+  const createsSession = ['/auth/login', '/auth/claim', '/auth/resume', '/auth/device-link'].includes(path)
     || (path === '/auth/enrollment' && requestOptions.method === 'PUT');
   const schoolCode = requestOptions.body?.schoolCode ?? (sameSchoolServer ? profile.schoolCode : undefined);
   if (createsSession && tokenPattern.test(result?.token ?? '')) {

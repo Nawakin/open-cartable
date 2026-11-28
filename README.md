@@ -6,7 +6,7 @@ Il peut être utilisé avec des données fictives uniquement.
 
 ## Installation
 
-Installez Docker avec Compose, puis ouvrez le lanceur de votre système. Open Cartable démarre le serveur et l’application web. L’assistant crée la première école dans le navigateur.
+Installez Docker avec Compose, puis ouvrez le lanceur de votre système. Open Cartable démarre le serveur et l’application web. L’assistant crée l’accès direction dans le navigateur et guide l’activation de l’authentificateur. Un mode HTTPS local permet de le faire depuis un autre appareil du réseau.
 
 - Windows · `Installer-Windows.cmd`
 - macOS · `Installer.command`

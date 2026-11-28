@@ -4,10 +4,10 @@ import { openPrivateFile, preparePrivateFile, privateFileBody, privateFileBodyLi
 
 const target = '(school_id,class_id,id) = ($1,$2,$3)';
 
-async function download(db, ids, key, reply) {
+async function download(db, ids, key, reply, publicOnly = false) {
   const { rows: [file] } = await db.query(`
-    SELECT attachment_data, attachment_kind FROM homework_entries WHERE ${target} AND attachment_kind IS NOT NULL
-  `, ids);
+    SELECT attachment_data, attachment_kind FROM homework_entries WHERE ${target} AND attachment_kind IS NOT NULL AND (NOT $4::boolean OR publish_at <= statement_timestamp())
+  `, [...ids, publicOnly]);
   if (!file) return null;
   privateFileHeaders(reply, file.attachment_kind, 'document-cahier-de-texte');
   return openPrivateFile(file.attachment_data, key, ['homework', ...ids]);
@@ -47,6 +47,6 @@ export function registerParentHomeworkAttachments(app, authenticated, key) {
     authenticated(async (request, db, actor, reply) => {
       const classId = await linkedChildClass(db, actor, request.params.childId);
       if (!classId) return null;
-      return download(db, [actor.school_id, classId, request.params.entryId], key, reply);
+      return download(db, [actor.school_id, classId, request.params.entryId], key, reply, true);
     }));
 }

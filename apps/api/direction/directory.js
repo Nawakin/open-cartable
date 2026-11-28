@@ -1,3 +1,4 @@
+import { previewDirectoryImport } from './directory-import.js';
 import { randomUUID } from 'node:crypto';
 import { insertParentInvitation } from '../auth/parent-store.js';
 import { uuidPattern } from '../auth/credentials.js';
@@ -73,6 +74,7 @@ async function saveStudent(db, schoolId, id, { displayName: input, classId, birt
 }
 
 async function saveGuardian(db, schoolId, id, { displayName: input, studentIds, active }) {
+  const { rows: [previous] } = await db.query('SELECT active FROM guardians WHERE (school_id,id)=($1,$2)', [schoolId, id]);
   const valid = await db.query('SELECT id FROM students WHERE school_id = $1 AND id = ANY($2::uuid[])',
     [schoolId, studentIds]);
   if (valid.rowCount !== studentIds.length) return null;
@@ -80,15 +82,27 @@ async function saveGuardian(db, schoolId, id, { displayName: input, studentIds, 
     INSERT INTO guardians (school_id, id, display_name, active) VALUES ($1, $2, $3, $4)
     ON CONFLICT (school_id, id) DO UPDATE SET display_name = excluded.display_name, active = excluded.active
   `, [schoolId, id, displayName(input), active]);
-  await db.query(`DELETE FROM guardian_students WHERE (school_id, guardian_id) = ($1, $2)
-    AND NOT student_id = ANY($3::uuid[])`, [schoolId, id, studentIds]);
+  if (!previous || previous.active !== active) {
+    await logGuardian(db, schoolId, id, !previous ? 'created' : active ? 'reactivated' : 'suspended');
+  }
   await db.query(`
-    INSERT INTO guardian_students (school_id, guardian_id, student_id)
-    SELECT $1, $2, id FROM unnest($3::uuid[]) AS id
-    ON CONFLICT DO NOTHING
+    WITH removed AS (
+      DELETE FROM guardian_students WHERE (school_id,guardian_id)=($1,$2) AND NOT student_id=ANY($3::uuid[])
+      RETURNING student_id
+    ), added AS (
+      INSERT INTO guardian_students (school_id,guardian_id,student_id)
+      SELECT $1,$2,id FROM unnest($3::uuid[]) AS id ON CONFLICT DO NOTHING RETURNING student_id
+    )
+    INSERT INTO directory_access_log (school_id,guardian_id,student_id,action)
+    SELECT $1,$2,student_id,'unlinked' FROM removed UNION ALL SELECT $1,$2,student_id,'linked' FROM added
   `, [schoolId, id, studentIds]);
   if (!active) await revokeCredentials(db, schoolId, [id], true);
   return { id };
+}
+
+function logGuardian(db, schoolId, guardianId, action) {
+  return db.query('INSERT INTO directory_access_log (school_id,guardian_id,action) VALUES ($1,$2,$3)',
+    [schoolId, guardianId, action]);
 }
 
 async function revokeCredentials(db, schoolId, ids, sessions) {
@@ -129,6 +143,63 @@ export function registerSchoolDirectory(app, authenticated, invitationKey) {
   }), saveStudent);
   resource('guardians', 'guardians', fields({ displayName: name, studentIds: ids, active: { type: 'boolean' } }), saveGuardian);
 
+  const csv = { type: 'string', minLength: 1, maxLength: 128 * 1024 };
+  app.post(path + '/import/preview', { bodyLimit: 768 * 1024, schema: { body: fields({ csv }) } },
+    authenticated(async ({ body }, db, actor) => previewDirectoryImport(body.csv, await exportDirectory(db, actor.school_id)).preview));
+  app.post(path + '/import', { bodyLimit: 768 * 1024, schema: { body: fields({
+    csv, tag: { type: 'string', pattern: '^[A-Za-z0-9_-]{43}$' }, acceptHomonyms: { type: 'boolean' },
+  }) } }, mutation(async ({ body }, db, actor) => {
+    const schoolId = actor.school_id;
+    const { rows, preview } = previewDirectoryImport(body.csv, await exportDirectory(db, schoolId));
+    if (preview.tag !== body.tag || preview.errors.length || (preview.warnings.length && !body.acceptHomonyms)) invalid(409);
+    const ids = new Map(rows.map(({ ref }) => [ref, randomUUID()]));
+    const idOf = (reference) => ids.get(reference) ?? reference;
+    const classes = rows.filter(({ kind }) => kind === 'classe');
+    const students = rows.filter(({ kind }) => kind === 'eleve');
+    const guardians = rows.filter(({ kind }) => kind === 'responsable');
+    for (const row of classes) {
+      if (!await saveClass(db, schoolId, idOf(row.ref), { displayName: row.name, levels: [] })) invalid(409);
+    }
+    for (const row of students) {
+      if (!await saveStudent(db, schoolId, idOf(row.ref), {
+        displayName: row.name, classId: idOf(row.classRef), birthDate: null, grade: null, departed: false,
+      })) invalid(409);
+    }
+    for (const row of guardians) {
+      if (!await saveGuardian(db, schoolId, idOf(row.ref), {
+        displayName: row.name, studentIds: row.childList.map(idOf), active: true,
+      })) invalid(409);
+    }
+    return { classes: classes.length, students: students.length, guardians: guardians.length };
+  }, 201));
+
+  app.get(path + '/access-log', authenticated(async (_request, db, actor) => {
+    const { rows } = await db.query(`
+      SELECT a.id,a.action,a.occurred_at AS "occurredAt",g.display_name AS "guardianName",s.display_name AS "studentName"
+      FROM directory_access_log a
+      LEFT JOIN guardians g ON (g.school_id,g.id)=(a.school_id,a.guardian_id)
+      LEFT JOIN students s ON (s.school_id,s.id)=(a.school_id,a.student_id)
+      WHERE a.school_id=$1 ORDER BY a.id DESC LIMIT 150
+    `, [actor.school_id]);
+    return { entries: rows };
+  }));
+
+  app.get(path + '/invitation-status', authenticated(async (_request, db, actor) => {
+    const { rows } = await db.query(`
+      SELECT g.id,g.display_name AS "displayName",
+        CASE WHEN NOT g.active THEN 'suspended' WHEN i.revoked_at IS NOT NULL THEN 'revoked'
+          WHEN i.consumed_at IS NOT NULL THEN 'used' WHEN i.expires_at <= statement_timestamp() THEN 'expired'
+          WHEN i.expires_at IS NOT NULL THEN 'pending' ELSE 'none' END AS status,
+        i.expires_at AS "expiresAt"
+      FROM guardians g LEFT JOIN LATERAL (
+        SELECT expires_at,consumed_at,revoked_at FROM parent_invitations i
+        WHERE (i.school_id,i.guardian_id)=(g.school_id,g.id) ORDER BY expires_at DESC,digest LIMIT 1
+      ) i ON true
+      WHERE g.school_id=$1 ORDER BY g.display_name,g.id
+    `, [actor.school_id]);
+    return { invitations: rows };
+  }));
+
   app.post(path + '/invitations', { bodyLimit: 32 * 1024, schema: { body: fields({
     guardianIds: ids, replaceSessions: { type: 'boolean' },
   }) } }, mutation(async ({ body }, db, actor) => {
@@ -147,6 +218,7 @@ export function registerSchoolDirectory(app, authenticated, invitationKey) {
     const invitations = [];
     for (const { id: guardianId, name } of rows) {
       const invitation = await insertParentInvitation(db, invitationKey, { schoolCode, schoolId, guardianId });
+      await logGuardian(db, schoolId, guardianId, body.replaceSessions ? 'sessions-replaced' : 'invited');
       invitations.push({ id: guardianId, name, ...invitation });
     }
     return { schoolCode, invitations };

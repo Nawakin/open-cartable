@@ -2,8 +2,8 @@ import { agendaPath, agendaRemindersPath, homeworkPath, request } from './http';
 
 export const needsSchoolAddress = false;
 
-export async function signIn({ schoolCode, code }) {
-  await request(fetch, '', '/web/auth/login', { method: 'POST', body: { schoolCode, code }, credentials: 'same-origin' });
+export async function signIn({ schoolCode, code, pairing }) {
+  await request(fetch, '', pairing ? '/web/auth/device-link' : '/web/auth/login', { method: 'POST', body: { schoolCode, code }, credentials: 'same-origin' });
 }
 
 async function get(path) {

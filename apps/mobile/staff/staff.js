@@ -29,6 +29,12 @@ import { StaffReports } from '../school-reports/reports';
 import { downloadDocument, encodedFile, FileButton } from '../files/documents';
 import { StaffLibrary } from '../files/library';
 
+import { DeviceSettings } from '../devices/settings';
+import { StaffActivities } from '../school-life/activities';
+import { StaffPlannedAbsences } from '../school-life/absences';
+import { TeachingTemplates } from '../school-life/templates';
+import { schoolDateTime, schoolInstant, schoolTimeLabel } from '../school-life/ui';
+
 const monthLabel = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 const emptyPage = { entries: [], nextCursor: null };
 const blankEntry = () => ({ date: dayInSchoolCalendar(), title: '', domain: '', description: '', kind: 'notebook' });
@@ -47,6 +53,7 @@ const teacherSections = [
 ];
 const schoolPages = [
   { id: 'directory', label: 'Enseignants', detail: 'Gérer les comptes et les affectations.' },
+  { id: 'activities', art: 'agenda', label: 'Annonces et rendez-vous', detail: 'Publier, inviter et suivre les réponses.' },
   { id: 'enrolment', art: 'home', label: 'Classes et familles', detail: 'Gérer les élèves, les accès parents et les invitations.' },
   { id: 'reports', art: 'homework', label: 'Livrets scolaires', detail: 'Consulter les bilans et télécharger les PDF.' },
   { id: 'library', art: 'blog', label: 'Médiathèque', detail: 'Consulter les documents, images et enregistrements de classe.' },
@@ -54,10 +61,13 @@ const schoolPages = [
   { id: 'banner', label: 'Bandeau d’en-tête', detail: 'Choisir le texte et les couleurs du bandeau.' },
   { id: 'attendance', label: 'Suivi des absences', detail: 'Consulter les absences par classe et leurs justifications.' },
   { id: 'year-transition', label: 'Clôture d’année', detail: 'Préparer la rentrée et exporter le blog en PDF.' },
+  { id: 'devices', art: 'security', label: 'Mes appareils', detail: 'Lier et gérer les appareils de la direction.' },
   { id: 'security', label: 'Sécurité du compte', detail: 'Configurer la récupération et la double authentification.' },
 ];
 const classLifePages = [
   { id: 'attendance', label: 'Faire l’appel', detail: 'Enregistrer les présences, retards et absences.' },
+  { id: 'activities', art: 'agenda', label: 'Annonces et rendez-vous', detail: 'Informer les familles et proposer des créneaux.' },
+  { id: 'devices', art: 'security', label: 'Mes appareils', detail: 'Lier et gérer vos appareils.' },
   { id: 'liaison', label: 'Cahier de liaison', detail: 'Publier un mot et lire les réponses des familles.' },
   { id: 'blog', label: 'Blog de classe', detail: 'Partager les articles et les galeries de la classe.' },
   { id: 'reports', art: 'homework', label: 'Livret scolaire', detail: 'Rédiger et publier les bilans par trimestre.' },
@@ -93,6 +103,8 @@ export function Staff({ role, access, onParent, onLogout }) {
   const [address, setAddress] = useState(access?.origin ?? '');
   const [teacherLogin, setTeacherLogin] = useState('');
   const [activationCode, setActivationCode] = useState(access?.code ?? '');
+  const [pairCode, setPairCode] = useState(access?.pairCode ?? '');
+  const [pairing, setPairing] = useState(Boolean(access?.pairCode));
   const [activating, setActivating] = useState(Boolean(access?.code));
   const [confirmation, setConfirmation] = useState('');
   const [password, setPassword] = useState('');
@@ -106,6 +118,8 @@ export function Staff({ role, access, onParent, onLogout }) {
   const [draft, setDraft] = useState(blankEntry);
   const [editing, setEditing] = useState(null);
   const [removing, setRemoving] = useState(null);
+  const [publication, setPublication] = useState('');
+  const [plannedAbsences, setPlannedAbsences] = useState(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
   const [notice, setNotice] = useState('');
@@ -136,6 +150,7 @@ export function Staff({ role, access, onParent, onLogout }) {
     setClassId(null);
     setPage(emptyPage);
     setEditing(null);
+    setPublication('');
     setRemoving(null);
     setDraft(blankEntry());
   }
@@ -196,7 +211,7 @@ export function Staff({ role, access, onParent, onLogout }) {
       const profile = await staffProfile(role);
       setAddress(access?.origin || profile?.origin || await lastSchoolAddress());
       setSchool(access?.schoolCode || profile?.schoolCode || '');
-      if (access?.code) setPhase('login');
+      if (access?.code || pairing) setPhase('login');
       else await restore();
     });
   }, []);
@@ -239,6 +254,22 @@ export function Staff({ role, access, onParent, onLogout }) {
       const origin = staffNeedsSchoolAddress ? parseSchoolAddress(address) : undefined;
       if (staffNeedsSchoolAddress && !origin) {
         setProblem('Saisissez l’adresse HTTPS de votre école, sans chemin.');
+        return;
+      }
+      if (pairing) {
+        if (!/^[A-Z0-9][A-Z0-9-]{1,31}$/.test(schoolCode)
+          || !(isTeacher ? /^EN-[0-9]{8}$/ : /^DI-[0-9]{8}$/).test(pairCode.trim().toUpperCase())
+          || (!isTeacher && !validCode(authCode))) {
+          setProblem('Vérifiez le code d’appareil et le code de l’authentificateur demandé.');
+          return;
+        }
+        await request('/auth/device-link', { origin, method: 'POST', body: {
+          schoolCode, code: pairCode.trim().toUpperCase(), ...(isTeacher ? {} : { authenticator: authCode }),
+        } });
+        setPairCode('');
+        setPairing(false);
+        setAuthCode('');
+        await restore();
         return;
       }
       if (!/^[A-Z0-9][A-Z0-9-]{1,31}$/.test(schoolCode) || !password.trim() || length < 15 || length > 128) {
@@ -326,6 +357,7 @@ export function Staff({ role, access, onParent, onLogout }) {
     void run(async () => {
       setClassId(id);
       setEditing(null);
+      setPublication('');
       setRemoving(null);
       setDraft(blankEntry());
       setPage(emptyPage);
@@ -343,21 +375,29 @@ export function Staff({ role, access, onParent, onLogout }) {
     });
   }
 
-  function edit(entry) {
-    const { id, date, title, domain, description, kind = 'notebook' } = entry;
-    setEditing(id);
+  function edit(entry, copy = false) {
+    const { date, title, domain, description, kind = 'notebook' } = entry;
+    setEditing(copy ? null : entry);
+    setPublication(copy ? '' : schoolDateTime(entry.publishAt));
     setRemoving(null);
-    setDraft({ date, title, domain, description, kind });
+    setDraft({ date: copy ? dayInSchoolCalendar() : date, title, domain, description, kind });
   }
 
-  function save() {
+  const canPlan = !editing || Object.hasOwn(editing, 'publishAt');
+  function save(asDraft = false) {
     void run(async () => {
-      const target = editing ? `${classPath(classId)}/${editing}` : classPath(classId);
-      await request(target, { method: editing ? 'PUT' : 'POST', body: draft });
+      const target = editing ? `${classPath(classId)}/${editing.id}` : classPath(classId);
+      const publishAt = asDraft ? null : publication ? schoolInstant(publication) : 'now';
+      if (!asDraft && canPlan && !publishAt) {
+        setProblem('Utilisez le format AAAA-MM-JJ HH:MM pour la date de publication.');
+        return;
+      }
+      await request(target, { method: editing ? 'PUT' : 'POST', body: { ...draft, ...(canPlan ? { publishAt } : {}) } });
       const savedDate = draft.date;
       setMonth(savedDate);
-      setNotice(editing ? 'Modification enregistrée.' : 'Entrée publiée.');
+      setNotice(asDraft ? 'Brouillon enregistré.' : publication ? 'Entrée programmée.' : editing ? 'Modification enregistrée.' : 'Entrée publiée.');
       setEditing(null);
+      setPublication('');
       setDraft(blankEntry());
       setRemoving(null);
       setPage(emptyPage);
@@ -369,7 +409,7 @@ export function Staff({ role, access, onParent, onLogout }) {
     void run(async () => {
       await request(`${classPath(classId)}/${entryId}`, { method: 'DELETE' });
       setRemoving(null);
-      if (editing === entryId) {
+      if (editing?.id === entryId) {
         setEditing(null);
         setDraft(blankEntry());
       }
@@ -390,7 +430,7 @@ export function Staff({ role, access, onParent, onLogout }) {
   const menu = phase === 'desk' && <SectionNav label={isTeacher ? 'Menu enseignant' : 'Menu direction'} active={section} busy={busy}
     items={(isTeacher ? teacherSections : directionSections).map((item) => ({
       ...item, unreadCount: item.id === 'messages' ? unread.count : 0,
-      onPress: () => { setMessageDraft(null); setSubpage(null); setSection(item.id); },
+      onPress: () => { setMessageDraft(null); setSubpage(null); setPlannedAbsences(false); setSection(item.id); },
     }))} />;
   const schoolGroup = !isTeacher && section === 'school';
   const classLifeGroup = isTeacher && section === 'class-life';
@@ -428,10 +468,16 @@ export function Staff({ role, access, onParent, onLogout }) {
             keyboardType="url" placeholder="https://ent.ecole.example" maxLength={512} editable={!busy} />}
           <Field label="Code de l’école" value={school} onChangeText={setSchool}
             autoCapitalize="characters" maxLength={32} editable={!busy} />
-          {isTeacher && !activating && <Field label="Identifiant enseignant" value={teacherLogin} onChangeText={setTeacherLogin}
+          {isTeacher && !activating && !pairing && <Field label="Identifiant enseignant" value={teacherLogin} onChangeText={setTeacherLogin}
             autoCapitalize="none" autoComplete="username" maxLength={32} editable={!busy} />}
           {activating && <Field label="Code d’activation" value={activationCode} onChangeText={setActivationCode}
             autoCapitalize="none" maxLength={26} editable={!busy} secureTextEntry />}
+          {pairing ? <>
+            <Field label="Code de liaison de l’appareil" value={pairCode} onChangeText={setPairCode}
+              autoCapitalize="characters" maxLength={11} secureTextEntry editable={!busy} />
+            {!isTeacher && <AuthenticatorField value={authCode} onChangeText={setAuthCode} editable={!busy} />}
+            <Button label="Lier cet appareil" busy={busy} onPress={login} />
+          </> : <>
           <Field label={isTeacher ? 'Mot de passe enseignant' : 'Mot de passe direction'} value={password} onChangeText={setPassword}
             secureTextEntry autoCapitalize="none" autoComplete={activating ? 'new-password' : 'current-password'}
             maxLength={256} editable={!busy} onSubmitEditing={login} />
@@ -449,6 +495,7 @@ export function Staff({ role, access, onParent, onLogout }) {
             }
             setPassword(''); setAuthCode(''); setNeedsCode(false); setRecovery({ phase: 'request' });
           }} />}
+          </>}
           <Button label="Retour à la connexion" icon="arrow-back-outline" onPress={onParent} busy={busy} secondary />
         </>
       )}
@@ -457,7 +504,7 @@ export function Staff({ role, access, onParent, onLogout }) {
           {subpages && <>
             {subpage ? <View style={styles.actions}>
               <Button label="Retour" accessibilityLabel={schoolGroup ? 'Retour à École' : 'Retour à Vie de classe'} icon="arrow-back-outline"
-                secondary busy={busy} onPress={() => setSubpage(null)} />
+                secondary busy={busy} onPress={() => { setSubpage(null); setPlannedAbsences(false); }} />
             </View> : <>
               <View style={staffStyles.overview}>
                 <Illustration name={schoolGroup ? 'school' : 'class-life'} size={64} />
@@ -472,17 +519,26 @@ export function Staff({ role, access, onParent, onLogout }) {
               </View>}
             </>}
             {schoolGroup && subpage === 'directory' && <TeacherDirectory classes={desk.classes} request={request} run={run} busy={busy} schoolAddress={address} />}
-            {schoolGroup && subpage === 'enrolment' && <SchoolDirectory request={request} run={run} busy={busy} onChanged={restore} />}
+            {schoolGroup && subpage === 'enrolment' && <SchoolDirectory request={request} run={run} busy={busy} onChanged={restore} onExpired={expireSession} />}
+            {subpage === 'devices' && <DeviceSettings request={request} onExpired={expireSession} />}
+            {subpage === 'activities' && <StaffActivities classes={desk.classes} teacher={isTeacher}
+              request={request} onExpired={expireSession} />}
             {subpage === 'reports' && <StaffReports classes={desk.classes} request={request} onExpired={expireSession} teacher={isTeacher} />}
             {subpage === 'library' && <StaffLibrary classes={desk.classes} request={request} onExpired={expireSession} role={role} />}
             {schoolGroup && subpage === 'photo-authorizations' && <DirectionPhotoAuthorizations classes={desk.classes}
               request={request} run={run} busy={busy} />}
             {schoolGroup && subpage === 'banner' && <BannerSettings request={request} run={run} busy={busy} onSaved={replaceBanner} />}
-            {schoolGroup && subpage === 'attendance' && <DirectionAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
+
             {schoolGroup && subpage === 'year-transition' && <YearTransition classes={desk.classes}
               request={request} onExpired={expireSession} onApplied={() => void run(restore)} />}
             {schoolGroup && subpage === 'security' && <DirectionSecurity request={request} onExpired={expireSession} />}
-            {classLifeGroup && subpage === 'attendance' && <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
+            {subpage === 'attendance' && <>
+              <View style={styles.actions}><Button label={plannedAbsences ? 'Revenir au suivi de l’appel' : 'Absences annoncées'}
+                secondary onPress={() => setPlannedAbsences(!plannedAbsences)} /></View>
+              {plannedAbsences ? <StaffPlannedAbsences request={request} onExpired={expireSession} />
+                : isTeacher ? <TeacherAttendance classes={desk.classes} request={request} onExpired={expireSession} />
+                  : <DirectionAttendance classes={desk.classes} request={request} onExpired={expireSession} />}
+            </>}
             {classLifeGroup && subpage === 'account-link' && Platform.OS === 'web' && <AccountLink role="teacher" request={request}
               onExpired={expireSession} onOpen={onParent} />}
             {classLifeGroup && subpage === 'liaison' && <StaffLiaison classes={desk.classes} request={request} onExpired={expireSession}
@@ -516,9 +572,16 @@ export function Staff({ role, access, onParent, onLogout }) {
                   <Field label="Domaine" value={draft.domain} onChangeText={(domain) => setDraft({ ...draft, domain })} maxLength={80} editable={!busy} />
                   <Field label="Description" value={draft.description} onChangeText={(description) => setDraft({ ...draft, description })}
                     maxLength={2500} multiline style={[styles.input, staffStyles.description]} editable={!busy} />
+                  {isTeacher && <TeachingTemplates kind="homework"
+                    content={{ title: draft.title, domain: draft.domain, description: draft.description, kind: draft.kind }}
+                    onApply={(template) => setDraft({ ...draft, ...template })} request={request}
+                    onExpired={expireSession} disabled={busy} />}
+                  {canPlan && <Field label="Programmer la publication · heure de Paris" placeholder="AAAA-MM-JJ HH:MM · facultatif"
+                    value={publication} onChangeText={setPublication} maxLength={16} editable={!busy} />}
                   <View style={styles.actions}>
-                    <Button label={editing ? 'Enregistrer' : 'Publier'} onPress={save} busy={busy} />
-                    {editing && <Button label="Annuler la modification" onPress={() => { setEditing(null); setDraft(blankEntry()); }} busy={busy} secondary />}
+                    <Button label={publication ? 'Programmer' : canPlan ? 'Publier' : 'Enregistrer'} onPress={() => save()} busy={busy} />
+                    {canPlan && <Button label="Enregistrer le brouillon" onPress={() => save(true)} secondary busy={busy} />}
+                    {editing && <Button label="Annuler la modification" onPress={() => { setEditing(null); setPublication(''); setDraft(blankEntry()); }} busy={busy} secondary />}
                   </View>
 
                   <Text accessibilityRole="header" style={staffStyles.heading}>Publications · {monthLabel.format(new Date(month + 'T00:00:00Z'))}</Text>
@@ -532,6 +595,9 @@ export function Staff({ role, access, onParent, onLogout }) {
                     <View key={entry.id} style={staffStyles.entry}>
                       <Text style={styles.body}>{entry.kind === 'assignment' ? 'À rendre · ' : ''}{entry.date} · {entry.domain}</Text>
                       <Text accessibilityRole="header" style={staffStyles.heading}>{entry.title}</Text>
+                      {Object.hasOwn(entry, 'publishAt') && <Text style={styles.body}>
+                        {entry.publishAt ? 'Publication programmée · ' + schoolTimeLabel(entry.publishAt) : 'Brouillon'}
+                      </Text>}
                       <Text style={styles.body}>{entry.description}</Text>
                       <View style={styles.actions}>
                         <FileButton label={entry.hasDocument ? 'Remplacer le document' : 'Joindre un document'} busy={busy}
@@ -555,6 +621,8 @@ export function Staff({ role, access, onParent, onLogout }) {
                           </>
                         ) : (
                           <>
+                            <Button label="Dupliquer" accessibilityLabel={`Dupliquer ${entry.title}`} busy={busy} secondary
+                              onPress={() => edit(entry, true)} />
                             <Button label="Modifier" accessibilityLabel={`Modifier ${entry.title}`} busy={busy} onPress={() => edit(entry)} secondary />
                             <Button label="Retirer" accessibilityLabel={`Retirer ${entry.title}`} busy={busy} onPress={() => setRemoving(entry.id)} secondary />
                           </>

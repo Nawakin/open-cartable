@@ -1,3 +1,5 @@
+import { linkedChildClass } from './class-access.js';
+import { deviceCodePatterns, deviceMetadata, registerAccountDevices } from '../devices/store.js';
 import rateLimit from '@fastify/rate-limit';
 import cookie from '@fastify/cookie';
 import { eventCalendar } from '../agenda/ical.js';
@@ -20,6 +22,10 @@ import { registerNativePush } from '../notifications/native-routes.js';
 import { registerParentAccountLink } from './account-links.js';
 import { cookieOptions, parentCookieName as browserCookie, webSessionToken } from './staff-web.js';
 
+import { registerParentActivities } from '../school-life/activities.js';
+import { registerParentPlannedAbsences } from '../school-life/absences.js';
+import { nextAssignments, registerParentHome } from '../school-life/home.js';
+
 function jsonBody(fields) {
   return {
     type: 'object',
@@ -35,7 +41,7 @@ function unauthorized(reply) {
   return reply.code(401).send({ error: 'Identifiants non valides.' });
 }
 
-export async function parentRoutes(app, { store, signingKey, webOrigin, blogMediaKey, webPush, nativePush }) {
+export async function parentRoutes(app, { store, signingKey, webOrigin, blogMediaKey, webPush, nativePush, pairingKey }) {
   await app.register(rateLimit, { global: false, cache: 10_000 });
   if (webOrigin) await app.register(cookie);
   app.addHook('onRequest', async (_request, reply) => {
@@ -92,6 +98,10 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
       }
     },
   };
+  registerAccountDevices(app, '/parent', { role: 'parent', authenticated, writes, key: pairingKey });
+  registerParentActivities(app, { authenticated, writes, key: blogMediaKey });
+  registerParentPlannedAbsences(app, { authenticated, writes });
+  registerParentHome(app, authenticated);
   registerParentMessages(app, { authenticated, writes, key: blogMediaKey });
   registerParentHomeworkAttachments(app, authenticated, blogMediaKey);
   registerParentMedia(app, authenticated, blogMediaKey);
@@ -114,6 +124,13 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     const { schoolCode, code } = request.body;
     return signIn(reply, await store.redeem(schoolCode, code));
   });
+
+  const pairingOptions = {
+    ...invitationOptions, config: { rateLimit: { max: 6, timeWindow: '1 minute' } },
+    schema: { body: jsonBody({ schoolCode: schoolCodePattern, code: new RegExp(deviceCodePatterns.parent) }) },
+  };
+  if (pairingKey) app.post('/parent/auth/device-link', pairingOptions, async (request, reply) =>
+    signIn(reply, await store.pairDevice(request.body.schoolCode, request.body.code, false, deviceMetadata(request))));
 
   app.post('/parent/auth/refresh', {
     bodyLimit: 1024,
@@ -153,6 +170,12 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
       }).code(204).send();
     });
 
+    if (pairingKey) app.post('/parent/web/auth/device-link', { ...pairingOptions, onRequest: requireWebOrigin }, async (request, reply) => {
+      const result = await store.pairDevice(request.body.schoolCode, request.body.code, true, deviceMetadata(request));
+      if (!result) return unauthorized(reply);
+      return reply.setCookie(browserCookie, result.browserToken, { ...cookieOptions, maxAge: parentSessionSeconds }).code(204).send();
+    });
+
     app.post('/parent/web/auth/logout', { onRequest: requireWebOrigin }, async (request, reply) => {
       const claims = await browserIdentity(request);
       if (claims) await store.revoke(claims);
@@ -184,6 +207,7 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     if (!claims) return unauthorized(reply);
     const children = await store.children(claims);
     if (!children) return unauthorized(reply);
+    await store.seenDevice(claims.sessionId, deviceMetadata(request));
     return { children };
   });
 
@@ -203,21 +227,8 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     return reminders ?? unauthorized(reply);
   });
 
-  app.get('/parent/assignments/next', authenticated(async (_request, db, actor) => {
-    const { rows } = await db.query(`
-      WITH calendar AS (SELECT (statement_timestamp() AT TIME ZONE 'Europe/Paris')::date AS today)
-      SELECT h.id, h.title, h.domain, h.entry_date::text AS date,
-        json_build_object('id',s.id,'displayName',s.display_name,'className',c.name) AS child
-      FROM guardian_students l JOIN students s ON (s.school_id,s.id) = (l.school_id,l.student_id)
-      JOIN classes c ON (c.school_id,c.id) = (s.school_id,s.class_id)
-      JOIN homework_entries h ON (h.school_id,h.class_id) = (c.school_id,c.id)
-      CROSS JOIN calendar
-      WHERE (l.school_id,l.guardian_id) = ($1,$2) AND s.left_at IS NULL AND c.archived_year IS NULL
-        AND h.kind = 'assignment' AND h.entry_date BETWEEN today AND today + 13
-      ORDER BY h.entry_date,s.display_name,h.id,s.id LIMIT 12
-    `, [actor.school_id, actor.guardian_id]);
-    return { assignments: rows };
-  }));
+  app.get('/parent/assignments/next', authenticated(async (_request, db, actor) =>
+    ({ assignments: await nextAssignments(db, actor) })));
 
   app.get('/parent/children/:childId/homework', {
     schema: {
@@ -236,6 +247,18 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     return { child, entries, nextCursor };
   });
 
+  app.get('/parent/children/:childId/homework/:entryId', {
+    schema: { params: jsonBody({ childId: uuidPattern, entryId: uuidPattern }) },
+  }, authenticated(async ({ params }, db, actor) => {
+    const childClass = await linkedChildClass(db, actor, params.childId);
+    if (!childClass) return null;
+    const { rows: [entry] } = await db.query(`
+      SELECT id,entry_date::text AS date,title,domain,description,kind,attachment_kind IS NOT NULL AS "hasDocument"
+      FROM homework_entries WHERE (school_id,class_id,id)=($1,$2,$3) AND publish_at<=statement_timestamp()
+    `, [actor.school_id, childClass, params.entryId]);
+    return entry ?? null;
+  }));
+
   const calendar = '/parent/children/:childId/agenda';
   app.get(calendar, {
     schema: { params: jsonBody({ childId: uuidPattern }), querystring: agendaQuerySchema },
@@ -248,6 +271,17 @@ export async function parentRoutes(app, { store, signingKey, webOrigin, blogMedi
     if (!authenticated) return unauthorized(reply);
     if (!child) return reply.code(404).send({ error: 'Enfant introuvable.' });
     return { child, events, nextCursor };
+  });
+
+  app.get(calendar + '/:eventId', {
+    schema: { params: jsonBody({ childId: uuidPattern, eventId: uuidPattern }) },
+  }, async (request, reply) => {
+    const claims = await parentIdentity(request, reply);
+    if (!claims) return unauthorized(reply);
+    const { childId, eventId } = request.params;
+    const { authenticated, event } = await store.agendaEvent(claims, childId, eventId);
+    if (!authenticated) return unauthorized(reply);
+    return event ?? reply.code(404).send({ error: 'Événement introuvable.' });
   });
 
   app.get(calendar + '/:eventId/ical', {

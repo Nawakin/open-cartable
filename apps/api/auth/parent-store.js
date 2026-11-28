@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { markDevice, redeemDevicePair } from '../devices/store.js';
 import { agendaPageSize, eventDetails, eventScope, pageEvents } from '../agenda/events.js';
 import { transaction } from '../db/database.js';
 import { homeworkPage, homeworkPageSize } from '../homework/entries.js';
@@ -56,6 +57,27 @@ export async function insertParentInvitation(client, invitationKey, { schoolCode
   return { code, expiresAt: result.rows[0].expires_at };
 }
 
+async function openParentSession(client, schoolId, guardianId, browser) {
+  const result = await client.query(`
+    INSERT INTO parent_sessions (id, school_id, guardian_id, expires_at)
+    VALUES ($1, $2, $3, statement_timestamp() + $4::interval)
+    RETURNING id, guardian_id, expires_at
+  `, [randomUUID(), schoolId, guardianId, browser ? `${parentSessionSeconds} seconds` : `${nativeParentSessionSeconds} seconds`]);
+  const session = result.rows[0];
+  if (browser) {
+    const browserToken = generateRefreshToken();
+    await client.query('INSERT INTO parent_browser_sessions (digest, session_id) VALUES ($1, $2)', [
+      refreshDigest(browserToken), session.id,
+    ]);
+    return { session, browserToken };
+  }
+  const refreshToken = generateRefreshToken();
+  await client.query('INSERT INTO parent_refresh_tokens (digest, session_id) VALUES ($1, $2)', [
+    refreshDigest(refreshToken), session.id,
+  ]);
+  return { session, refreshToken };
+}
+
 export function createParentStore(pool, invitationKey) {
   return {
     async invite(schoolCode, guardianId, replaceSessions = false) {
@@ -97,25 +119,20 @@ export function createParentStore(pool, invitationKey) {
         `, [digest]);
         if (used.rowCount !== 1) return null;
 
-        const result = await client.query(`
-          INSERT INTO parent_sessions (id, school_id, guardian_id, expires_at)
-          VALUES ($1, $2, $3, statement_timestamp() + $4::interval)
-          RETURNING id, guardian_id, expires_at
-        `, [randomUUID(), invitation.school_id, invitation.guardian_id, browser ? `${parentSessionSeconds} seconds` : `${nativeParentSessionSeconds} seconds`]);
-        const session = result.rows[0];
-        if (browser) {
-          const browserToken = generateRefreshToken();
-          await client.query('INSERT INTO parent_browser_sessions (digest, session_id) VALUES ($1, $2)', [
-            refreshDigest(browserToken), session.id,
-          ]);
-          return { session, browserToken };
-        }
-        const refreshToken = generateRefreshToken();
-        await client.query('INSERT INTO parent_refresh_tokens (digest, session_id) VALUES ($1, $2)', [
-          refreshDigest(refreshToken), session.id,
-        ]);
-        return { session, refreshToken };
+        return openParentSession(client, invitation.school_id, invitation.guardian_id, browser);
       });
+    },
+
+    async pairDevice(schoolCode, code, browser, metadata) {
+      return transaction(pool, (db) => redeemDevicePair(db, invitationKey, 'parent', schoolCode, code, async (schoolId, guardianId) => {
+        const session = await openParentSession(db, schoolId, guardianId, browser);
+        await markDevice(db, 'parent', session.session.id, metadata);
+        return session;
+      }));
+    },
+
+    seenDevice(sessionId, metadata) {
+      return markDevice(pool, 'parent', sessionId, metadata);
     },
 
     async browserIdentity(token, remember = false) {
@@ -224,7 +241,7 @@ export function createParentStore(pool, invitationKey) {
         if (!guardian.rowCount) return { authorized: false };
         const { rows: [actor] } = await client.query(`${activeParentQuery} FOR SHARE OF s`, parameters);
         if (!actor) return { authorized: false };
-        return { authorized: true, value: await operation(client, actor) };
+        return { authorized: true, value: await operation(client, { ...actor, sessionId }) };
       });
     },
 
@@ -234,7 +251,7 @@ export function createParentStore(pool, invitationKey) {
           SELECT e.id, e.entry_date, e.title, e.domain, e.description, e.kind, e.attachment_kind IS NOT NULL AS "hasDocument"
           FROM permitted_child c
           JOIN homework_entries e ON (e.school_id, e.class_id) = (c.school_id, c.class_id)
-          WHERE e.entry_date BETWEEN $4 AND $5
+          WHERE e.entry_date BETWEEN $4 AND $5 AND e.publish_at <= statement_timestamp()
             AND ($6::text IS NULL OR strpos(lower(e.domain), lower($6)) > 0)
             AND ($7::date IS NULL OR (e.entry_date, e.id) < ($7, $8::uuid))
             AND ($10::text IS NULL OR e.kind = $10)

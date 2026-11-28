@@ -5,13 +5,11 @@ import { RequestError } from '../parent/http';
 import { EmailField, validEmail } from '../direction-security/fields';
 
 const endpoint = '/api/v1/installation';
-const empty = { schoolName: '', schoolCode: '', className: '', studentName: '' };
+const empty = { schoolName: '', schoolCode: '', className: '', studentName: '', connectionOrigin: '' };
 const example = { schoolName: 'École de démonstration', schoolCode: 'ECOLE-DEMO', className: 'Classe fictive A', studentName: 'Élève fictif A' };
 const fields = [
   { key: 'schoolName', label: 'Nom de l’école', maxLength: 100 },
   { key: 'schoolCode', label: 'Code de l’école', maxLength: 32 },
-  { key: 'className', label: 'Nom de la classe', maxLength: 100 },
-  { key: 'studentName', label: 'Nom d’affichage du premier élève', maxLength: 100 },
 ];
 
 export function consumeInstallationLink() {
@@ -46,7 +44,7 @@ export async function needsInstallation() {
 }
 
 export function FirstRun({ token, onComplete, onDirection }) {
-  const [form, setForm] = useState(empty);
+  const [form, setForm] = useState(() => ({ ...empty, connectionOrigin: Platform.OS === 'web' ? window.location.origin : '' }));
   const [manualToken, setManualToken] = useState('');
   const [directionPassword, setDirectionPassword] = useState('');
   const [recoveryEmail, setRecoveryEmail] = useState('');
@@ -65,10 +63,19 @@ export function FirstRun({ token, onComplete, onDirection }) {
       setProblem('Saisissez le code du lanceur ou rouvrez le site depuis le lanceur.');
       return;
     }
-    const values = Object.fromEntries(fields.map(({ key }) => [key, form[key].trim()]));
+    const { schoolName, schoolCode, connectionOrigin, className, studentName } = form;
+    const values = { schoolName: schoolName.trim(), schoolCode: schoolCode.trim(), connectionOrigin: connectionOrigin.trim().replace(/\/$/, ''),
+      ...(className && studentName ? { className, studentName } : {}) };
     values.schoolCode = values.schoolCode.toUpperCase();
     if (!Object.values(values).every(Boolean) || !/^[A-Z0-9][A-Z0-9-]{1,31}$/.test(values.schoolCode)) {
-      setProblem('Renseignez les quatre champs. Le code de l’école contient 2 à 32 lettres, chiffres ou tirets.');
+      setProblem('Renseignez le nom, l’adresse et le code de l’école. Le code contient 2 à 32 lettres, chiffres ou tirets.');
+      return;
+    }
+    const origin = URL.parse ? URL.parse(values.connectionOrigin) : (() => {
+      try { return new URL(values.connectionOrigin); } catch { return null; }
+    })();
+    if (!origin || origin.origin !== values.connectionOrigin || (origin.protocol !== 'https:' && origin.origin !== window.location.origin)) {
+      setProblem('Renseignez une adresse HTTPS sans chemin, ou gardez l’adresse locale actuelle.');
       return;
     }
     if (!directionPassword.trim() || [...directionPassword].length < 15
@@ -112,16 +119,19 @@ export function FirstRun({ token, onComplete, onDirection }) {
     return (
       <View style={styles.panel}>
         <Text accessibilityRole="header" style={styles.title}>École configurée</Text>
-        <Text style={styles.body}>Ce premier code ouvre un compte parent. Il est utilisable une seule fois et expire dans sept jours.</Text>
+        <Text style={styles.body}>Ouvrez l’espace direction dans ce navigateur puis configurez votre authentificateur OTP. Gardez l’accès sur le réseau local pendant cette étape.</Text>
         <View style={setupStyles.credentials}>
+          <Text style={styles.label}>Adresse de connexion à l’ENT</Text>
+          <Text selectable style={styles.body}>{result.connectionOrigin}</Text>
           <Text style={styles.label}>Code de l’école</Text>
           <Text selectable style={setupStyles.value}>{result.schoolCode}</Text>
-          <Text style={styles.label}>Invitation parent</Text>
-          <Text selectable style={setupStyles.value}>{result.code}</Text>
+          {result.code && <>
+            <Text style={styles.label}>Invitation parent de démonstration</Text>
+            <Text selectable style={setupStyles.value}>{result.code}</Text>
+          </>}
         </View>
-        <Button label="Aller à la connexion" onPress={() => onComplete(result)} />
-        <Button label="Ouvrir l’espace direction" icon="lock-closed-outline" secondary
-          onPress={() => onDirection(result.schoolCode)} />
+        <Button label="Ouvrir l’espace direction" icon="lock-closed-outline" onPress={() => onDirection(result.schoolCode)} />
+        {result.code && <Button label="Aller à la connexion" secondary onPress={() => onComplete(result)} />}
       </View>
     );
   }
@@ -138,9 +148,9 @@ export function FirstRun({ token, onComplete, onDirection }) {
   return (
     <View style={styles.panel}>
       <Text accessibilityRole="header" style={styles.title}>Configurer Open Cartable</Text>
-      <Text style={styles.body}>Créez votre école, une première classe et les accès direction et parent.</Text>
+      <Text style={styles.body}>Bienvenue. Créez l’accès direction, puis protégez-le avec un authentificateur à code unique dans ce navigateur.</Text>
       <Button label="Remplir un exemple fictif" busy={pending} secondary onPress={() => {
-        setForm(example);
+        setForm((previous) => ({ ...previous, ...example }));
         setRecoveryEmail('direction@ecole.example');
       }} />
       {!token && (
@@ -153,13 +163,18 @@ export function FirstRun({ token, onComplete, onDirection }) {
           onChangeText={(value) => setForm((previous) => ({ ...previous, [key]: value }))}
           editable={!pending} />
       ))}
+      <Field label="Adresse web de connexion" value={form.connectionOrigin} onChangeText={(value) =>
+        setForm((previous) => ({ ...previous, connectionOrigin: value }))}
+        autoCapitalize="none" keyboardType="url" maxLength={512} editable={!pending} />
+      <Text style={styles.body}>Utilisez l’adresse de ce réseau ou indiquez l’adresse HTTPS prévue pour l’école.</Text>
+      {form.studentName && <Text style={styles.body}>Exemple fictif activé · une classe et un accès parent de démonstration seront créés.</Text>}
       <Field label="Mot de passe direction" value={directionPassword} onChangeText={setDirectionPassword}
         secureTextEntry autoCapitalize="none" autoComplete="new-password" maxLength={256} editable={!pending} />
       <Field label="Confirmer le mot de passe direction" value={confirmation} onChangeText={setConfirmation}
         secureTextEntry autoCapitalize="none" autoComplete="new-password" maxLength={256} editable={!pending} />
       <EmailField value={recoveryEmail} onChangeText={setRecoveryEmail} editable={!pending} />
       {problem ? <Text accessibilityRole="alert" style={styles.error}>{problem}</Text> : null}
-      <Button label={pending ? 'Configuration…' : 'Créer l’école'} busy={pending} onPress={submit} />
+      <Button label={pending ? 'Configuration…' : 'Créer le compte direction'} busy={pending} onPress={submit} />
     </View>
   );
 }

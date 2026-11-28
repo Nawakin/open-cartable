@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Field, styles } from '../parent/ui';
+import { TeachingTemplates } from '../school-life/templates';
 import { NoteCard, formatLiaisonDay, liaisonStyles, useLiaisonTask } from './ui';
 
 function classPath(id) {
@@ -11,6 +12,7 @@ export function StaffLiaison({ classes, request, onReply, onExpired }) {
   const [classId, setClassId] = useState(null);
   const [page, setPage] = useState(null);
   const [draft, setDraft] = useState('');
+  const [publicationDay, setPublicationDay] = useState('');
   const [details, setDetails] = useState(null);
   const [notice, setNotice] = useState('');
   const { busy, problem, run } = useLiaisonTask(onExpired);
@@ -24,6 +26,7 @@ export function StaffLiaison({ classes, request, onReply, onExpired }) {
         setClassId(id);
         setPage(null);
         setDetails(null);
+        setPublicationDay('');
       }
       const result = await request(classPath(id) + (before ? '?before=' + encodeURIComponent(before) : ''));
       setPage((current) => before
@@ -35,12 +38,14 @@ export function StaffLiaison({ classes, request, onReply, onExpired }) {
 
   function publish() {
     void run(async () => {
-      const note = await request(classPath(classId) + '/today', {
-        method: 'PUT', body: { day: page.today, body: draft },
+      const scheduled = Boolean(publicationDay);
+      const note = await request(classPath(classId) + (scheduled ? '/schedule' : '/today'), {
+        method: 'PUT', body: { day: publicationDay || page.today, body: draft },
       });
-      setPage((current) => ({ ...current, notes: [note, ...current.notes.filter(({ id }) => id !== note.id)] }));
+      setPage((current) => ({ ...current, notes: [note, ...current.notes.filter(({ id }) => id !== note.id)]
+        .sort((left, right) => right.day.localeCompare(left.day)) }));
       setDraft(note.body);
-      setNotice('Mot du jour enregistré.');
+      setNotice(scheduled ? 'Mot de liaison programmé.' : 'Mot du jour enregistré.');
     });
   }
 
@@ -77,16 +82,29 @@ export function StaffLiaison({ classes, request, onReply, onExpired }) {
         <Text accessibilityRole="header" style={styles.label}>Mot du jour · {formatLiaisonDay(page.today)}</Text>
         <Field label="Texte du mot" value={draft} onChangeText={setDraft}
           style={[styles.input, liaisonStyles.editor]} multiline maxLength={1000} editable={!busy} />
+        <TeachingTemplates kind="liaison" content={{ body: draft }} onApply={({ body }) => setDraft(body)}
+          request={request} onExpired={onExpired} disabled={busy} />
+        <Field label="Date de publication future" placeholder="AAAA-MM-JJ · facultatif" value={publicationDay}
+          onChangeText={setPublicationDay} maxLength={10} editable={!busy} />
         <View style={styles.actions}>
-          <Button label={dailyNote ? 'Enregistrer les modifications' : 'Publier le mot'} icon="checkmark-outline"
-            onPress={publish} busy={busy || !draft.trim() || draft.trim() === dailyNote?.body} />
+          <Button label={publicationDay ? 'Programmer le mot' : dailyNote ? 'Enregistrer les modifications' : 'Publier le mot'} icon="checkmark-outline"
+            onPress={publish} busy={busy || !draft.trim() || (!publicationDay && draft.trim() === dailyNote?.body)} />
           <Button label="Actualiser" icon="refresh-outline" onPress={() => load(classId)} busy={busy} secondary />
         </View>
         {page.notes.length === 0 && <Text style={styles.body}>Aucun mot de liaison publié dans cette classe.</Text>}
         {page.notes.map((note) => (
           <NoteCard key={note.id} note={note}>
             <View style={styles.actions}>
-              <Button label="Voir les réponses" icon="chatbubbles-outline" onPress={() => loadReplies(note)} busy={busy} secondary />
+              {note.scheduled ? <>
+                <Button label="Modifier la programmation" secondary busy={busy} onPress={() => {
+                  setDraft(note.body); setPublicationDay(note.day);
+                }} />
+                <Button label="Retirer la programmation" secondary busy={busy} onPress={() => void run(async () => {
+                  await request(classPath(classId) + '/schedule/' + note.id, { method: 'DELETE' });
+                  setPage((current) => ({ ...current, notes: current.notes.filter(({ id }) => id !== note.id) }));
+                  if (publicationDay === note.day) { setPublicationDay(''); setDraft(dailyNote?.body ?? ''); }
+                })} />
+              </> : <Button label="Voir les réponses" icon="chatbubbles-outline" onPress={() => loadReplies(note)} busy={busy} secondary />}
             </View>
           </NoteCard>
         ))}

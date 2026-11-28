@@ -117,13 +117,17 @@ export async function signInTeacher(pool, { schoolCode, login, password }, secon
     `, [account.school_id, account.id, account.password_salt]);
     if (!current.rowCount) return null;
 
-    const token = generateRefreshToken();
-    await db.query(`
-      INSERT INTO teacher_sessions (digest, school_id, teacher_id, expires_at)
-      VALUES ($1, $2, $3, statement_timestamp() + $4 * interval '1 second')
-    `, [refreshDigest(token), account.school_id, account.id, seconds]);
-    return token;
+    return openTeacherSession(db, account.school_id, account.id, seconds);
   });
+}
+
+export async function openTeacherSession(db, schoolId, teacherId, seconds) {
+  const token = generateRefreshToken();
+  await db.query(`
+    INSERT INTO teacher_sessions (digest, school_id, teacher_id, expires_at)
+    VALUES ($1, $2, $3, statement_timestamp() + $4 * interval '1 second')
+  `, [refreshDigest(token), schoolId, teacherId, seconds]);
+  return token;
 }
 
 export async function renewTeacherSession(pool, token, seconds) {
@@ -151,7 +155,7 @@ export async function withTeacherSession(pool, token, operation) {
     const session = await db.query('SELECT 1 FROM teacher_sessions WHERE digest = $1 AND expires_at > statement_timestamp() FOR SHARE',
       [digest]);
     if (!session.rowCount) return { authorized: false };
-    return { authorized: true, value: await operation(db, actor) };
+    return { authorized: true, value: await operation(db, { ...actor, sessionDigest: digest }) };
   });
 }
 

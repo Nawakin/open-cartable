@@ -9,7 +9,7 @@ export function formatLiaisonDay(day) {
   return dayLabel.format(new Date(day + 'T12:00:00Z'));
 }
 
-export function useLiaisonTask(onExpired) {
+export function useLiaisonTask(onExpired, explain) {
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState('');
@@ -23,6 +23,7 @@ export function useLiaisonTask(onExpired) {
       await action();
     } catch (error) {
       if (error.status === 401) onExpired();
+      else if (explain) setProblem(explain(error));
       else if (error.status === 404) setProblem('Ce cahier ou ce mot n’est plus accessible. Actualisez pour vérifier.');
       else if (error.status === 409) setProblem('La journée a changé. Actualisez le cahier avant de publier.');
       else if (error.status === 400) setProblem('Vérifiez le texte et sa longueur.');

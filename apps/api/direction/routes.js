@@ -1,3 +1,6 @@
+import { registerAccountDevices } from '../devices/store.js';
+import { registerStaffActivities } from '../school-life/activities.js';
+import { registerStaffPlannedAbsences } from '../school-life/absences.js';
 import { registerStaffAgenda } from '../agenda/staff-routes.js';
 import { schoolCodePattern, uuidPattern } from '../auth/credentials.js';
 import { passwordLimits } from '../auth/password.js';
@@ -64,6 +67,8 @@ export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mail
     return { schoolName: school.school_name ?? school.school_code, classes: rows };
   }));
 
+  registerStaffActivities(app, '/direction', authenticated, blogMediaKey);
+  registerStaffPlannedAbsences(app, '/direction', authenticated);
   registerStaffHomework(app, '/direction', authenticated);
   registerStaffAgenda(app, '/direction', authenticated);
   registerDirectionMessages(app, authenticated, blogMediaKey);
@@ -78,7 +83,8 @@ export async function directionRoutes(app, { pool, webOrigin, blogMediaKey, mail
   registerYearTransition(app, authenticated);
   registerSchoolDirectory(app, authenticated, invitationKey);
   registerBlogExport(app, authenticated, blogMediaKey);
-  registerDirectionAccess(app, { pool, tokenFor, totpKey, requireTotp, cookieName });
+  registerAccountDevices(app, '/direction', { role: 'direction', authenticated, key: requireTotp ? invitationKey : undefined });
+  registerDirectionAccess(app, { pool, tokenFor, totpKey, requireTotp, cookieName, pairingKey: invitationKey });
   registerDirectionSecurity(app, { pool, tokenFor, authenticated, mailer, totpKey, cookieName, requireTotp });
 
   app.get('/direction/teachers', authenticated(async (_request, db, actor) => ({

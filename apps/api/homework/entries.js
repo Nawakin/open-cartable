@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { validPublicationAt } from '../school-life/validation.js';
 import { isSchoolDate } from './period.js';
 
 export const homeworkPageSize = 30;
 
 export function homeworkPage(entries) {
-  entries = entries.map(({ hasDocument, kind, ...entry }) => ({
+  entries = entries.map(({ hasDocument, kind, draft, publishAt, ...entry }) => ({
     ...entry, ...(hasDocument ? { hasDocument: true } : {}), ...(kind === 'assignment' ? { kind } : {}),
+    ...(draft || publishAt ? { publishAt: publishAt ?? null } : {}),
   }));
   if (entries.length <= homeworkPageSize) return { entries, nextCursor: null };
   const page = entries.slice(0, homeworkPageSize);
@@ -16,10 +18,11 @@ export function homeworkPage(entries) {
 export async function listClassEntries(db, schoolId, classId, { from, to, domain, beforeDate, beforeId, kind }) {
   const { rows } = await db.query(`
     SELECT listing.id, to_char(listing.entry_date, 'YYYY-MM-DD') AS date,
-           listing.title, listing.domain, listing.description, listing."hasDocument", listing.kind
+           listing.title, listing.domain, listing.description, listing."hasDocument", listing.kind, listing.draft, listing."publishAt"
     FROM classes c
     LEFT JOIN LATERAL (
-      SELECT e.id, e.entry_date, e.title, e.domain, e.description, e.kind, e.attachment_kind IS NOT NULL AS "hasDocument"
+      SELECT e.id, e.entry_date, e.title, e.domain, e.description, e.kind, e.attachment_kind IS NOT NULL AS "hasDocument",
+        e.publish_at IS NULL AS draft, CASE WHEN e.publish_at > statement_timestamp() THEN e.publish_at END AS "publishAt"
       FROM homework_entries e
       WHERE (e.school_id, e.class_id) = (c.school_id, c.id)
         AND e.entry_date BETWEEN $3 AND $4
@@ -37,12 +40,16 @@ export async function listClassEntries(db, schoolId, classId, { from, to, domain
 
 export function readEntry(input) {
   if (!input || typeof input !== 'object' || Array.isArray(input)
-      || Object.keys(input).some((key) => !['date', 'title', 'domain', 'description', 'kind'].includes(key))
+      || Object.keys(input).some((key) => !['date', 'title', 'domain', 'description', 'kind', 'publishAt'].includes(key))
       || (input.kind !== undefined && !['notebook', 'assignment'].includes(input.kind))
       || !isSchoolDate(input.date)) return null;
 
   const entry = { date: input.date };
   if (input.kind !== undefined) entry.kind = input.kind;
+  if (input.publishAt !== undefined) {
+    if (input.publishAt !== null && input.publishAt !== 'now' && !validPublicationAt(input.publishAt)) return null;
+    entry.publishAt = input.publishAt === null ? 'draft' : input.publishAt;
+  }
   for (const [key, maximum] of [['title', 120], ['domain', 80], ['description', 2500]]) {
     const value = typeof input[key] === 'string' ? input[key].trim() : '';
     if (!value || value.includes('\0') || [...value].length > maximum) return null;
@@ -51,25 +58,29 @@ export function readEntry(input) {
   return entry;
 }
 
-export async function createEntry(pool, schoolCode, classId, { date, title, domain, description, kind = 'notebook' }) {
+export async function createEntry(pool, schoolCode, classId, { date, title, domain, description, kind = 'notebook', publishAt = 'now' }) {
   const id = randomUUID();
   const result = await pool.query(`
-    INSERT INTO homework_entries (school_id, class_id, id, entry_date, title, domain, description, kind)
-    SELECT c.school_id, c.id, $3, $4, $5, $6, $7, $8
+    INSERT INTO homework_entries (school_id, class_id, id, entry_date, title, domain, description, kind, publish_at)
+    SELECT c.school_id, c.id, $3, $4, $5, $6, $7, $8,
+      CASE $9 WHEN 'now' THEN statement_timestamp() WHEN 'draft' THEN NULL ELSE $9::timestamptz END
     FROM classes c JOIN schools s ON s.id = c.school_id
     WHERE s.code = $1 AND c.id = $2 AND c.archived_year IS NULL
     RETURNING id
-  `, [schoolCode, classId, id, date, title, domain, description, kind]);
+  `, [schoolCode, classId, id, date, title, domain, description, kind, publishAt]);
   return result.rows[0]?.id ?? null;
 }
 
-export async function updateEntry(pool, schoolCode, classId, id, { date, title, domain, description, kind }) {
+export async function updateEntry(pool, schoolCode, classId, id, { date, title, domain, description, kind, publishAt }) {
   const result = await pool.query(`
-    UPDATE homework_entries e SET entry_date = $4, title = $5, domain = $6, description = $7, kind = COALESCE($8,e.kind)
+    UPDATE homework_entries e SET entry_date = $4, title = $5, domain = $6, description = $7, kind = COALESCE($8,e.kind),
+      publish_at = CASE WHEN $9 IS NULL THEN e.publish_at WHEN $9 = 'now' THEN statement_timestamp()
+        WHEN $9 = 'draft' THEN NULL ELSE $9::timestamptz END
     FROM classes c JOIN schools s ON s.id = c.school_id
     WHERE s.code = $1 AND (e.school_id, e.class_id) = (c.school_id, c.id)
       AND c.id = $2 AND e.id = $3 AND c.archived_year IS NULL
-  `, [schoolCode, classId, id, date, title, domain, description, kind]);
+      AND ($9::text IS NULL OR e.publish_at IS NULL OR e.publish_at > statement_timestamp())
+  `, [schoolCode, classId, id, date, title, domain, description, kind, publishAt]);
   return result.rowCount === 1;
 }
 

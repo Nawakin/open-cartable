@@ -20,7 +20,7 @@ export async function listFamilyNotes(db, actor, childId, before) {
       CASE WHEN r.id IS NOT NULL THEN json_build_object('body', r.body) END AS reply
     FROM liaison_notes n
     LEFT JOIN liaison_replies r ON (r.school_id, r.note_id, r.guardian_id, r.student_id) = (n.school_id, n.id, $4, $5)
-    WHERE n.school_id = $1 AND n.class_id = $2 AND n.published_at > ${retainedSince}
+    WHERE n.school_id = $1 AND n.class_id = $2 AND n.published_at > ${retainedSince} AND n.published_at <= statement_timestamp()
       AND ($3::date IS NULL OR n.note_day < $3)
     ORDER BY n.note_day DESC LIMIT $6
   `, [actor.school_id, classId, before, actor.guardian_id, childId, notesPageSize + 1]);
@@ -35,7 +35,7 @@ export async function saveFamilyReply(db, actor, childId, noteId, body) {
     INSERT INTO liaison_replies (school_id, id, note_id, guardian_id, student_id, body)
     SELECT n.school_id, $4, n.id, $5, $6, $7
     FROM liaison_notes n
-    WHERE n.school_id = $1 AND n.class_id = $2 AND n.id = $3 AND n.published_at > ${retainedSince}
+    WHERE n.school_id = $1 AND n.class_id = $2 AND n.id = $3 AND n.published_at > ${retainedSince} AND n.published_at <= statement_timestamp()
     FOR KEY SHARE OF n
     ON CONFLICT (school_id, note_id, guardian_id, student_id) DO UPDATE
     SET body = excluded.body
@@ -48,7 +48,7 @@ export async function listClassNotes(db, schoolId, classId, before) {
   const { rows: [{ today, notes }] } = await db.query(`
     SELECT to_char(${currentDay}, 'YYYY-MM-DD') AS today, (
       SELECT COALESCE(json_agg(page ORDER BY day DESC), '[]'::json) FROM (
-        SELECT ${noteFields} FROM liaison_notes n
+        SELECT ${noteFields}, n.published_at > statement_timestamp() AS scheduled FROM liaison_notes n
         WHERE n.school_id = $1 AND n.class_id = $2 AND n.published_at > ${retainedSince}
           AND ($3::date IS NULL OR n.note_day < $3)
         ORDER BY n.note_day DESC LIMIT $4
@@ -56,7 +56,7 @@ export async function listClassNotes(db, schoolId, classId, before) {
     ) AS notes
   `, [schoolId, classId, before, notesPageSize + 1]);
   const { items, nextCursor } = packPage(notes, notesPageSize, 'day');
-  return { today, notes: items, nextCursor };
+  return { today, notes: items.map(({ scheduled, ...note }) => ({ ...note, ...(scheduled ? { scheduled } : {}) })), nextCursor };
 }
 
 export async function saveDailyNote(db, schoolId, classId, day, body) {
@@ -67,6 +67,25 @@ export async function saveDailyNote(db, schoolId, classId, day, body) {
     RETURNING ${noteFields}
   `, [schoolId, classId, randomUUID(), day, body]);
   return note;
+}
+
+export async function saveScheduledNote(db, schoolId, classId, day, body) {
+  const { rows: [note] } = await db.query(`
+    INSERT INTO liaison_notes AS n (school_id,class_id,id,note_day,body,published_at)
+    SELECT $1,$2,$3,$4,$5,$4::date::timestamp AT TIME ZONE 'Europe/Paris'
+    WHERE $4::date > ${currentDay} AND $4::date <= ${currentDay} + 366
+    ON CONFLICT (school_id,class_id,note_day) DO UPDATE SET body=excluded.body
+      WHERE n.published_at > statement_timestamp()
+    RETURNING ${noteFields}
+  `, [schoolId, classId, randomUUID(), day, body]);
+  return note;
+}
+
+export async function deleteScheduledNote(db, schoolId, classId, noteId) {
+  const result = await db.query(`
+    DELETE FROM liaison_notes WHERE (school_id,class_id,id)=($1,$2,$3) AND published_at > statement_timestamp()
+  `, [schoolId, classId, noteId]);
+  return result.rowCount === 1;
 }
 
 export async function listNoteReplies(db, schoolId, classId, noteId, after) {

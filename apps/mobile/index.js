@@ -3,12 +3,12 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { errorMessage, parseSchoolAddress } from './parent/http';
-import { getTutorReference, listAgenda, listAgendaReminders, listChildren, listHomework, needsSchoolAddress, requestMessages, requestParent, signIn, signOut } from './parent/session';
+import { getTutorReference, listAgenda, listChildren, listHomework, needsSchoolAddress, requestMessages, requestParent, signIn, signOut } from './parent/session';
 import { Homework, dayInSchoolCalendar, periodRange } from './parent/homework';
 import { Button, Field, styles } from './parent/ui';
 import { consumeInstallationLink, FirstRun, needsInstallation } from './installation/first-run';
 import { Staff } from './staff/staff';
-import { AgendaReminders, ParentAgenda } from './agenda/agenda-view';
+import { ParentAgenda } from './agenda/agenda-view';
 import { agendaRange } from './agenda/dates';
 import { Messages } from './messaging/messages';
 import { useUnreadMessages } from './messaging/unread';
@@ -26,10 +26,12 @@ import { cleanupTemporaryDocuments, downloadDocument } from './files/documents';
 import { PushSettings } from './notifications/settings';
 import { useNativeNotificationDestination, useNativeNotifications } from './notifications/listen';
 import { lastAccessRole, lastSchoolAddress, rememberAccessRole } from './access/remember';
-import { UpcomingAssignments } from './parent/upcoming';
+import { DeviceSettings } from './devices/settings';
+import { FamilyHome } from './school-life/home';
+import { FamilyActivities } from './school-life/activities';
+import { FamilyPlannedAbsences } from './school-life/absences';
 
-const emptyReminders = { reminders: [], nextCursor: null };
-const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'attendance', 'reports', 'library', 'messages', 'account', 'notifications'];
+const parentSections = ['children', 'homework', 'agenda', 'liaison', 'blog', 'attendance', 'reports', 'library', 'messages', 'account', 'notifications', 'activities', 'devices'];
 const notificationLabels = {
   homework: 'Cahier de texte', assignments: 'Devoirs', reports: 'Livret scolaire', library: 'Médiathèque',
   agenda: 'Agenda', 'agenda-reminder': 'Rappel de l’agenda',
@@ -52,9 +54,11 @@ function ParentApp({ onStaff, requestedNotification }) {
   const [installationToken, setInstallationToken] = useState(consumeInstallationLink);
   const [notification, setNotification] = useState(consumeNotification);
   const [children, setChildren] = useState([]);
-  const [reminders, setReminders] = useState(emptyReminders);
-  const [assignments, setAssignments] = useState([]);
-  const [reminderError, setReminderError] = useState('');
+  const [home, setHome] = useState(null);
+  const [homeError, setHomeError] = useState('');
+  const [selectedChild, setSelectedChild] = useState('');
+  const [activityId, setActivityId] = useState(null);
+  const [threadId, setThreadId] = useState(null);
   const [tutorReference, setTutorReference] = useState(null);
   const [schoolPanel, setSchoolPanel] = useState(null);
   const [classLifeChild, setClassLifeChild] = useState(null);
@@ -97,9 +101,8 @@ function ParentApp({ onStaff, requestedNotification }) {
     setTutorReference(null);
     setSchoolPanel(null);
     setClassLifeChild(null);
-    setReminders(emptyReminders);
-    setAssignments([]);
-    setReminderError('');
+    setHome(null);
+    setHomeError('');
     try {
       const roster = await listChildren();
       if (roster === null) {
@@ -108,7 +111,9 @@ function ParentApp({ onStaff, requestedNotification }) {
       } else {
         setChildren(roster);
         setPhase('children');
-        if (roster.length) await loadHome();
+        const selected = roster.some(({ id }) => id === selectedChild) ? selectedChild : '';
+        setSelectedChild(selected);
+        if (roster.length) await loadHome(selected);
       }
     } catch (failure) {
       setPhase('unavailable');
@@ -116,32 +121,21 @@ function ParentApp({ onStaff, requestedNotification }) {
     }
   }
 
-  async function loadReminders(cursor) {
-    setReminderError('');
+  async function loadHome(childId = selectedChild) {
+    setHomeError('');
     try {
-      const page = await listAgendaReminders(cursor);
-      if (page === null) {
-        setChildren([]);
-        setTutorReference(null);
-        setReminders(emptyReminders);
-        setAssignments([]);
-        setPhase('login');
-        return;
-      }
-      setReminders((before) => cursor ? {
-        reminders: Array.from(new Map([...before.reminders, ...page.reminders].map((item) => [item.id, item])).values()),
-        nextCursor: page.nextCursor,
-      } : page);
+      setHome(await requestParent('/home' + (childId ? '?childId=' + encodeURIComponent(childId) : '')));
     } catch (failure) {
-      if (failure.status === 404) return;
-      setReminderError('Les rappels sont indisponibles. Utilisez « Actualiser » pour réessayer.');
+      setHome(null);
+      setHomeError(failure.status === 404 ? 'Ce rattachement a changé. Actualisez votre accueil.'
+        : 'Le suivi du jour est indisponible. Actualisez votre accueil.');
     }
   }
 
-  async function loadHome() {
-    await Promise.all([loadReminders(), requestParent('/assignments/next').then(({ assignments: next }) => {
-      setAssignments(next);
-    }).catch(() => setAssignments([]))]);
+  function filterHome(id) {
+    setSelectedChild(id);
+    setHome(null);
+    void run(() => loadHome(id));
   }
 
   async function initialize() {
@@ -186,7 +180,12 @@ function ParentApp({ onStaff, requestedNotification }) {
         await loadSchoolPanel({ ...selection, child: page.child });
         return;
       }
-      const items = append ? [...selection[key], ...page[key]] : page[key];
+      let items = append ? [...selection[key], ...page[key]] : page[key];
+      if (!append && selection.focusId) {
+        const selected = items.find(({ id }) => id === selection.focusId)
+          ?? await requestParent('/children/' + selection.child.id + '/' + selection.kind + '/' + selection.focusId);
+        items = [selected, ...items.filter(({ id }) => id !== selected.id)];
+      }
       const unique = Array.from(new Map(items.map((item) => [item.id, item])).values());
       setSchoolPanel({ ...selection, child: page.child, [key]: unique, nextCursor: page.nextCursor });
     } catch (failure) {
@@ -198,7 +197,6 @@ function ParentApp({ onStaff, requestedNotification }) {
 
   function openSchoolPanel(child, kind, anchor = dayInSchoolCalendar(), options) {
     setTutorReference(null);
-    setReminders(emptyReminders);
     void run(() => loadSchoolPanel({ child, kind, anchor, view: 'week', domain: '', ...options }));
   }
 
@@ -261,6 +259,17 @@ function ParentApp({ onStaff, requestedNotification }) {
         onStaff('teacher', { origin, schoolCode, code: invitation.trim() });
         return;
       }
+      const pairCode = invitation.trim().toUpperCase();
+      if (/^(PA|EN|DI)-[0-9]{8}$/.test(pairCode) && /^[A-Z0-9][A-Z0-9-]{1,31}$/.test(schoolCode)) {
+        if (pairCode.startsWith('PA-')) {
+          await signIn({ origin, schoolCode, code: pairCode, pairing: true });
+          setInvitation('');
+          await load(true);
+        } else {
+          onStaff(pairCode.startsWith('EN-') ? 'teacher' : 'direction', { origin, schoolCode, pairCode });
+        }
+        return;
+      }
       const letters = invitation.toUpperCase().replaceAll(/[\s-]/g, '');
       if (!/^[A-Z0-9][A-Z0-9-]{1,31}$/.test(schoolCode) || !/^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{12}$/.test(letters)) {
         setError('Vérifiez le code de l’école et le code d’accès remis par votre école.');
@@ -277,9 +286,9 @@ function ParentApp({ onStaff, requestedNotification }) {
     void run(async () => {
       await signOut();
       setChildren([]);
-      setReminders(emptyReminders);
-      setAssignments([]);
-      setReminderError('');
+      setHome(null);
+      setHomeError('');
+      setSelectedChild('');
       setTutorReference(null);
       setSchoolPanel(null);
       setClassLifeChild(null);
@@ -292,12 +301,14 @@ function ParentApp({ onStaff, requestedNotification }) {
     setTutorReference(null);
     setSchoolPanel(null);
     setError('');
+    setActivityId(null);
+    setThreadId(null);
     setPhase(section);
-    if (section === 'children' && children.length) void run(loadHome);
+    if (section === 'children' && children.length) void run(() => loadHome());
   }
 
   const menu = signedIn && <SectionNav label="Menu parent" busy={busy}
-    active={phase === 'notifications' ? 'account' : ['messages', 'account'].includes(phase) ? phase : 'children'}
+    active={['notifications', 'devices'].includes(phase) ? 'account' : ['messages', 'account'].includes(phase) ? phase : 'children'}
     items={[
       { id: 'children', art: 'home', label: 'Accueil', onPress: () => showParentSection('children') },
       { id: 'messages', label: 'Messagerie', unreadCount: unread.count,
@@ -368,11 +379,12 @@ function ParentApp({ onStaff, requestedNotification }) {
 
       {phase === 'children' && (
         <>
-          <UpcomingAssignments assignments={assignments} busy={busy}
-            onOpen={(entry) => openSchoolPanel(entry.child, 'homework', entry.date, { entryKind: 'assignment', view: 'day' })} />
-          <AgendaReminders page={reminders} busy={busy} error={reminderError}
-            onOpen={(reminder) => openSchoolPanel(reminder.child, 'agenda', dayInSchoolCalendar(new Date(reminder.startsAt)))}
-            onMore={() => void run(() => loadReminders(reminders.nextCursor))} />
+          {!!children.length && <FamilyHome children={children} selected={selectedChild} onSelect={filterHome}
+            data={home} busy={busy} problem={homeError}
+            onAssignment={(item) => openSchoolPanel(item.child, 'homework', item.date, { entryKind: 'assignment', view: 'day', focusId: item.id })}
+            onEvent={(item) => openSchoolPanel(item.child, 'agenda', dayInSchoolCalendar(new Date(item.startsAt)), { view: 'day', focusId: item.id })}
+            onActivity={(item) => { setActivityId(item?.id ?? null); setPhase('activities'); }}
+            onMessage={(item) => { setThreadId(item.id); setPhase('messages'); }} />}
           <View style={styles.panel}>
             <Text accessibilityRole="header" style={styles.title}>Vos enfants</Text>
             {notification && notification !== 'messages' && children.length > 1 && <View style={styles.field}>
@@ -384,7 +396,7 @@ function ParentApp({ onStaff, requestedNotification }) {
               </View>
             </View>}
             {children.length === 0 && <Text style={styles.body}>Aucun enfant n’est rattaché à votre compte. Contactez votre école.</Text>}
-            {children.map((child) => (
+            {children.filter(({ id }) => !selectedChild || id === selectedChild).map((child) => (
               <View key={child.id} style={shell.child}>
                 <View style={shell.childHeader}>
                   <View style={shell.childIcon}>
@@ -429,13 +441,17 @@ function ParentApp({ onStaff, requestedNotification }) {
       )}
 
       {phase === 'messages' && <View style={styles.panel}>
-        <Messages children={children} request={requestMessages} refreshUnread={unread.refresh} onExpired={() => void run(load)} />
+        <Messages initialThreadId={threadId} children={children} request={requestMessages} refreshUnread={unread.refresh} onExpired={() => void run(load)} />
       </View>}
+
+      {phase === 'activities' && <FamilyActivities request={requestParent} initialId={activityId}
+        onBack={() => showParentSection('children')} onExpired={() => void run(load)} />}
 
       {phase === 'account' && <View style={styles.panel}>
         <Text accessibilityRole="header" style={styles.title}>Mon compte</Text>
         <Button label="Paramètres de notification" icon="notifications-outline" secondary
           onPress={() => showParentSection('notifications')} />
+        <Button label="Mes appareils" icon="phone-portrait-outline" secondary onPress={() => showParentSection('devices')} />
         <FamilyPhotoAuthorizations request={requestParent} run={run} busy={busy} onExpired={load} />
         <Text style={styles.body}>Votre référence tuteur permet à l’école de vous écrire ou de vous proposer un rendez-vous individuel.</Text>
         {tutorReference && <Text accessibilityLabel="Référence tuteur" selectable style={styles.label}>{tutorReference}</Text>}
@@ -446,6 +462,11 @@ function ParentApp({ onStaff, requestedNotification }) {
         </View>
         {Platform.OS === 'web' && <AccountLink role="parent" request={requestParent}
           onOpen={() => onStaff('teacher')} onExpired={() => void run(load)} />}
+      </View>}
+
+      {phase === 'devices' && <View style={styles.panel}>
+        <Button label="Retour au compte" secondary onPress={() => showParentSection('account')} />
+        <DeviceSettings request={requestParent} onExpired={() => void run(load)} />
       </View>}
 
       {phase === 'notifications' && <View style={styles.panel}>
@@ -488,8 +509,12 @@ function ParentApp({ onStaff, requestedNotification }) {
       )}
 
       {phase === 'attendance' && schoolPanel && (
-        <ParentAttendance key={schoolPanel.child.id} child={schoolPanel.child} request={requestParent}
-          initialMonth={schoolPanel.month} onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
+        <>
+          <FamilyPlannedAbsences key={schoolPanel.child.id} childId={schoolPanel.child.id} request={requestParent}
+            onExpired={() => void run(load)} />
+          <ParentAttendance key={schoolPanel.child.id} child={schoolPanel.child} request={requestParent}
+            initialMonth={schoolPanel.month} onBack={() => showParentSection('children')} onExpired={() => void run(load)} />
+        </>
       )}
 
       {phase === 'reports' && schoolPanel && <ParentReports key={schoolPanel.child.id} child={schoolPanel.child}

@@ -75,7 +75,7 @@ export function ParentAgenda({ calendar, busy, error, onChange, onMore, onBack, 
       <Text accessibilityRole="header" style={styles.title}>Agenda</Text>
       <Text style={styles.body}>{child.displayName} · {child.className}</Text>
       <CalendarPeriod anchor={anchor} view={view} busy={busy}
-        onChange={(nextAnchor, nextView) => onChange({ ...calendar, anchor: nextAnchor, view: nextView })} />
+        onChange={(nextAnchor, nextView) => onChange({ ...calendar, focusId: undefined, anchor: nextAnchor, view: nextView })} />
       {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
       {busy && events.length === 0 && <Text accessibilityLiveRegion="polite" style={styles.body}>Chargement de l’agenda…</Text>}
       {!busy && !error && events.length === 0 && <Text style={styles.body}>Aucun événement pour cette période.</Text>}

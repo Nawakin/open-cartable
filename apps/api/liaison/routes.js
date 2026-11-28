@@ -2,7 +2,7 @@ import { uuidPattern } from '../auth/credentials.js';
 import { uuidParams } from '../auth/staff-web.js';
 import { isSchoolDate } from '../homework/period.js';
 import { forTeacherClass } from '../auth/class-access.js';
-import { listClassNotes, listFamilyNotes, listNoteReplies, saveDailyNote, saveFamilyReply } from './store.js';
+import { listClassNotes, listFamilyNotes, listNoteReplies, saveDailyNote, saveFamilyReply, saveScheduledNote, deleteScheduledNote } from './store.js';
 
 const dayField = { type: 'string', minLength: 10, maxLength: 10 };
 const dateQuery = {
@@ -64,6 +64,16 @@ export function registerTeacherLiaison(app, authenticated) {
     if (!note) throw Object.assign(new Error('La date a changé.'), { statusCode: 409 });
     return note;
   }));
+  app.put(path + '/schedule', {
+    bodyLimit: 16 * 1024, schema: { params: classParams, body: textBody(1000, { day: dayField }) },
+  }, forClass(async (request, db, schoolId, classId) => {
+    const note = await saveScheduledNote(db, schoolId, classId, requireDay(request.body.day), requireText(request.body.body));
+    if (!note) throw Object.assign(new Error('Choisissez une date à venir.'), { statusCode: 409 });
+    return { ...note, scheduled: true };
+  }));
+  app.delete(path + '/schedule/:noteId', { schema: { params: uuidParams('classId', 'noteId') } },
+    forTeacherClass(authenticated, async (request, db, schoolId, classId) =>
+      await deleteScheduledNote(db, schoolId, classId, request.params.noteId) ? undefined : null, 204));
   app.get(path + '/:noteId/replies', { schema: { params: uuidParams('classId', 'noteId'), querystring: replyQuery } },
     forClass((request, db, schoolId, classId) =>
       listNoteReplies(db, schoolId, classId, request.params.noteId, request.query.after ?? null)));

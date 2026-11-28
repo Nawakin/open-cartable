@@ -1,5 +1,10 @@
+import { deviceCodePatterns, deviceMetadata, markDevice, redeemDevicePair, registerAccountDevices } from '../devices/store.js';
+import { transaction } from '../db/database.js';
+import { registerTeacherTemplates } from '../school-life/templates.js';
+import { registerStaffActivities } from '../school-life/activities.js';
+import { registerStaffPlannedAbsences } from '../school-life/absences.js';
 import { registerStaffAgenda } from '../agenda/staff-routes.js';
-import { schoolCodePattern } from '../auth/credentials.js';
+import { refreshDigest, schoolCodePattern } from '../auth/credentials.js';
 import { passwordLimits } from '../auth/password.js';
 import { authRateLimit, cookieOptions, nativeStaffClient, registerStaffWeb, teacherCookieName as cookieName, unauthorized } from '../auth/staff-web.js';
 import { registerTeacherAccountLink } from '../auth/account-links.js';
@@ -15,7 +20,7 @@ import { registerHomeworkAttachments } from '../homework/attachments.js';
 import { registerStaffMedia } from '../files/class-media.js';
 import {
   activateTeacher, canTeachClass, signInTeacher, signOutTeacher, teacherActivationPattern,
-  teacherLoginPattern, teacherSessionSeconds, teacherNativeSessionSeconds, withTeacherSession, renewTeacherSession,
+  teacherLoginPattern, teacherSessionSeconds, teacherNativeSessionSeconds, withTeacherSession, renewTeacherSession, openTeacherSession,
 } from './store.js';
 
 const credentials = {
@@ -34,7 +39,7 @@ function credentialsOptions(properties) {
   };
 }
 
-export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey, classMediaQuota }) {
+export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey, classMediaQuota, invitationKey }) {
   const { tokenFor, authenticated } = await registerStaffWeb(app, {
     webOrigin, cookieName, withSession: (token, operation) => withTeacherSession(pool, token, operation),
   });
@@ -64,6 +69,23 @@ export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey, classM
     return openSession(request, reply, { ...request.body, login });
   });
 
+  registerAccountDevices(app, '/teacher', { role: 'teacher', authenticated, key: invitationKey });
+  if (invitationKey) app.post('/teacher/auth/device-link', credentialsOptions({
+    schoolCode: credentials.schoolCode, code: { type: 'string', pattern: deviceCodePatterns.teacher },
+  }), async (request, reply) => {
+    const { schoolCode, code } = request.body;
+    const native = nativeStaffClient(request);
+    const seconds = native ? teacherNativeSessionSeconds : teacherSessionSeconds;
+    const token = await transaction(pool, (db) => redeemDevicePair(db, invitationKey, 'teacher', schoolCode, code, async (schoolId, teacherId) => {
+      const result = await openTeacherSession(db, schoolId, teacherId, seconds);
+      await markDevice(db, 'teacher', refreshDigest(result), deviceMetadata(request));
+      return result;
+    }));
+    if (!token) return unauthorized(reply);
+    if (native) return reply.send({ state: 'active', token });
+    return reply.setCookie(cookieName, token, { ...cookieOptions, maxAge: seconds }).code(204).send();
+  });
+
   app.get('/teacher/auth/state', async (request, reply) => {
     const token = tokenFor(request);
     if (!token) return { state: 'login' };
@@ -74,6 +96,7 @@ export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey, classM
     const native = nativeStaffClient(request);
     const seconds = native ? teacherNativeSessionSeconds : teacherSessionSeconds;
     await renewTeacherSession(pool, token, seconds);
+    await markDevice(pool, 'teacher', refreshDigest(token), deviceMetadata(request));
     if (!native) reply.setCookie(cookieName, token, { ...cookieOptions, maxAge: seconds });
     return result.value;
   });
@@ -93,6 +116,9 @@ export async function teacherRoutes(app, { pool, webOrigin, blogMediaKey, classM
     return { schoolName: actor.school_name ?? actor.school_code, classes: rows };
   }));
 
+  registerTeacherTemplates(app, authenticated);
+  registerStaffActivities(app, '/teacher', authenticated, blogMediaKey);
+  registerStaffPlannedAbsences(app, '/teacher', authenticated);
   registerStaffHomework(app, '/teacher', authenticated, canTeachClass);
   registerStaffAgenda(app, '/teacher', authenticated, canTeachClass);
   registerTeacherMessages(app, authenticated, blogMediaKey);

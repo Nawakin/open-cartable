@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Button, Field, styles } from './ui';
 
 const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'long', timeZone: 'UTC' });
+const parisDay = new Intl.DateTimeFormat('sv-SE', { dateStyle: 'short', timeZone: 'Europe/Paris' });
 const views = [{ id: 'day', label: 'Jour' }, { id: 'week', label: 'Semaine' }, { id: 'month', label: 'Mois' }];
 
 function asDate(value) {
@@ -20,11 +21,7 @@ function addDays(date, days) {
 }
 
 export function dayInSchoolCalendar(now = new Date()) {
-  return [
-    now.getFullYear(),
-    String(now.getMonth() + 1).padStart(2, '0'),
-    String(now.getDate()).padStart(2, '0'),
-  ].join('-');
+  return parisDay.format(now);
 }
 
 export function periodRange(anchor, view) {
@@ -57,7 +54,7 @@ export function Homework({ notebook, onChange, onMore, onBack, onLogout, busy, e
   const [domainInput, setDomainInput] = useState(notebook.domain);
   const { child, anchor, view, domain, entries, nextCursor, entryKind } = notebook;
   const { from, to } = periodRange(anchor, view);
-  const update = (changes) => onChange({ ...notebook, ...changes });
+  const update = (changes) => onChange({ ...notebook, focusId: undefined, ...changes });
   const filter = () => update({ domain: domainInput.trim() });
   const clearFilter = () => {
     setDomainInput('');

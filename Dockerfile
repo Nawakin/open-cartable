@@ -16,6 +16,9 @@ RUN --mount=type=secret,id=build_ca \
 COPY apps/mobile/ apps/mobile/
 RUN npm run build:web
 
+FROM caddy:2.10-alpine AS lan
+COPY --chmod=0444 deploy/lan.Caddyfile /etc/caddy/Caddyfile
+
 FROM node:24-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app

@@ -1,7 +1,11 @@
+import { refreshDigest, schoolCodePattern } from '../auth/credentials.js';
+import { transaction } from '../db/database.js';
+import { deviceCodePatterns, deviceMetadata, markDevice, redeemDevicePair } from '../devices/store.js';
+import { shape } from '../school-life/validation.js';
 import { authRateLimit, cookieOptions, nativeStaffClient, nativeStaffDevice, unauthorized, webSessionToken } from '../auth/staff-web.js';
 import { beginEnrollment, confirmEnrollment } from './security.js';
 import {
-  directionDeviceSeconds, readDirectionDevice, recordDirectionCodeFailure, rememberDirectionDevice, resumeDirection,
+  checkDirectionCode, directionDeviceSeconds, factorFields, readDirectionDevice, recordDirectionCodeFailure, rememberDirectionDevice, resumeDirection,
   withDirectionSession,
 } from './store.js';
 import { authenticatorCode } from './totp.js';
@@ -27,15 +31,19 @@ const codeOptions = {
   schema: { body: { type: 'object', required: ['code'], additionalProperties: false, properties: { code: authenticatorCode } } },
 };
 
-export function registerDirectionAccess(app, { pool, tokenFor, totpKey, requireTotp, cookieName }) {
+export function registerDirectionAccess(app, { pool, tokenFor, totpKey, requireTotp, cookieName, pairingKey }) {
   const path = '/direction/auth';
   app.get(path + '/state', async (request) => {
     const token = tokenFor(request);
     if (token) {
       const result = await withDirectionSession(pool, token, (_db, actor) => ({
-        state: actor.assurance === 'enroll' ? 'enroll' : 'active', schoolCode: actor.school_code, schoolName: actor.school_name,
+        state: actor.assurance === 'enroll' ? 'enroll' : 'active', deviceDigest: actor.deviceDigest, schoolCode: actor.school_code, schoolName: actor.school_name,
       }), { requireTotp, allowEnrollment: true });
-      if (result.authorized) return result.value;
+      if (result.authorized) {
+        const { deviceDigest, ...state } = result.value;
+        await markDevice(pool, 'direction', deviceDigest, deviceMetadata(request));
+        return state;
+      }
     }
     const remembered = await readDirectionDevice(pool, deviceFor(request));
     return remembered ? { state: 'verify', schoolCode: remembered.schoolCode, schoolName: remembered.schoolName } : { state: 'login' };
@@ -47,6 +55,25 @@ export function registerDirectionAccess(app, { pool, tokenFor, totpKey, requireT
     const session = await resumeDirection(pool, deviceToken, totpKey, request.body.code);
     if (session === null) return unauthorized(reply);
     if (session === false) return reply.code(422).send({ error: 'Code d’authentificateur invalide.' });
+    return sendDirectionSession(request, reply, session, cookieName);
+  });
+
+  if (requireTotp && pairingKey) app.post(path + '/device-link', {
+    bodyLimit: 1024, config: authRateLimit, schema: { body: shape({
+      schoolCode: { type: 'string', pattern: schoolCodePattern.source },
+      code: { type: 'string', pattern: deviceCodePatterns.direction }, authenticator: authenticatorCode,
+    }) },
+  }, async (request, reply) => {
+    const { schoolCode, code, authenticator } = request.body;
+    const session = await transaction(pool, (db) => redeemDevicePair(db, pairingKey, 'direction', schoolCode, code, async (schoolId) => {
+      const { rows: [account] } = await db.query(`SELECT ${factorFields} FROM direction_accounts WHERE school_id=$1`, [schoolId]);
+      if (!account?.totp_secret || !await checkDirectionCode(db, account, schoolId, totpKey, authenticator)) return { rejected: true };
+      const result = await rememberDirectionDevice(db, schoolId);
+      await markDevice(db, 'direction', refreshDigest(result.deviceToken), deviceMetadata(request));
+      return result;
+    }));
+    if (!session) return unauthorized(reply);
+    if (session.rejected) return reply.code(422).send({ error: 'Code d’authentificateur invalide.' });
     return sendDirectionSession(request, reply, session, cookieName);
   });
 

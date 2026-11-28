@@ -1,3 +1,5 @@
+import { purgeDevicePairings } from '../devices/store.js';
+import { purgeSchoolLife } from '../school-life/activities.js';
 import { purgeExpiredLiaison } from '../liaison/store.js';
 import { purgeExpiredMessages } from '../messaging/retention.js';
 import { purgeExpiredBlogPhotos } from '../blog/photos.js';
@@ -8,6 +10,8 @@ import { purgeClassMedia } from '../files/class-media.js';
 import { purgeParentPush } from '../notifications/web-push.js';
 
 const purges = [
+  { run: purgeDevicePairings, label: 'codes de jumelage' },
+  { run: purgeSchoolLife, label: 'vie de l’école' },
   { run: purgeExpiredMessages, label: 'messagerie' },
   { run: purgeExpiredLiaison, label: 'cahier de liaison' },
   { run: purgeExpiredBlogPhotos, label: 'photos du blog' },

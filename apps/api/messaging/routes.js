@@ -11,6 +11,7 @@ const uuid = { type: 'string', pattern: uuidPattern.source };
 const message = { type: 'string', minLength: 1, maxLength: 4000 };
 const subject = { type: 'string', minLength: 1, maxLength: 120 };
 const document = { document: privateFileBody.properties.content };
+const sendingLimit = { rateLimit: { max: 40, timeWindow: '1 minute' } };
 const messageLimit = privateFileBodyLimit + 16 * 1024;
 const prepare = (body) => body.document ? preparePrivateFile(body.document) : undefined;
 const querystring = {
@@ -43,7 +44,7 @@ function registerConversations(app, prefix, authenticated, key, writeOptions = {
       readConversation(db, actor, request.params.conversationId, requireTimestampCursor(request.query.cursor))));
   app.post(item, {
     ...writeOptions,
-    bodyLimit: messageLimit,
+    bodyLimit: messageLimit, config: sendingLimit,
     schema: { params, body: bodySchema({ body: message }, document) },
   }, authenticated(async (request, db, actor) =>
     addMessage(db, actor, request.params.conversationId, requireText(request.body.body), await prepare(request.body), key), 201));
@@ -77,7 +78,7 @@ function conversationDraft(body) {
 export function registerTeacherMessages(app, authenticated, key) {
   const collection = registerConversations(app, '/teacher', authenticated, key);
   app.post(collection, {
-    bodyLimit: messageLimit,
+    bodyLimit: messageLimit, config: sendingLimit,
     schema: { body: bodySchema({ childId: uuid, guardianReference: uuid, subject, body: message }, document) },
   }, authenticated(async (request, db, actor) => createConversation(db, actor, {
     ...conversationDraft(request.body), guardianReference: request.body.guardianReference, file: await prepare(request.body),
@@ -90,7 +91,7 @@ export function registerParentMessages(app, { authenticated, writes, key }) {
     authenticated((request, db, actor) => listParentRecipients(db, actor, request.params.childId)));
   app.post(collection, {
     ...writes,
-    bodyLimit: messageLimit,
+    bodyLimit: messageLimit, config: sendingLimit,
     schema: { body: bodySchema({ childId: uuid, subject, body: message }, { teacherId: uuid, ...document }) },
   }, authenticated(async (request, db, actor) => createConversation(db, actor, {
     ...conversationDraft(request.body), teacherId: request.body.teacherId, file: await prepare(request.body),

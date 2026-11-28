@@ -3,9 +3,10 @@ import { Platform, Text, View } from 'react-native';
 import { Button, Field, styles } from '../parent/ui';
 import { layout, Select } from '../year-transition/ui';
 import { downloadDocument } from '../files/documents';
+import { DirectoryImport, DirectoryTracking } from '../school-life/directory-tools';
 
 const grades = ['TPS', 'PS', 'MS', 'GS', 'CP', 'CE1', 'CE2', 'CM1', 'CM2'];
-const sections = { classes: 'Classes', students: 'Élèves', guardians: 'Accès parents', invitations: 'Invitations' };
+const sections = { classes: 'Classes', students: 'Élèves', guardians: 'Accès parents', invitations: 'Invitations', tools: 'Rentrée et suivi' };
 const empty = { displayName: '', levels: [], classId: '', grade: null, birthDate: null, departed: false, studentIds: [], active: true };
 const visibleStudents = 12;
 const path = '/directory';
@@ -39,7 +40,7 @@ function csvFile(result) {
   return downloadDocument(file, 'invitations-open-cartable', 'csv');
 }
 
-export function SchoolDirectory({ request, run, busy, onChanged }) {
+export function SchoolDirectory({ request, run, busy, onChanged, onExpired }) {
   const [data, setData] = useState(null);
   const [section, setSection] = useState('classes');
   const [editor, setEditor] = useState(null);
@@ -51,6 +52,7 @@ export function SchoolDirectory({ request, run, busy, onChanged }) {
   const [replaceSessions, setReplaceSessions] = useState(false);
   const [invitations, setInvitations] = useState(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [tool, setTool] = useState('import');
   const needle = searchText(filter);
   const studentNeedle = searchText(studentFilter);
   const activeClasses = new Set(data?.classes.map(({ id }) => id));
@@ -172,7 +174,15 @@ export function SchoolDirectory({ request, run, busy, onChanged }) {
         </View>
       </View>}
     </>}
-    {data && section !== 'invitations' && (editor ? <View style={layout.card}>
+    {data && section === 'tools' && <>
+      <View style={styles.actions}>{[['import', 'Importer'], ['invitations', 'Suivi des invitations'], ['audit', 'Journal des accès']]
+        .map(([id, label]) => <Button key={id} label={label} selected={tool === id} secondary={tool !== id} onPress={() => setTool(id)} />)}</View>
+      {tool === 'import' ? <DirectoryImport request={request} onExpired={onExpired} onImported={async () => {
+        await load();
+        await onChanged();
+      }} /> : <DirectoryTracking key={tool} request={request} section={tool} onExpired={onExpired} />}
+    </>}
+    {data && !['invitations', 'tools'].includes(section) && (editor ? <View style={layout.card}>
       <Text accessibilityRole="header" style={layout.heading}>{section === 'guardians'
         ? (editor.id ? 'Modifier l’accès parent' : 'Nouvel accès parent') : (editor.id ? 'Modifier la fiche' : 'Ajouter une fiche')}</Text>
       <Field label={section === 'classes' ? 'Nom de la classe' : section === 'guardians' ? 'Nom du responsable' : 'Nom d’affichage'} value={editor.displayName}

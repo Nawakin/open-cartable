@@ -43,7 +43,7 @@ export async function recordDirectionCodeFailure(db, account, schoolId) {
   `, [schoolId, account.locked_window ? account.totp_failed_attempts + 1 : 1, Boolean(account.locked_window)]);
 }
 
-const factorFields = 'totp_secret, totp_step, totp_failed_attempts, totp_failed_until > statement_timestamp() AS locked_window';
+export const factorFields = 'totp_secret, totp_step, totp_failed_attempts, totp_failed_until > statement_timestamp() AS locked_window';
 
 async function makeSession(db, schoolId, assurance, deviceDigest = null) {
   const token = generateRefreshToken();
@@ -56,13 +56,16 @@ async function makeSession(db, schoolId, assurance, deviceDigest = null) {
 }
 
 export async function rememberDirectionDevice(db, schoolId, previous = null) {
-  if (previous) await db.query('DELETE FROM direction_devices WHERE (school_id,digest) = ($1,$2)', [schoolId, refreshDigest(previous)]);
+  const { rows: [old] } = previous ? await db.query(`
+    DELETE FROM direction_devices WHERE (school_id,digest)=($1,$2)
+    RETURNING public_id,device_name,device_os,device_type
+  `, [schoolId, refreshDigest(previous)]) : { rows: [] };
   const deviceToken = generateRefreshToken();
   const digest = refreshDigest(deviceToken);
   await db.query(`
-    INSERT INTO direction_devices (digest, school_id, expires_at)
-    VALUES ($1,$2,statement_timestamp() + $3 * interval '1 second')
-  `, [digest, schoolId, directionDeviceSeconds]);
+    INSERT INTO direction_devices (digest,school_id,expires_at,public_id,device_name,device_os,device_type)
+    VALUES ($1,$2,statement_timestamp()+$3*interval '1 second',coalesce($4,gen_random_uuid()),$5,$6,$7)
+  `, [digest, schoolId, directionDeviceSeconds, old?.public_id, old?.device_name, old?.device_os, old?.device_type]);
   return { ...await makeSession(db, schoolId, 'totp', digest), deviceToken };
 }
 
@@ -93,7 +96,7 @@ export async function withDirectionSession(pool, token, operation, { lockAccount
   return transaction(pool, async (client) => {
     const digest = refreshDigest(token);
     const result = await client.query(`
-      SELECT d.school_id, d.assurance, s.code AS school_code, s.name AS school_name
+      SELECT d.school_id, d.assurance, d.device_digest AS "deviceDigest", s.code AS school_code, s.name AS school_name
       FROM direction_sessions d JOIN schools s ON s.id = d.school_id
       JOIN direction_accounts a ON a.school_id = s.id
       WHERE d.digest = $1 AND d.expires_at > statement_timestamp()

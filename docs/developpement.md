@@ -22,19 +22,17 @@ Les menus principaux et les raccourcis par enfant utilisent des cartes illustré
 
 Il reste à simplifier les écrans les plus chargés. Regrouper les actions liées, rendre l’action suivante évidente et afficher les réglages secondaires au moment où ils deviennent utiles. Vérifier sur téléphone et ordinateur que les utilisateurs trouvent où consulter, publier ou gérer une autorisation sans tutoriel.
 
-## Prochains lots fonctionnels
+## Parcours livrés et recette
 
-Ordre proposé pour les prochains développements web, Android et iOS. Chaque lot part des parcours existants et inclut sa vérification du point de vue des familles, de l’équipe et de la direction.
-
-| Priorité | Fonctionnalités à ajouter | Résultat à vérifier |
+| Périmètre | Fonctions disponibles | Recette du pilote |
 | --- | --- | --- |
-| 1 · Accueil famille | Regrouper les devoirs, rendez-vous, messages non lus et documents qui demandent une action. Ajouter un filtre « Tous mes enfants » ou par enfant et des liens directs vers les éléments. | Avec trois enfants, un parent repère ce qui demande une action et ouvre le bon document ou échange depuis l’accueil. |
-| 2 · Communication de l’école | Publier une annonce à l’échelle de l’école ou de certaines classes. Préparer un brouillon, programmer la publication et demander un accusé de lecture si nécessaire. | La direction prévisualise les destinataires. Chaque responsable répond pour son propre compte et retrouve les annonces autorisées dans l’ENT. |
-| 3 · Organisation quotidienne | Publier des créneaux de rendez-vous réservables, annoncer une absence à l’avance et faire répondre les familles aux sorties et réunions. | L’équipe suit les réponses par enfant, le parent retrouve la date dans son agenda et un créneau reste réservable une seule fois. |
-| 4 · Outils enseignants | Préparer des exercices et mots de liaison réutilisables, dupliquer un devoir vers une autre échéance et programmer des publications. | L’enseignant peut préparer sa semaine, vérifier les classes destinataires et corriger un brouillon avant diffusion. |
-| 5 · Administration de rentrée | Importer les classes, élèves et responsables avec prévisualisation, contrôles de doublons et validation explicite des rattachements. Ajouter le suivi des invitations et un journal des changements de droits. | La direction repère les homonymes avant de valider et retrouve qui a créé, modifié ou suspendu un rattachement. |
+| Accueil famille | Devoirs, rendez-vous, messages non lus et documents qui demandent une action, avec accès direct et filtre par enfant | Vérifier le parcours avec une fratrie et des rattachements différents selon le responsable. |
+| Communication de l’école | Brouillons, annonces par classe ou pour l’école, programmation et accusés de lecture | Confirmer les destinataires et l’indépendance des réponses des responsables. |
+| Organisation quotidienne | Créneaux réservables, réponses aux invitations et absences annoncées | Vérifier l’affichage privé à l’agenda et la réservation concurrente d’un même créneau. |
+| Outils enseignants | Modèles de devoirs et de mots, duplication du texte d’un devoir et publication programmée | Préparer une semaine de cours sur le web et sur téléphone signé. |
+| Rentrée | Import avec aperçu, contrôles de doublons, validation des rattachements, suivi des invitations et journal | Essayer un import avec homonymes et contrôler la restauration de l’annuaire. |
 
-Le premier lot est l’accueil famille. La recette du pilote comprend un compte avec plusieurs enfants et deux adultes partageant seulement une partie des rattachements. Avant utilisation avec des données réelles, vérifier aussi la restauration sur une instance vierge, les parcours sur des téléphones signés et l’accessibilité des actions principales au clavier et au lecteur d’écran.
+Avant utilisation avec des données réelles, vérifier également la restauration sur une instance vierge et l’accessibilité des actions principales au clavier et au lecteur d’écran. [Tutoriel](installation.md)
 
 ## Architecture cible
 
@@ -65,4 +63,4 @@ Le chiffrement, les sauvegardes restaurables et les règles de conservation sont
 
 ## État des dépendances du socle
 
-L'audit npm du verrou initial signale encore 12 alertes transitives de la chaîne Expo, dont une élevée dans `image-size` (utilisé par Metro). PostCSS est épinglé à une version corrigée via une surcharge ciblée. Réévaluer le SDK et refaire l'audit et les builds natifs avant le pilote. Exécuter les outils de compilation en local avec des sources et ressources de confiance.
+L’audit du 28 novembre 2026 signale zéro avis pour les dépendances de production de l’API. L’arbre complet affiche 34 signalements, dont 22 de sévérité élevée remontés depuis la chaîne Expo et Metro. Les trois dépendances directement visées sont `image-size`, `glob` et `minimatch`. Metro 0.83 attend encore l’API fichier de `image-size` 1.x. La montée de version de la chaîne reste à valider avec les exports web et natifs. La compilation utilise uniquement les ressources et le dépôt de confiance, sans images envoyées par les utilisateurs.

@@ -1,3 +1,5 @@
+import { Dimensions, Platform } from 'react-native';
+
 const parentPath = '/api/v1/parent';
 
 export function homeworkPath(childId, { from, to, domain, cursor, kind }) {
@@ -49,6 +51,11 @@ export async function requestJson(fetcher, url, {
   const headers = { Accept: accept[responseType] ?? 'application/json' };
   if (body !== undefined) headers['Content-Type'] = binary ? 'application/octet-stream' : 'application/json';
   if (token) headers.Authorization = 'Bearer ' + token;
+  if (Platform.OS === 'android' || Platform.OS === 'ios') {
+    headers['X-Open-Cartable-Platform'] = Platform.OS;
+    const { width, height } = Dimensions.get('screen');
+    headers['X-Open-Cartable-Device-Type'] = (Platform.isPad || Math.min(width, height) >= 600) ? 'tablet' : 'mobile';
+  }
   if (nativeStaff) {
     headers['X-Open-Cartable-Client'] = 'native';
     if (device) headers['X-Open-Cartable-Device'] = device;

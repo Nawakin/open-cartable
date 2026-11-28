@@ -1,6 +1,6 @@
 # Installer Open Cartable
 
-Ce tutoriel démarre PostgreSQL, l’API et l’application web sur votre ordinateur. L’assistant web crée l’école, sa première classe et son premier accès parent. Pour découvrir le projet, utilisez le bouton « Remplir un exemple fictif ».
+Ce tutoriel démarre PostgreSQL, l’API et l’application web sur votre ordinateur. L’assistant web crée l’école et son accès direction. « Remplir un exemple fictif » ajoute une classe et un accès parent de démonstration.
 
 ## 1. Préparer la machine
 
@@ -36,21 +36,47 @@ docker compose exec -T api node deploy/installation-link.mjs
 
 Si l’école est encore à configurer, le lien contient le code d’installation dans son fragment. Gardez ce lien privé. L’app le retire de la barre d’adresse dès son ouverture.
 
+### Configurer depuis un autre appareil du réseau local
+
+Le mode LAN ouvre uniquement un port HTTPS sur l’adresse IPv4 privée choisie pour la machine Docker. Remplacez `192.168.1.20` par l’adresse de cette machine et gardez les appareils sur le même réseau.
+
+Sous macOS ou Linux, lancez cette commande dans le dossier du projet.
+
+```sh
+OPEN_CARTABLE_LAN_IP=192.168.1.20 ./installer.sh
+```
+
+Sous Windows, lancez les commandes suivantes dans l’invite de commandes.
+
+```bat
+set OPEN_CARTABLE_LAN_IP=192.168.1.20
+Installer-Windows.cmd
+```
+
+1. Le lanceur prépare le certificat local et copie son certificat public dans `.local/open-cartable-lan-ca.crt`. Transférez uniquement ce fichier à l’appareil choisi, par un canal de confiance, et ajoutez-le aux autorités de confiance de cet appareil.
+2. Ouvrez le lien privé affiché par le lanceur dans le navigateur de cet appareil. L’adresse ressemble à `https://192.168.1.20:3443`. Le port peut être modifié avant lancement avec `OPEN_CARTABLE_LAN_PORT`.
+3. Terminez la création du compte direction et l’enregistrement de l’authentificateur sur le réseau local. Pour passer à un nom public, arrêtez d’abord la passerelle LAN avec `docker compose -f compose.yaml -f compose.lan.yaml stop lan` dans le terminal où l’IP est renseignée. Retirez `OPEN_CARTABLE_LAN_IP` et l’option Compose LAN, puis utilisez la procédure de configuration publique. [Configurer une origine HTTPS publique](#ouvrir-le-service-depuis-un-autre-appareil)
+
 ## 3. Configurer l’école dans le navigateur
 
-1. Sur « Configurer Open Cartable », renseignez le nom et le code de l’école, le nom de la classe et le nom d’affichage du premier élève. Pour un essai, cliquez sur « Remplir un exemple fictif ». Choisissez un mot de passe direction de 15 à 128 caractères et confirmez-le. Gardez-le dans votre gestionnaire de mots de passe.
-2. Cliquez sur « Créer l’école ». Conservez le code école et le code d’invitation parent qui s’affichent.
-3. Cliquez sur « Aller à la connexion », puis sur « Se connecter ». Le compte affiche l’élève créé. Ouvrez son cahier de texte pour consulter ses publications.
+1. Sur « Configurer Open Cartable », renseignez le nom et le code de l’école, puis l’adresse web de connexion. Gardez l’adresse actuelle pour commencer en local ou saisissez l’adresse HTTPS prévue pour la mise en ligne.
+2. Choisissez le mot de passe direction et l’adresse e-mail de récupération. Cliquez sur « Créer le compte direction », puis sur « Ouvrir l’espace direction » dans le même navigateur.
+3. Connectez-vous, scannez le QR code localement avec votre authentificateur TOTP et saisissez les six chiffres affichés pour ouvrir la direction. Le lien d’installation est à conserver en privé jusqu’à la création du compte.
+4. Dans « École → Classes et familles », ajoutez vos classes, élèves et accès parents. Si vous avez activé l’exemple fictif, utilisez le code de démonstration pour essayer le compte parent dans un autre profil de navigateur.
 
-Le code d’invitation est valable sept jours et pour une seule activation. Il ouvre l’accès à tous les enfants rattachés au compte du responsable. Pour connecter un deuxième appareil, générez une invitation supplémentaire pour ce même compte. La configuration initiale est enregistrée dans PostgreSQL. Le navigateur et l’application rouvrent le dernier espace utilisé tant que l’accès est reconnu.
-
-Si l’assistant vous demande le code d’installation après un rechargement, relancez l’installateur pour ouvrir son lien. Si la création a réussi mais que l’invitation a été perdue, utilisez la procédure de réémission ci-dessous.
+Une invitation initiale parent est valable sept jours et pour une seule activation. Elle ouvre l’accès à tous les enfants rattachés au compte. Le menu « Mes appareils » permet ensuite d’activer un autre appareil depuis un compte déjà connecté.
 
 ## 4. Se connecter sur le web ou sur l’application
 
 Ouvrez la page d’accueil de l’ENT ou lancez l’application. Sur Android et iOS, saisissez l’adresse HTTPS fournie par votre école lors de la première connexion. Dans « Connexion à l’ENT », saisissez le code de l’école et le code d’accès parent ou le code d’activation enseignant. Pour la direction ou un compte enseignant déjà activé, ouvrez « Accès pour l’équipe » et choisissez votre rôle. La web-app et l’application utilisent les mêmes espaces et les mêmes droits.
 
 Les sessions parent et enseignant restent ouvertes jusqu’à 90 jours d’inactivité dans le navigateur et 365 jours dans l’application. Le navigateur utilise un cookie sécurisé. L’application conserve ses accès dans le stockage sécurisé du système. Déconnectez-vous après utilisation d’un appareil partagé.
+
+### Lier ou révoquer un appareil
+
+1. Depuis un appareil déjà connecté, ouvrez « Mes appareils ». Le menu se trouve sous « Compte » pour les parents, « Vie de classe » pour les enseignants et « École » pour la direction.
+2. Choisissez « Lier un appareil ». Sur le nouvel appareil, ouvrez l’adresse de l’ENT et saisissez le code de l’école avec le code de liaison affiché. Il est à usage unique et expire après cinq minutes. La direction saisit aussi un code frais de son authentificateur.
+3. Dans la liste, choisissez « Nommer » pour retrouver facilement l’appareil. Le système et le type sont déduits automatiquement. La dernière connexion se met à jour à la réouverture de l’espace et les appareils peuvent être révoqués à partir d’un autre appareil connecté.
 
 ### Publier une entrée
 
@@ -171,6 +197,27 @@ Après avoir publié l’article de démonstration, ouvrez « École → Clôtur
 Par exemple, rattachez les élèves fictifs A et B au premier responsable. Rattachez A, B et C au second si la direction a validé cet accès. Chacun reçoit son propre code et retrouve uniquement ses enfants autorisés. Les deux comptes voient la scolarité de A et B et disposent chacun de leurs échanges privés avec l’école. Les seuls rattachements saisis par la direction déterminent les accès.
 
 Pour ajouter ou retirer un enfant sur un compte déjà connecté, modifiez la fiche du responsable. La liste des enfants se met à jour à l’ouverture de l’ENT ou avec « Actualiser » sur l’accueil parent. Pour remplacer l’accès après la perte d’un appareil, générez une invitation et choisissez « Fermer aussi les anciennes sessions ».
+
+### Importer des listes et suivre les accès
+
+Dans « École → Classes et familles → Rentrée et suivi », ouvrez « Importer ». Choisissez ou collez le CSV UTF-8 à séparateur point-virgule avec les colonnes ci-dessous. Utilisez la référence d’une ligne pour rattacher l’élève à sa classe et le responsable à ses enfants. Séparez plusieurs références d’élèves par `|`. L’aperçu montre les rattachements et les homonymes avant validation.
+
+```csv
+type;reference;nom;classe;eleves
+classe;ce1;CE1 fictif;;
+eleve;e1;Élève fictif;ce1;
+responsable;r1;Responsable fictif;;e1
+```
+
+Les homonymes confirmés donnent des fiches distinctes. Les onglets « Suivi des invitations » et « Journal des accès » affichent les états d’activation et les modifications de droits gérées par la direction, sans afficher les codes d’invitation.
+
+### Utiliser l’accueil famille, les annonces et les rendez-vous
+
+- Dans « À faire et à venir », sélectionnez « Tous mes enfants » ou choisissez un enfant. Ouvrez un devoir, un événement, un message non lu ou une annonce qui attend une réponse.
+- Dans « École » ou « Vie de classe », choisissez « Annonces et rendez-vous ». Créez un brouillon, choisissez les classes et vérifiez les destinataires. Une annonce peut comporter un document et demander une confirmation de lecture. Pour programmer la publication, indiquez la date et l’heure de Paris.
+- Le même écran permet de publier une invitation ou un créneau réservable. Une réponse positive ou une réservation ajoute un événement privé à l’agenda du responsable. L’équipe retrouve les réponses depuis la publication.
+- Depuis « Absences » sous le nom de l’enfant, choisissez « Prévenir d’une absence ». L’équipe retrouve ce signalement dans « Absences annoncées » à côté du suivi de l’appel.
+- Pour réutiliser un devoir, utilisez « Dupliquer » dans le cahier de texte, ou « Modèles » pour enregistrer son texte. Le cahier de liaison propose aussi des modèles et une date de publication future.
 
 ### Publier un livret d’essai
 

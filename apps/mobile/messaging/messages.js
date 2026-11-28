@@ -39,11 +39,11 @@ function messageError(error, sending) {
   }
 }
 
-export function Messages({ request, role = 'parent', children = [], classes = [], loadStudents, refreshUnread, onExpired, initialDraft }) {
+export function Messages({ request, role = 'parent', children = [], classes = [], loadStudents, refreshUnread, onExpired, initialDraft, initialThreadId }) {
   const isParent = role === 'parent';
   const isTeacher = role === 'teacher';
   const canStart = isParent ? children.length > 0 : isTeacher && classes.length > 0;
-  const [view, setView] = useState(initialDraft ? { kind: 'compose' } : inboxView);
+  const [view, setView] = useState(initialDraft ? { kind: 'compose' } : initialThreadId ? { kind: 'thread', id: initialThreadId } : inboxView);
   const [inbox, setInbox] = useState(null);
   const [thread, setThread] = useState(null);
   const [childId, setChildId] = useState(initialDraft?.childId ?? null);
@@ -197,7 +197,8 @@ export function Messages({ request, role = 'parent', children = [], classes = []
   }
 
   useEffect(() => {
-    if (!initialDraft) void run(() => loadInbox());
+    if (initialThreadId) void run(() => loadThread(initialThreadId));
+    else if (!initialDraft) void run(() => loadInbox());
   }, []);
 
   useEffect(() => {

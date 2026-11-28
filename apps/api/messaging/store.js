@@ -59,6 +59,20 @@ export async function listConversations(db, actor, { beforeAt, beforeId }) {
   return { conversations: items, nextCursor };
 }
 
+export async function unreadParentThreads(db, actor, childId) {
+  const { rows } = await db.query(`
+    SELECT c.id,c.subject,c.last_message_at AS "lastMessageAt",student.display_name AS "studentName"
+    FROM message_conversations c ${threadStudent}
+    WHERE ${visibleThread} AND ${unread} AND ($4::uuid IS NULL OR c.student_id=$4)
+      AND student.left_at IS NULL AND EXISTS (
+        SELECT 1 FROM guardian_students g JOIN classes room ON (room.school_id,room.id)=(student.school_id,student.class_id)
+        WHERE (g.school_id,g.guardian_id,g.student_id)=(c.school_id,$2,c.student_id) AND room.archived_year IS NULL
+      )
+    ORDER BY c.last_message_at DESC,c.id LIMIT 12
+  `, [...actorScope(actor), childId]);
+  return rows;
+}
+
 export async function countUnreadConversations(db, actor) {
   const { rows: [result] } = await db.query(`
     SELECT count(*)::integer AS "unreadCount" FROM message_conversations c

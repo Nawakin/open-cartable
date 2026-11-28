@@ -67,8 +67,8 @@ function refresh(session, version) {
   return refreshing;
 }
 
-export async function signIn({ origin, schoolCode, code }) {
-  const result = await request(fetch, origin, '/auth/invitations/redeem', {
+export async function signIn({ origin, schoolCode, code, pairing }) {
+  const result = await request(fetch, origin, pairing ? '/auth/device-link' : '/auth/invitations/redeem', {
     method: 'POST', body: { schoolCode, code },
   });
   sessionVersion += 1;

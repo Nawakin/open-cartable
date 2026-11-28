@@ -4,19 +4,20 @@ import { buildApp } from './app.js';
 import { readAuthKeys } from './auth/credentials.js';
 import { createParentStore } from './auth/parent-store.js';
 import { migrate, migrations, openDatabase } from './db/database.js';
+import { installationOrigin, privateLanIp } from './installation/origin.js';
 import { readSecret } from './installation/secrets.js';
 import { startRetention } from './db/retention.js';
 import { createRecoveryMailer } from './direction/recovery-mail.js';
 import { pushEncryptionKey, startParentPush, webPushSettings } from './notifications/web-push.js';
 import { nativePushTransports } from './notifications/native-providers.js';
 
-function readWebOrigin(value) {
-  const url = URL.parse(value);
-  if (!url || url.origin !== value || (url.protocol !== 'https:'
-    && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname)))) {
-    throw new Error('WEB_ORIGIN doit être une origine HTTPS exacte, sans barre finale. HTTP est réservé à localhost et 127.0.0.1.');
+function readWebOrigin(value, lanIp) {
+  const origin = installationOrigin(value);
+  if (!origin || (lanIp !== undefined && (!privateLanIp(lanIp) || new URL(origin).hostname !== lanIp
+    || !origin.startsWith('https://')))) {
+    throw new Error('WEB_ORIGIN doit être une origine HTTPS exacte. Le mode LAN exige une IPv4 privée et HTTPS.');
   }
-  return url.origin;
+  return origin;
 }
 
 let pool;
@@ -32,7 +33,7 @@ try {
   let installation;
   let directionInvitationKey;
   const token = readSecret(env, 'INSTALLATION_TOKEN');
-  const webOrigin = env.WEB_ORIGIN === undefined ? undefined : readWebOrigin(env.WEB_ORIGIN);
+  const webOrigin = env.WEB_ORIGIN === undefined ? undefined : readWebOrigin(env.WEB_ORIGIN, env.OPEN_CARTABLE_LAN_IP);
   if (token !== undefined && (!webOrigin || !/^[0-9a-f]{64}$/.test(token))) {
     throw new Error('La configuration de l’installation web est invalide.');
   }
@@ -53,7 +54,7 @@ try {
     const schema = await pool.query('SELECT 1 FROM schema_migrations WHERE name = ANY($1::text[])', [requiredMigrations])
       .catch(() => null);
     if (schema?.rowCount !== requiredMigrations.length) throw new Error('PostgreSQL est inaccessible ou des migrations doivent être exécutées.');
-    parentAuth = { signingKey, store: createParentStore(pool, invitationKey), webOrigin };
+    parentAuth = { signingKey, store: createParentStore(pool, invitationKey), webOrigin, pairingKey: invitationKey };
     if (token) installation = { pool, token, invitationKey, webOrigin };
   }
   const securitySecret = readSecret(env, 'DIRECTION_TOTP_KEY');
@@ -77,7 +78,7 @@ try {
   const webPush = webPushSettings(pushSecret, webOrigin);
   const transports = nativePushTransports(env);
   const nativePush = Object.keys(transports).length ? { key: pushEncryptionKey(pushSecret), transports } : undefined;
-  const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey, webPush, nativePush });
+  const app = buildApp({ parentAuth, webRoot, installation, direction, blogMediaKey, webPush, nativePush, webOrigin });
   let stopRetention;
   let stopPush;
   if (pool) app.addHook('onClose', async () => {
